@@ -30,7 +30,10 @@ jobs:
 
     - name: Test with pytest
       run: |
-        pytest -v --junitxml=report.xml --cov=yoke -Werror
+        pytest -v --cov-report=lcov:./coverage/lcov.info --cov=yoke -Werror
+
+    - name: Upload coverage to Coveralls
+      uses: coverallsapp/github-action@v1
 
     - name: Lint Yoke
       run: |
