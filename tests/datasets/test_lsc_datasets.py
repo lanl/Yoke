@@ -429,6 +429,6 @@ def test_policy_getitem(
     assert state_geom_params.shape == torch.Size([3])  # Mocked B-spline node shape
     assert state_hfield.shape == torch.Size([1, 10, 10])
     assert target_hfield.shape == torch.Size([1, 10, 10])
-    assert torch.allclose(
-        geom_discrepancy, torch.tensor([0.0, 0.0, 0.0]), atol=1e-6
-    ), "Tensors are not equal."
+    assert torch.allclose(geom_discrepancy, torch.tensor([0.0, 0.0, 0.0]), atol=1e-6), (
+        "Tensors are not equal."
+    )

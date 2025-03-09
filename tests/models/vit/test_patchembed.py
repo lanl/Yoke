@@ -26,9 +26,9 @@ def test_get_conv2d_biases() -> None:
     out_channels = 64
     biases = _get_conv2d_biases(out_channels)
 
-    assert biases.shape == (
-        out_channels,
-    ), f"Expected shape {(out_channels,)}, got {biases.shape}"
+    assert biases.shape == (out_channels,), (
+        f"Expected shape {(out_channels,)}, got {biases.shape}"
+    )
     assert torch.is_tensor(biases), "Output should be a torch.Tensor"
 
 
@@ -157,9 +157,9 @@ def test_swin_linear_embedding_weights() -> None:
 
     conv = embedder.linear_embedding
 
-    assert isinstance(
-        conv, nn.Conv2d
-    ), "linear_embedding should be an nn.Conv2d instance"
+    assert isinstance(conv, nn.Conv2d), (
+        "linear_embedding should be an nn.Conv2d instance"
+    )
 
     assert conv.kernel_size == (
         16,

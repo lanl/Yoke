@@ -66,9 +66,9 @@ def csv2scalar(csv_file: str, key: str, scalar: str) -> float:
     for col in design_df.columns:
         design_df.rename(columns={col: col.strip()}, inplace=True)
 
-    assert (
-        scalar in design_df.columns
-    ), "csv2scalar: selected scalar is not in the design file"
+    assert scalar in design_df.columns, (
+        "csv2scalar: selected scalar is not in the design file"
+    )
 
     value = design_df.at[key, scalar]
 

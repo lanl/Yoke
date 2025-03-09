@@ -28,15 +28,15 @@ def test_conv2d_shape() -> None:
         expected_total,
     ) in test_cases:
         new_w, new_h, total = conv2d_shape(w, h, k, s_w, s_h, p_w, p_h)
-        assert (
-            new_w == expected_new_w
-        ), f"Expected width {expected_new_w}, but got {new_w}"
-        assert (
-            new_h == expected_new_h
-        ), f"Expected height {expected_new_h}, but got {new_h}"
-        assert (
-            total == expected_total
-        ), f"Expected total {expected_total}, but got {total}"
+        assert new_w == expected_new_w, (
+            f"Expected width {expected_new_w}, but got {new_w}"
+        )
+        assert new_h == expected_new_h, (
+            f"Expected height {expected_new_h}, but got {new_h}"
+        )
+        assert total == expected_total, (
+            f"Expected total {expected_total}, but got {total}"
+        )
 
 
 @pytest.mark.parametrize(
