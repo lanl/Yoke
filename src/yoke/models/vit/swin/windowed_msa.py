@@ -611,22 +611,6 @@ class ShiftedWindowCosMSA(nn.Module):
             e.args += msg_tuple
             raise
 
-        try:
-            msg = "Window height not divisble by 2!!!"
-            assert window_size[0] % 2 == 0, msg
-        except AssertionError as e:
-            msg_tuple = ("Window height:", window_size[0])
-            e.args += msg_tuple
-            raise
-
-        try:
-            msg = "Window width not divisble by 2!!!"
-            assert window_size[1] % 2 == 0, msg
-        except AssertionError as e:
-            msg_tuple = ("Window width:", window_size[1])
-            e.args += msg_tuple
-            raise
-
         self.emb_size = emb_size
         self.num_heads = num_heads
         self.patch_grid_size = patch_grid_size
