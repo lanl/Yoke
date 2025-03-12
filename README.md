@@ -1,12 +1,11 @@
 YOKE: Yielding Optimal Knowledge Enhancement
 ============================================
 
+[![Coverage Status](https://coveralls.io/repos/github/lanl/Yoke/badge.svg?branch=main)](https://coveralls.io/github/lanl/Yoke?branch=main)
 [![pipeline status](https://github.com/lanl/Yoke/actions/workflows/yoke_install_test_lint.yml/badge.svg)](https://github.com/lanl/Yoke/actions) 
 [![Latest Release](https://img.shields.io/github/v/release/lanl/Yoke)](https://github.com/lanl/Yoke/releases)
-[![Coverage Status](https://coveralls.io/repos/github/lanl/Yoke/badge.svg?branch=main)](https://coveralls.io/github/lanl/Yoke?branch=main)
 
 ![Get YOKEd!](./YOKE_DALLE_512x512.png)
-
 
 About:
 ------
@@ -19,11 +18,14 @@ projects.
 The YOKE module is divided into submodules, installed in a python environment:
 
 - datasets/
+- helpers/
 - models/
 - metrics/
-- torch_training_utils.py
+- losses/
+- utils/
 - lr_schedulers.py
-- parallel_utils.py
+- parellel_utils.py
+- torch_training_utils.py
 
 Helper utilities and examples are under `applications`:
 

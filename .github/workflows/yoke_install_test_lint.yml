@@ -16,64 +16,84 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+
     - name: Set up Python 3.9
       uses: actions/setup-python@v3
       with:
         python-version: '3.9'
+
     - name: Install flit
       run: pip install flit
+
     - name: Build yoke
       run: flit install --deps=all
+
     - name: Test with pytest
       run: |
         pytest -v --cov-report=lcov:./coverage/lcov.info --cov=yoke -Werror
+
     - name: Upload coverage to Coveralls
       uses: coverallsapp/github-action@v1
+
     - name: Lint Yoke
       run: |
         ruff check
         ruff check --preview
         ruff format --check --diff
       continue-on-error: true
+
     - name: Lint applications/evaluation
       run: |
         ruff check applications/evaluation
         ruff check applications/evaluation --preview
         ruff format applications/evaluation --check --diff
       continue-on-error: false
+
     - name: Lint applications/filelists
       run: |
         ruff check applications/filelists
         ruff check applications/filelists --preview
         ruff format applications/filelists --check --diff
       continue-on-error: false
+
     - name: Lint applications/normalization
       run: |
         ruff check applications/normalization
         ruff check applications/normalization --preview
         ruff format applications/normalization --check --diff
       continue-on-error: false
+
     - name: Lint applications/viewers
       run: |
         ruff check applications/viewers
         ruff check applications/viewers --preview
         ruff format applications/viewers --check --diff
       continue-on-error: false
+
     - name: Lint tests
       run: |
         ruff check tests
         ruff check tests --preview
         ruff format tests --check --diff
       continue-on-error: false
+
     - name: Lint datasets
       run: |
         ruff check src/yoke/datasets
         ruff check src/yoke/datasets --preview
         ruff format src/yoke/datasets --check --diff
       continue-on-error: false
+
     - name: Lint models
       run: |
         ruff check src/yoke/models
         ruff check src/yoke/models --preview
         ruff format src/yoke/models --check --diff
+      continue-on-error: false
+
+    - name: lint losses
+      run: |
+        ruff check src/yoke/losses
+        ruff check src/yoke/losses --preview
+        ruff format src/yoke/losses --check --diff
       continue-on-error: false
