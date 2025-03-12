@@ -23,6 +23,8 @@ from yoke.models.vit.swin.bomberman import LodeRunner
 from yoke.datasets.lsc_dataset import LSC_rho2rho_temporal_DataSet
 import yoke.torch_training_utils as tr
 from yoke.parallel_utils import LodeRunner_DataParallel
+from yoke.lr_schedulers import CosineWithWarmupScheduler
+from yoke.helpers import cli
 import yoke.utils.logger as yl
 
 #############################################
@@ -35,6 +37,7 @@ descr_str = (
 parser = argparse.ArgumentParser(
     prog="Initial LodeRunner Training", description=descr_str, fromfile_prefix_chars="@"
 )
+parser = cli.add_cosine_lr_scheduler_args(parser=parser)
 
 #############################################
 # Channel Subset Study Param
@@ -291,10 +294,11 @@ if __name__ == "__main__":
     block_structure = tuple(args.block_structure)
 
     # Training Parameters
-    initial_learningrate = args.init_learnrate
-    LRepoch_per_step = args.LRepoch_per_step
-    LRdecay = args.LRdecay
-    batch_size = args.batch_size
+    anchor_lr = args.anchor_lr
+    num_cycles = args.num_cycles
+    min_fraction = args.min_fraction
+    terminal_steps = args.terminal_steps
+    warmup_steps = args.warmup_steps
 
     # Number of workers controls how batches of data are prefetched and,
     # possibly, pre-loaded onto GPUs. If the number of workers is large they
@@ -303,6 +307,7 @@ if __name__ == "__main__":
     prefetch_factor = args.prefetch_factor
 
     # Epoch Parameters
+    batch_size = args.batch_size
     total_epochs = args.total_epochs
     cycle_epochs = args.cycle_epochs
     train_batches = args.train_batches
@@ -374,7 +379,7 @@ if __name__ == "__main__":
     #############################################
     optimizer = torch.optim.AdamW(
         model.parameters(),
-        lr=initial_learningrate,
+        lr=1e-6,
         betas=(0.9, 0.999),
         eps=1e-08,
         weight_decay=0.01,
@@ -411,13 +416,22 @@ if __name__ == "__main__":
                 state[k] = v.to(device)
 
     #############################################
-    # Setup LR scheduler
+    # LR scheduler
     #############################################
-    stepLRsched = torch.optim.lr_scheduler.StepLR(
+    # We will take a scheduler step every back-prop step so the number of steps
+    # is the number of previous batches.
+    if starting_epoch == 0:
+        last_epoch = -1
+    else:
+        last_epoch = train_batches * (starting_epoch - 1)
+    LRsched = CosineWithWarmupScheduler(
         optimizer,
-        step_size=LRepoch_per_step,
-        gamma=LRdecay,
-        last_epoch=starting_epoch - 1,
+        anchor_lr=anchor_lr,
+        terminal_steps=terminal_steps,
+        warmup_steps=warmup_steps,
+        num_cycles=num_cycles,
+        min_fraction=min_fraction,
+        last_epoch=last_epoch,
     )
 
     #############################################
@@ -503,23 +517,21 @@ if __name__ == "__main__":
         startTime = time.time()
 
         # Train an Epoch
-        tr.train_simple_loderunner_epoch(
+        tr.train_LRsched_loderunner_epoch(
             channel_map,
             training_data=train_dataloader,
             validation_data=val_dataloader,
             model=model,
             optimizer=optimizer,
             loss_fn=loss_fn,
+            LRsched=LRsched,
             epochIDX=epochIDX,
             train_per_val=train_per_val,
             train_rcrd_filename=trn_rcrd_filename,
             val_rcrd_filename=val_rcrd_filename,
             device=device,
-            verbose=False
+            verbose=False,
         )
-
-        # Increment LR scheduler
-        stepLRsched.step()
 
         endTime = time.time()
         epoch_time = (endTime - startTime) / 60
