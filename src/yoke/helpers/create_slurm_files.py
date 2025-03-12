@@ -1,13 +1,16 @@
 import json
 import os
 from collections import defaultdict
+from pathlib import Path
 
 class MkSlurm:
-    def __init__(self, config_path, output_path, template_path = "templates/training_START_slurm.tmpl"):
+    def __init__(self, config_path, output_path, template_path = "templates/training_slurm.tmpl"):
+        scriptdir = Path(__file__).parent
+        tPath = scriptdir / template_path
         with open(config_path, 'r') as file:
             self._config = defaultdict(None, json.load(file))
         self._output_path = output_path
-        with open(template_path, 'r') as file:
+        with open(tPath, 'r') as file:
             self._template = file.read()
 
     def generateSlurm(self):
@@ -25,8 +28,14 @@ class MkSlurm:
         if self._config["email"] and len(self._config["email"]) > 0:
             eList = ','.join(self._config["email"])
             template = template.replace("[EMAIL]", f"#SBATCH --mail-user={eList}\n#SBATCH --mail-type=ALL")
-        self._slurmFile = template
+        else:
+            template = template.replace("[EMAIL]", "")
+        if self._config['local']:
+            template = template.replace("[LOCAL]", "export PYTHONPATH=../../../../../src:../../../src:$PYTHONPATH")
+        else:
+            template = template.replace("[LOCAL]", "")
+        return template
 
-    def writeSlurm(self):
-        with open(os.path.join(self._output_path, "training_slurm.tmpl"), 'w') as file:
-            file.write(self._slurmFile)
+    # def writeSlurm(self):
+    #     with open(os.path.join(self._output_path, "training_slurm.tmpl"), 'w') as file:
+    #         file.write(self._slurmFile)

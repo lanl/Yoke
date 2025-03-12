@@ -26,10 +26,7 @@ training_START_input = "./training_START.input"
 slrm_obj = create_slurm_files.MkSlurm(
     config_path='./slurm_config.json', output_path='./'
 )
-slrm_obj.generateSlurm()
-slrm_obj.writeSlurm()
-slurm_tmpl = './training_slurm.tmpl'
-slurm_tmpl_data = open(slurm_tmpl, 'r').read()
+slurm_tmpl_data = slrm_obj.generateSlurm()
 
 # List of files to copy
 with open(args.cpFile, "r") as cp_text_file:
