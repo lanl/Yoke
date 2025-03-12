@@ -35,7 +35,3 @@ class MkSlurm:
         else:
             template = template.replace("[LOCAL]", "")
         return template
-
-    # def writeSlurm(self):
-    #     with open(os.path.join(self._output_path, "training_slurm.tmpl"), 'w') as file:
-    #         file.write(self._slurmFile)
