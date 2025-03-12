@@ -14,17 +14,11 @@ studyIDX,YOKE_TORCH_ENV,channel_map_size,EMBED_DIM,B0,B1,B2,B3,NUM_WORKERS,PREFE
 #12,torch_ch_gpu_241112,8,512,1,1,11,2,8,2,32,1000,500,1.00E-06,110,0.5,train_density_LodeRunner.py
 #13,torch_ch_gpu_241112,8,512,1,1,11,2,8,2,64,1000,500,1.00E-06,110,0.5,train_density_LodeRunner.py
 #14,torch_ch_gpu_241112,8,512,1,1,11,2,8,2,128,1000,500,1.00E-06,110,0.5,train_density_LodeRunner.py
-#604,torch_ch_gpu_241112,4,128,1,1,3,1,8,2,64,1000,500,1.00E-04,110,0.5,train_density_LodeRunner.py
-#605,torch_ch_gpu_241112,5,128,1,1,3,1,8,2,64,1000,500,1.00E-04,110,0.5,train_density_LodeRunner.py
-#610,torch_ch_gpu_241112,6,128,1,1,3,1,8,2,64,1000,500,1.00E-04,110,0.5,train_density_LodeRunner.py
-#611,torch_ch_gpu_241112,4,128,1,1,3,1,8,2,64,1000,500,1.00E-04,110,0.5,train_density_LodeRunner.py
-#620,torch_ch_gpu_241112,8,128,1,1,3,1,8,2,64,1000,500,1.00E-04,110,0.5,train_density_LodeRunner.py
-#621,torch_ch_gpu_241112,1,128,1,1,3,1,8,2,64,1000,500,1.00E-04,110,0.5,train_density_LodeRunner.py
 #922,torch_ch_gpu_241112,2,128,1,1,3,1,8,2,64,1000,500,1.00E-04,110,0.5,train_density_LodeRunner.py
 #923,torch_ch_gpu_241112,3,128,1,1,3,1,8,2,64,1000,500,1.00E-04,110,0.5,train_density_LodeRunner.py
-#924,torch_ch_gpu_241112,4,128,1,1,3,1,8,2,64,1000,500,1.00E-04,110,0.5,train_density_LodeRunner.py
+924,torch_ch_gpu_241112,4,128,1,1,3,1,8,2,64,1000,500,1.00E-04,110,0.5,train_density_LodeRunner.py
 #925,torch_ch_gpu_241112,5,128,1,1,3,1,8,2,64,1000,500,1.00E-04,110,0.5,train_density_LodeRunner.py
-926,torch_ch_gpu_241112,6,128,1,1,3,1,8,2,64,1000,500,1.00E-04,110,0.5,train_density_LodeRunner.py
+#926,torch_ch_gpu_241112,6,128,1,1,3,1,8,2,64,1000,500,1.00E-04,110,0.5,train_density_LodeRunner.py
 #927,torch_ch_gpu_241112,7,128,1,1,3,1,8,2,64,1000,500,1.00E-04,110,0.5,train_density_LodeRunner.py
 #928,torch_ch_gpu_241112,8,128,1,1,3,1,8,2,64,1000,500,1.00E-04,110,0.5,train_density_LodeRunner.py
 
