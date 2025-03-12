@@ -22,6 +22,9 @@ class MkSlurm:
             template = template.replace(
                 "[RUNINFO]",
                 "#SBATCH --partition=gpu\n#SBATCH --time=16:00:00")
+        if self._config["email"] and len(self._config["email"]) > 0:
+            eList = ','.join(self._config["email"])
+            template = template.replace("[EMAIL]", f"#SBATCH --mail-user={eList}\n#SBATCH --mail-type=ALL")
         self._slurmFile = template
 
     def writeSlurm(self):

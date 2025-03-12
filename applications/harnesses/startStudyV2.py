@@ -21,9 +21,7 @@ parser = cli.add_default_args(parser)
 args = parser.parse_args()
 
 training_input_tmpl = "./training_input.tmpl"
-# training_slurm_tmpl = "./training_slurm.tmpl"
 training_START_input = "./training_START.input"
-# training_START_slurm = "./training_START.slurm"
 
 slrm_obj = create_slurm_files.MkSlurm(
     config_path='./slurm_config.json', output_path='./'
@@ -76,10 +74,6 @@ for k, study in enumerate(studylist):
     with open(training_input_filepath, "w") as f:
         f.write(training_input_data)
 
-    # Make new training_slurm.tmpl file
-    # with open(training_slurm_tmpl) as f:
-    #     training_slurm_data = f.read()
-
     training_slurm_data = strings.replace_keys(study, slurm_tmpl_data)
     training_slurm_filepath = os.path.join(studydirname, "training_slurm.tmpl")
 
@@ -96,10 +90,6 @@ for k, study in enumerate(studylist):
 
     with open(START_input_filepath, "w") as f:
         f.write(START_input_data)
-
-    # Make a new training_START.slurm file
-    # with open(training_START_slurm) as f:
-    #     START_slurm_data = f.read()
 
     # START_slurm_data = strings.replace_keys(study, START_slurm_data)
     e01data = strings.replace_keys(study, slurm_tmpl_data).replace("<epochIDX>", "0001")

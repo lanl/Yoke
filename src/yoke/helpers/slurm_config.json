@@ -1,5 +1,0 @@
-{
-    "jobname": "Yoke",
-    "debug": false,
-    "log": "study<studyIDX>_epoch<epochIDX>"
-}
