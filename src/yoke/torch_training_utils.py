@@ -1446,6 +1446,7 @@ def train_scheduled_loderunner_epoch(
     validation_data,
     model,
     optimizer,
+    LRsched,
     loss_fn,
     epochIDX,
     train_per_val,
@@ -1463,6 +1464,8 @@ def train_scheduled_loderunner_epoch(
         validation_data (torch.dataloader): dataloader containing the validation samples.
         model (loaded pytorch model): model to train.
         optimizer (torch.optim): optimizer for training set.
+        LRsched (torch.optim.lr_scheduler): Learning-rate scheduler that will be called
+                                            every training step.
         loss_fn (torch.nn Loss Function): loss function for training set.
         epochIDX (int): Index of current training epoch.
         train_per_val (int): Number of training epochs between each validation.
@@ -1492,6 +1495,9 @@ def train_scheduled_loderunner_epoch(
                 device=device,
                 scheduled_prob=scheduled_prob
             )
+
+            # Increment the learning-rate scheduler
+            LRsched.step()
 
             # Save batch records to the training record file
             batch_records = np.column_stack([
