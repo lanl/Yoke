@@ -2,6 +2,5 @@
     "jobname": "loderunner_chfe_study<studyIDX>",
     "debug": true,
     "log": "study<studyIDX>_epoch<epochIDX>",
-    "email": [],
-    "local": true
+    "email": []
 }
