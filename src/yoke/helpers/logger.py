@@ -8,37 +8,42 @@ number, and the log message. The logger is configured to output logs to the cons
 Usage:
     Import this module and use the logger instance to log messages.
 
-EXAMPLE USAGE:
+Example Usage:
 
-    STEP 1:
+.. code-block:: python
+
     import yoke.utils.logger as yl
 
-    STEP 2:
     yl.init()
 
     # Or, initialize with one of the logging levels below.
-    yl.init(<logging.DEBUG | loggin.INFO | loggin.WARNING | logging.ERROR | loggin.CRITIICAL>)
+    yl.init(logging.DEBUG)
+    yl.init(logging.INFO)
+    yl.init(logging.WARNING)
+    yl.init(logging.ERROR)
+    yl.init(logging.CRITICAL)
 
-    # Alternately, after yl.init(), loggin level can be set as below.
-    yl.logger.selLevel(<logging.DEBUG | loggin.INFO | loggin.WARNING | logging.ERROR | loggin.CRITIICAL>)
+    # Alternately, after yl.init(), logging level can be set as below.
+    yl.logger.setLevel(logging.DEBUG)
+    yl.logger.setLevel(logging.INFO)
+    yl.logger.setLevel(logging.WARNING)
+    yl.logger.setLevel(logging.ERROR)
+    yl.logger.setLevel(logging.CRITICAL)
 
-    STEP 3:
     # Use logging.
-
     logger.debug("DEBUG message.")       # For debug level messages
     logger.info("INFO message.")         # For info level messages
     logger.warning("WARNING message.")   # For warning level messages
     logger.error("ERROR message.")       # For error messages
     logger.critical("CRITICAL message.") # For critical messages
 
-    NOTE About logging levels:
-    Logging level hirearchy: DEBUG < INFO < WARNING < ERROR < CRITIICAL
-
+Note about logging levels:
+    Logging level hierarchy: DEBUG < INFO < WARNING < ERROR < CRITICAL
     Messages for levels including and above the set log level will be printed.
-    For ex.
-      - Setting log level to DEBUG will cause all log level messages to print
-      - Setting log level to ERROR will cause ERROR and CRITICAL log messages to print
-      - Setting log level to CRITICAL will only print CRITICAL messages
+    For example:
+    - Setting log level to DEBUG will cause all log level messages to print
+    - Setting log level to ERROR will cause ERROR and CRITICAL log messages to print
+    - Setting log level to CRITICAL will only print CRITICAL messages
 """
 
 import sys
@@ -89,28 +94,10 @@ def configure_logger(
     return logger
 
 def get_logger() -> logging.Logger:
+    """"
+    Returns the logger instance.
+
+    Returns:
+        logging.Logger: The logger instance.
+    """
     return logger
-
-# Example usage:
-if __name__ == "__main__":
-    """
-    Example usage of the logger module.
-    """
-    # Get a logger instance
-    logger = configure_logger("yoke_logger", level=logging.DEBUG)
-
-    for log_level in (
-        logging.CRITICAL,
-        logging.ERROR,
-        logging.WARNING,
-        logging.INFO,
-        logging.DEBUG,
-    ):
-        logger.setLevel(log_level)
-        # Log some example messages
-        print("")
-        logger.debug("This is a debug message")
-        logger.info("This is an info message")
-        logger.warning("This is a warning message")
-        logger.error("This is an error message")
-        logger.critical("This is a critical message")

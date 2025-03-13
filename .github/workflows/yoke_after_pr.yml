@@ -1,0 +1,29 @@
+name: Build documentation on merge
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  build-documentation:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python 3.9
+      uses: actions/setup-python@v3
+      with:
+        python-version: '3.9'
+    - name: Install flit
+      run: pip install flit
+    - name: Build yoke
+      run: flit install --deps=all
+    - name: Build documentation
+      run: |
+        sphinx-build -b html docs/ docs/_build/html
+    - name: Upload documentation artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: documentation
+        path: docs/_build/html
