@@ -5,24 +5,24 @@
 
 # NOTE: Number of CPUs per GPU must be an even number since there are
 # 2 threads per core. If an odd number is requested the next higher
-# even number gets used.
+# even number gets used. 
 
 # The following are one set of SBATCH options for the Chicoma GPU
 # partition. There are optional other constraints. Namely, `gpu80` and
-# `gpu40only`.
+# `gpu40only`. 
 
-#SBATCH --job-name=loderunner_chfe_study<studyIDX>
+#SBATCH --job-name=[JOBNAME]<studyIDX>
 #SBATCH --account=w25_artimis_g
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=64
-#SBATCH --partition=gpu_debug
-#SBATCH --reservation=gpu_debug
+[RUNINFO]
 #SBATCH --constraint=gpu40
-#SBATCH --time=02:00:00
-#SBATCH --output=study<studyIDX>_epoch0001.out
-#SBATCH --error=study<studyIDX>_epoch0001.err
+#SBATCH --output=[LOG].out
+#SBATCH --error=[LOG].err
+[EMAIL]
 #SBATCH -vvv
 
+[LOCAL]
 
 # Check available GPUs
 sinfo  -o "%P %.24G %N"
@@ -41,7 +41,7 @@ export MKL_SERVICE_FORCE_INTEL=TRUE
 export date00=`date`
 
 # # Start GPU monitoring
-# nvidia-smi --loop 5 --query-gpu=timestamp,gpu_bus_id,memory.used,memory.free,memory.total --format=csv > nvidia_smi_epoch0001.out &
+# nvidia-smi --loop 5 --query-gpu=timestamp,gpu_bus_id,memory.used,memory.free,memory.total --format=csv > nvidia_smi_epoch<epochIDX>.out &
 # nvpid=$!
 
 # Start the Code
