@@ -41,6 +41,7 @@ EXAMPLE USAGE:
       - Setting log level to CRITICAL will only print CRITICAL messages
 """
 
+import sys
 import logging
 
 logger = None
@@ -67,16 +68,16 @@ def configure_logger(
     logger.setLevel(level)
 
     # Create a console handler
-    console_handler = logging.StreamHandler()
+    console_handler = logging.StreamHandler(sys.stdout)
 
     # Define a custom formatter
     if log_time:
         formatter = logging.Formatter(
-            "%(levelname)-8s: %(asctime)s: " + "%(filename)s:%(lineno)4d - %(message)s"
+            "%(levelname)s: %(asctime)s: " + "%(filename)s:%(lineno)4d - %(message)s"
         )
     else:
         formatter = logging.Formatter(
-            "%(levelname)-8s: " + "%(filename)s:%(lineno)4d - %(message)s"
+            "%(levelname)s: " + "%(filename)s:%(lineno)4d - %(message)s"
         )
 
     # Attach the formatter to the handler
