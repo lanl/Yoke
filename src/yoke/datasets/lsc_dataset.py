@@ -749,7 +749,9 @@ class LSC_rho2rho_sequential_DataSet(Dataset):
         seq_len (int): Number of consecutive frames to return. This includes the
                        starting frame.
         half_image (bool): If True, returns half-images, otherwise full images.
-
+        scale_factor (float): Scale factor for downsampling images.
+        pad (tuple): pad length ordered as (left, right, top, bottom)
+        pad_value (float): value used for padding.
     """
 
     def __init__(
@@ -759,6 +761,9 @@ class LSC_rho2rho_sequential_DataSet(Dataset):
         max_file_checks: int,
         seq_len: int,
         half_image: bool = True,
+        scale_factor: float = 1.0,
+        pad: tuple = (0, 0, 0, 0),
+        pad_value: float = 0.0
     ) -> None:
         """Initialization for LSC sequential dataset."""
         dir_path = Path(LSC_NPZ_DIR)
@@ -770,6 +775,9 @@ class LSC_rho2rho_sequential_DataSet(Dataset):
         self.max_file_checks = max_file_checks
         self.seq_len = seq_len
         self.half_image = half_image
+        self.scale_factor = scale_factor
+        self.pad = pad
+        self.pad_value = pad_value
 
         # Load the list of file prefixes
         with open(file_prefix_list) as f:
@@ -866,6 +874,8 @@ class LSC_rho2rho_sequential_DataSet(Dataset):
 
         # Combine frames into a single tensor of shape [seq_len, num_fields, H, W]
         img_seq = torch.stack(frames, dim=0)
+        img_seq = torch.nn.functional.pad(img_seq, pad=self.pad, value=self.pad_value)
+        img_seq = torch.nn.functional.interpolate(img_seq, scale_factor=self.scale_factor)
 
         # Fixed time offset
         Dt = torch.tensor(0.25, dtype=torch.float32)
