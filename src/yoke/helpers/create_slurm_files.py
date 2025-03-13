@@ -30,8 +30,4 @@ class MkSlurm:
             template = template.replace("[EMAIL]", f"#SBATCH --mail-user={eList}\n#SBATCH --mail-type=ALL")
         else:
             template = template.replace("[EMAIL]", "")
-        if self._config['local']:
-            template = template.replace("[LOCAL]", "export PYTHONPATH=../../../../../src:../../../src:$PYTHONPATH")
-        else:
-            template = template.replace("[LOCAL]", "")
         return template

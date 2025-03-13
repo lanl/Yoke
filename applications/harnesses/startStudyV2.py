@@ -32,7 +32,7 @@ slurm_tmpl_data = slrm_obj.generateSlurm()
 with open(args.cpFile, "r") as cp_text_file:
     cp_file_list = [line.strip() for line in cp_text_file]
 
-# Process Hyperparmaeters File
+# Process Hyperparameters File
 studyDF = pd.read_csv(
     args.csv, sep=",", header=0, index_col=0, comment="#", engine="python"
 )
