@@ -189,6 +189,13 @@ def add_training_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParse
         "--batch_size", action="store", type=int, default=64, help="Batch size"
     )
     parser.add_argument(
+        "--seq_len",
+        action="store",
+        type=int,
+        default=3,
+        help="Length of predicted sequence.",
+    )
+    parser.add_argument(
         "--total_epochs",
         action="store",
         type=int,
@@ -375,6 +382,22 @@ def add_scheduled_sampling_args(
         type=float,
         default=0.0,  # Initial probability of using ground truth
         help="Minimum scheduled-sampling probability.",
+    )
+
+    return parser
+
+def add_ch_subsampling_args(
+    parser: argparse.ArgumentParser,
+) -> argparse.ArgumentParser:
+    """
+    Add channel subsampling arguments to parser for harnesses in yoke.applications.harnesses
+    """
+    parser.add_argument(
+        "--channel_map_size",
+        action="store",
+        type=int,
+        default=3,
+        help="Channel subsampling map size",
     )
 
     return parser
