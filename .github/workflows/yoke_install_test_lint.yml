@@ -26,7 +26,7 @@ jobs:
       run: flit install --deps=all
     - name: Test with pytest
       run: |
-        coverage run -m pytest -v --cov=yoke -Werror
+        coverage run --source=yoke -m pytest -v --cov=yoke -Werror
         coverage xml -o coverage.xml
     - name: Lint Yoke
       run: |
