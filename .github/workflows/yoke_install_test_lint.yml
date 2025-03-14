@@ -26,7 +26,8 @@ jobs:
       run: flit install --deps=all
     - name: Test with pytest
       run: |
-        pytest -v --cov-report=lcov:./coverage/lcov.info --cov=yoke -Werror
+        coverage run -m pytest -v --cov=yoke -Werror
+        coverage xml -o coverage.xml
     - name: Lint Yoke
       run: |
         ruff check
@@ -80,11 +81,12 @@ jobs:
         sphinx-build -b html docs/ docs/_build/html
     - name: Test documentation coverage
       run: |
-        sphinx-build -b html -b coverage docs/ _build/
+        coverage run -m sphinx -b coverage docs/ docs/_build/coverage
     - name: Combine coverage reports
       run: |
         coverage combine
+        coverage lcov -o coverage.lcov
     - name: Upload coverage to Coveralls
       uses: coverallsapp/github-action@v1
       with:
-        path-to-lcov: coverage.xml
+        path-to-lcov: coverage.lcov
