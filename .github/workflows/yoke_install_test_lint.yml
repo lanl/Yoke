@@ -98,7 +98,7 @@ jobs:
   
     - name: Test documentation coverage
       run: |
-        coverage run -m sphinx -b coverage docs/ docs/_build/coverage
+        coverage run -m sphinx -b coverage docs/ .
 
     - name: directory-analysis
       run: ls -R
