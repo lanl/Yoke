@@ -80,7 +80,7 @@ jobs:
         sphinx-build -b html docs/ docs/_build/html
     - name: Test documentation coverage
       run: |
-        pytest --cov=docs --cov-report=term-missing
+        sphinx-build -b html -b coverage docs/ _build/
     - name: Combine coverage reports
       run: |
         coverage combine

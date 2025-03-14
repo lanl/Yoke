@@ -5,4 +5,4 @@ _.*
 __pycache__
 .vscode
 runs
-docs/_*
+_build
