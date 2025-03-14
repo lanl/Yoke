@@ -77,7 +77,6 @@ jobs:
       continue-on-error: false
     - name: Build documentation
       run: |
-        pip install -r docs/requirements.txt
         sphinx-build -b html docs/ docs/_build/html
     - name: Test documentation coverage
       run: |
