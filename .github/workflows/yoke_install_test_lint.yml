@@ -83,7 +83,6 @@ jobs:
         pytest --cov=docs --cov-report=term-missing
     - name: Combine coverage reports
       run: |
-        pip install coverage
         coverage combine
     - name: Upload coverage to Coveralls
       uses: coverallsapp/github-action@v1
