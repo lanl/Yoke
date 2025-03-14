@@ -16,76 +16,98 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+
+    - name: proxy-check
+      run: env
+
     - name: Set up Python 3.9
       uses: actions/setup-python@v3
       with:
         python-version: '3.9'
+
     - name: Install flit
       run: pip install flit
-    - name: Build yoke
+
+    - name: Installing flit dependencies
       run: flit install --deps=all
+
     - name: Test with pytest
       run: |
         coverage run --source=yoke -m pytest -v --cov=yoke -Werror
         coverage xml -o coverage.xml
+
     - name: Lint Yoke
       run: |
         ruff check
         ruff check --preview
         ruff format --check --diff
       continue-on-error: true
+
     - name: Lint applications/evaluation
       run: |
         ruff check applications/evaluation
         ruff check applications/evaluation --preview
         ruff format applications/evaluation --check --diff
       continue-on-error: false
+
     - name: Lint applications/filelists
       run: |
         ruff check applications/filelists
         ruff check applications/filelists --preview
         ruff format applications/filelists --check --diff
       continue-on-error: false
+
     - name: Lint applications/normalization
       run: |
         ruff check applications/normalization
         ruff check applications/normalization --preview
         ruff format applications/normalization --check --diff
       continue-on-error: false
+
     - name: Lint applications/viewers
       run: |
         ruff check applications/viewers
         ruff check applications/viewers --preview
         ruff format applications/viewers --check --diff
       continue-on-error: false
+
     - name: Lint tests
       run: |
         ruff check tests
         ruff check tests --preview
         ruff format tests --check --diff
       continue-on-error: false
+
     - name: Lint datasets
       run: |
         ruff check src/yoke/datasets
         ruff check src/yoke/datasets --preview
         ruff format src/yoke/datasets --check --diff
       continue-on-error: false
+
     - name: Lint models
       run: |
         ruff check src/yoke/models
         ruff check src/yoke/models --preview
         ruff format src/yoke/models --check --diff
       continue-on-error: false
+
     - name: Build documentation
       run: |
         sphinx-build -b html docs/ docs/_build/html
+  
     - name: Test documentation coverage
       run: |
         coverage run -m sphinx -b coverage docs/ docs/_build/coverage
+
+    - name: directory-analysis
+      run: ls -R
+
     - name: Combine coverage reports
       run: |
         coverage combine
         coverage lcov -o coverage.lcov
+
     - name: Upload coverage to Coveralls
       uses: coverallsapp/github-action@v1
       with:
