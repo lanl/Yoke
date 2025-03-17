@@ -8,6 +8,10 @@ emulator.
 
 """
 
+from collections.abc import Iterable
+
+import numpy as np
+
 import torch
 from torch import nn
 from torch.optim.lr_scheduler import _LRScheduler
@@ -28,6 +32,63 @@ from yoke.models.vit.embedding_encoders import (
 from yoke.lr_schedulers import CosineWithWarmupScheduler
 from yoke.torch_training_utils import save_model_and_optimizer_hdf5
 from yoke.torch_training_utils import load_model_and_optimizer_hdf5
+
+
+def validate_patch_and_window(
+    image_size: Iterable[int, int],
+    patch_size: Iterable[int, int],
+    window_sizes: Iterable[
+        Iterable[int, int],
+        Iterable[int, int],
+        Iterable[int, int],
+        Iterable[int, int],
+    ],
+    patch_merge_scales: Iterable[
+        Iterable[int, int],
+        Iterable[int, int],
+        Iterable[int, int],
+    ] = None,
+):
+    """
+    Validate compatibility of `patch_size` and `window_sizes` with respect to
+    `image_size` for the LodeRunner architecture.
+
+    Args:
+    image_size (Iterable[int, int]): Height and width, in pixels, of input image.
+    patch_size (Iterable[int, int]): Height and width pixel dimensions of patch in
+                                     initial embedding.
+    window_sizes (list(4*(int, int))): Window sizes within each SWIN encoder/decoder.
+    patch_merge_scales (list(3*(int, int))): Height and width scales used in
+                                             each patch-merge layer.
+    """
+    ## Walk through LodeRunner stages and verify size compatibility.
+    valid = np.zeros(
+        (len(window_sizes), 2, 2), dtype=bool
+    )  # [stage, action, dimension]
+    image_size = np.array(image_size)
+    patch_size = np.array(patch_size)
+    window_sizes = np.array(window_sizes)
+    patch_merge_scales = (
+        np.array(patch_merge_scales)
+        if patch_merge_scales
+        else np.array([(2, 2) for _ in range(len(window_sizes) - 1)])
+    )
+
+    # Stage 1 patching (dividing input image into patches):
+    valid[0, 0] = (image_size % patch_size) == 0
+    new_grid = image_size // patch_size
+    # Stage 1 windowing (grouping patches into a window view):
+    valid[0, 1] = (new_grid % window_sizes[0, :]) == 0
+
+    # Stages 2-4 patch merging and windowing:
+    for s in range(1, 4):
+        # Patch merging (grouping patches into new, larger patches):
+        valid[s, 0] = (new_grid % patch_merge_scales[s - 1, :]) == 0
+        new_grid = new_grid // patch_merge_scales[s - 1, :]
+        # Windowing:
+        valid[s, 1] = (new_grid % window_sizes[s, :]) == 0
+
+    return valid
 
 
 class LodeRunner(nn.Module):
@@ -93,6 +154,17 @@ class LodeRunner(nn.Module):
         self.block_structure = block_structure
         self.window_sizes = window_sizes
         self.patch_merge_scales = patch_merge_scales
+
+        # Validate patch_size, window_sizes, and patch_merge_scales before proceeding.
+        valid = validate_patch_and_window(
+            image_size=image_size,
+            patch_size=patch_size,
+            window_sizes=window_sizes,
+            patch_merge_scales=patch_merge_scales,
+        )
+        assert np.all(
+            valid
+        ), "Invalid combination of image_size, patch_size, window_sizes, and patch_merge_scales!"
 
         # First embed the image as a sequence of tokenized patches. Each
         # channel is embedded independently.
