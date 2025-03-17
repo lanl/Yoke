@@ -874,7 +874,7 @@ class LSC_rho2rho_sequential_DataSet(Dataset):
 
         # Combine frames into a single tensor of shape [seq_len, num_fields, H, W]
         img_seq = torch.stack(frames, dim=0)
-        img_seq = torch.nn.functional.interpolate(img_seq, scale_factor=self.scale_factor)
+        img_seq = torch.nn.functional.interpolate(img_seq, scale_factor=self.scale_factor, mode="bilinear")
         img_seq = torch.nn.functional.pad(img_seq, pad=self.pad, value=self.pad_value)
         
         # Fixed time offset
