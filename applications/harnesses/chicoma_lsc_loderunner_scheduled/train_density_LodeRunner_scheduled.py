@@ -171,11 +171,11 @@ if __name__ == "__main__":
     # Load Model for Continuation
     #############################################
     if CONTINUATION:
-        starting_epoch = tr.load_model_and_optimizer_hdf5(model, optimizer, checkpoint)
-        print("Model state loaded for continuation.")
+        starting_epoch, scheduled_prob = tr.load_model_optimizer_and_prob_hdf5(model, optimizer, checkpoint)
+        print(f"Model state loaded for continuation with scheduled_prob = {scheduled_prob:.4f}")
     else:
         starting_epoch = 0
-
+ 
     #############################################
     # Move model and optimizer state to GPU
     #############################################
@@ -237,6 +237,13 @@ if __name__ == "__main__":
 
     print("Datasets initialized...")
 
+    # Log file path for storing scheduled_prob per epoch ##
+    log_filename = f"training_log_study{studyIDX}.txt"
+	
+	# Open the log file in append mode to preserve previous logs
+    log_file = open(log_filename, "a")
+    log_file.write("Epoch\tScheduled_Prob\tEpoch_Time (minutes)\n")  # Header for readabilit
+
     #############################################
     # Training Loop
     #############################################
@@ -294,11 +301,20 @@ if __name__ == "__main__":
         )
         print(f"Epoch time (minutes): {epoch_time:.2f}", flush=True)
 
-        # Decay the scheduled probability
+		# Log and print summary results
+        log_entry = f"{epochIDX}\t{scheduled_prob:.4f}\t{epoch_time:.2f}\n"
+        print(log_entry.strip(), flush=True)  # Print to console
+        log_file.write(log_entry)  # Write to log file
+        log_file.flush()  # Ensure immediate write
+        
+		# Decay the scheduled probability
         scheduled_prob = max(scheduled_prob * decay_rate, minimum_schedule_prob)
 
         # Clear GPU memory after each epoch
         torch.cuda.empty_cache()
+	
+	# Close the log file at the end of training 
+    log_file.close()	
 
     # Save Model Checkpoint
     print("Saving model checkpoint at end of epoch " + str(epochIDX) + ". . .")
@@ -311,11 +327,12 @@ if __name__ == "__main__":
             if isinstance(v, torch.Tensor):
                 state[k] = v.to("cpu")
 
-    # Save model and optimizer state in hdf5
+	# Save model and optimizer state in hdf5, including scheduled_prob
     h5_name_str = "study{0:03d}_modelState_epoch{1:04d}.hdf5"
     new_h5_path = os.path.join("./", h5_name_str.format(studyIDX, epochIDX))
-    tr.save_model_and_optimizer_hdf5(
-        model, optimizer, epochIDX, new_h5_path, compiled=False
+
+    tr.save_model_optimizer_and_prob_hdf5(
+        model, optimizer, epochIDX, scheduled_prob, new_h5_path, compiled=False
     )
 
     #############################################
@@ -323,9 +340,15 @@ if __name__ == "__main__":
     #############################################
     FINISHED_TRAINING = epochIDX + 1 > total_epochs
     if not FINISHED_TRAINING:
-        new_slurm_file = tr.continuation_setup(
-            new_h5_path, studyIDX, last_epoch=epochIDX
+        new_slurm_file = tr.continuation_setup_with_prob(
+            new_h5_path, studyIDX, last_epoch=epochIDX, scheduled_prob=scheduled_prob
         )
+        print(
+            f"Submitting SLURM job with checkpoint {new_h5_path}, "
+            f"scheduled_prob {scheduled_prob:.4f}, "
+            f"and input file {new_slurm_file}"
+        )
+
         os.system(f"sbatch {new_slurm_file}")
 
     ###########################################################################

@@ -11,7 +11,7 @@
 # partition. There are optional other constraints. Namely, `gpu80` and
 # `gpu40only`. 
 
-#SBATCH --job-name=loderunner_chfe_study<studyIDX>
+#SBATCH --job-name=loderunner_chfe_scheduled_sampling_study<studyIDX>
 #SBATCH --account=w25_artimis_g
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=64

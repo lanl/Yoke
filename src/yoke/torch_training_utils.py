@@ -178,6 +178,144 @@ def load_model_and_optimizer_hdf5(model, optimizer, filepath):
     return epoch
 
 
+def save_model_optimizer_and_prob_hdf5(model, optimizer, epoch, scheduled_prob, filepath, compiled=False):
+    """Saves the state of a model, optimizer, and scheduled probability in portable hdf5 format.
+    Model and optimizer should be moved to the CPU prior to using this function.
+
+    Args:
+        model (torch model): PyTorch model to save
+        optimizer (torch optimizer): PyTorch optimizer to save
+        epoch (int): Epoch associated with training
+        scheduled_prob (float): Scheduled sampling probability to checkpoint
+        filepath (str): Where to save
+        compiled (bool): Flag to extract original model if model being saved was compiled.
+    """
+    # If model is wrapped in DataParallel, access the underlying module
+    if isinstance(model, torch.nn.DataParallel):
+        model = model.module
+
+    # If the model is a `torch.compiled` version the original model must be extracted first.
+    if compiled:
+        model = model._orig_mod
+
+    with h5py.File(filepath, "w") as h5f:
+        # Save epoch number
+        h5f.attrs["epoch"] = epoch
+
+        # Save scheduled probability
+        h5f.attrs["scheduled_prob"] = scheduled_prob  # New addition
+
+        # Save model parameters and buffers
+        for name, param in model.named_parameters():
+            data = param.detach().cpu().numpy()
+            if data.ndim == 0:  # It's a scalar!
+                h5f.attrs["model/parameters/" + name] = data
+            else:
+                h5f.create_dataset("model/parameters/" + name, data=data)
+
+        for name, buffer in model.named_buffers():
+            data = buffer.cpu().numpy()
+            if data.ndim == 0:  # It's a scalar!
+                h5f.attrs["model/buffers/" + name] = data
+            else:
+                h5f.create_dataset("model/buffers/" + name, data=data)
+
+        # Save optimizer state
+        optimizer_state = optimizer.state_dict()
+        for idx, group in enumerate(optimizer_state["param_groups"]):
+            group_name = f"optimizer/group{idx}"
+            for k, v in group.items():
+                if isinstance(v, (int, float)):
+                    h5f.attrs[group_name + "/" + k] = v
+                elif isinstance(v, list):
+                    h5f.create_dataset(group_name + "/" + k, data=v)
+
+        # Save state values, like momentums
+        for idx, state in enumerate(optimizer_state["state"].items()):
+            state_name = f"optimizer/state{idx}"
+            for k, v in state[1].items():
+                if isinstance(v, torch.Tensor):
+                    h5f.create_dataset(
+                        state_name + "/" + k, data=v.detach().cpu().numpy()
+                    )
+
+
+def load_model_optimizer_and_prob_hdf5(model, optimizer, filepath):
+    """Loads the state of a model, optimizer, and scheduled probability stored in an HDF5 file.
+
+    Args:
+        model (torch model): PyTorch model to load
+        optimizer (torch optimizer): PyTorch optimizer to load
+        filepath (str): Path to the checkpoint file
+
+    Returns:
+        epoch (int): The last saved epoch
+        scheduled_prob (float): The last saved scheduled probability
+    """
+    # If model is wrapped in DataParallel, access the underlying module
+    if isinstance(model, torch.nn.DataParallel):
+        model = model.module
+
+    with h5py.File(filepath, "r") as h5f:
+        # Get epoch number
+        epoch = h5f.attrs["epoch"]
+
+        # Get scheduled probability (if available, default to 1.0)
+        scheduled_prob = h5f.attrs.get("scheduled_prob", 1.0)  # New addition
+
+        # Load model parameters and buffers
+        for name in h5f.get("model/parameters", []):  # Get the group
+            if isinstance(h5f["model/parameters/" + name], h5py.Dataset):
+                data = torch.from_numpy(h5f["model/parameters/" + name][:])
+            else:
+                data = torch.tensor(h5f.attrs["model/parameters/" + name])
+
+            name_list = name.split(".")
+            param_name = name_list.pop()
+            submod_name = ".".join(name_list)
+
+            model.get_submodule(submod_name)._parameters[param_name].data.copy_(data)
+
+        for name in h5f.get("model/buffers", []):
+            if isinstance(h5f["model/buffers/" + name], h5py.Dataset):
+                buffer = torch.from_numpy(h5f["model/buffers/" + name][:])
+            else:
+                buffer = torch.tensor(h5f.attrs["model/buffers/" + name])
+
+            name_list = name.split(".")
+            param_name = name_list.pop()
+            submod_name = ".".join(name_list)
+            model.get_submodule(submod_name)._buffers[param_name].data.copy_(buffer)
+
+        # Rebuild optimizer state (need to call this before loading state)
+        optimizer_state = optimizer.state_dict()
+
+        # Load optimizer parameter groups
+        for k in h5f.attrs:
+            if "optimizer/group" in k:
+                idx, param = k.split("/")[1:]
+                optimizer_state["param_groups"][int(idx.lstrip("group"))][param] = (
+                    h5f.attrs[k]
+                )
+
+        # Load state values, like momentums
+        for name, group in h5f.items():
+            if "optimizer/state" in name:
+                state_idx = int(name.split("state")[1])
+                param_idx, param_state = list(optimizer_state["state"].items())[
+                    state_idx
+                ]
+                for k in group:
+                    optimizer_state["state"][param_idx][k] = torch.from_numpy(
+                        group[k][:]
+                    )
+
+        # Load optimizer state
+        optimizer.load_state_dict(optimizer_state)
+
+    return epoch, scheduled_prob  # Now returning scheduled_prob as well
+
+
 ####################################
 # Make Dataloader form DataSet
 ####################################
@@ -363,6 +501,66 @@ def continuation_setup(checkpointpath, studyIDX, last_epoch):
         f.write(new_training_slurm_data)
 
     return new_training_slurm_filepath
+
+####################################
+# Continue Slurm Study (with Scheduled Probability)
+####################################
+def continuation_setup_with_prob(checkpointpath, studyIDX, last_epoch, scheduled_prob):
+    """Function to generate the training.input and training.slurm files for
+    continuation of model training, including scheduled probability.
+
+    Args:
+         checkpointpath (str): path to model checkpoint to load in model from
+         studyIDX (int): study ID to include in file name
+         last_epoch (int): number of epochs completed at this checkpoint
+         scheduled_prob (float): The last scheduled sampling probability
+
+    Returns:
+         new_training_slurm_filepath (str): Name of slurm file to submit job for
+                                            continued training
+    """
+    # Identify Template Files
+    training_input_tmpl = "./training_input.tmpl"
+    training_slurm_tmpl = "./training_slurm.tmpl"
+
+    # Define new file names
+    next_epoch = last_epoch + 1
+    new_training_input_filepath = f"study{studyIDX:03d}_restart_training_epoch{next_epoch:04d}.input"
+    new_training_slurm_filepath = f"study{studyIDX:03d}_restart_training_epoch{next_epoch:04d}.slurm"
+
+    # Make new training.input file
+    with open(training_input_tmpl) as f:
+        training_input_data = f.read()
+
+    # Replace placeholders in training.input
+    new_training_input_data = training_input_data.replace("<CHECKPOINT>", checkpointpath)
+    new_training_input_data = new_training_input_data.replace("<SCHEDULED_PROB>", f"{scheduled_prob:.4f}")
+
+    # Save the new training.input file
+    with open(os.path.join("./", new_training_input_filepath), "w") as f:
+        f.write(new_training_input_data)
+
+    # Make new training.slurm file
+    with open(training_slurm_tmpl) as f:
+        training_slurm_data = f.read()
+
+    # Replace the <INPUTFILE> placeholder with the new .input filename
+    new_training_slurm_data = training_slurm_data.replace("<INPUTFILE>", new_training_input_filepath)
+
+    # Replace any other epoch-specific placeholders
+    new_training_slurm_data = new_training_slurm_data.replace("<epochIDX>", f"{next_epoch:04d}")
+
+    # Ensure the Python command points to the correct input file
+    new_training_slurm_data = new_training_slurm_data.replace(
+        "python train_density_LodeRunner_scheduled.py @study001_START.input",
+        f"python train_density_LodeRunner_scheduled.py @{new_training_input_filepath}"
+    )
+
+    # Save the new training.slurm file
+    with open(os.path.join("./", new_training_slurm_filepath), "w") as f:
+        f.write(new_training_slurm_data)
+
+    return new_training_slurm_filepath  
 
 
 ####################################
