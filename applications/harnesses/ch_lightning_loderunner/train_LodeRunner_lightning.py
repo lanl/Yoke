@@ -18,7 +18,7 @@ import os
 import re
 
 import lightning.pytorch as L
-from lightning.pytorch.callbacks import ModelCheckpoint
+from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
 import torch
 import torch.nn as nn
 
@@ -72,21 +72,21 @@ if __name__ == "__main__":
     validation_filelist = os.path.join(args.FILELIST_DIR, args.validation_filelist)
     test_filelist = os.path.join(args.FILELIST_DIR, args.test_filelist)
 
-    # #############################################
-    # # Check Devices
-    # #############################################
-    # print("\n")
-    # print("Slurm & Device Information")
-    # print("=========================================")
-    # print("Slurm Job ID:", os.environ["SLURM_JOB_ID"])
-    # print("Pytorch Cuda Available:", torch.cuda.is_available())
-    # print("GPU ID:", os.environ["SLURM_JOB_GPUS"])
-    # print("Number of System CPUs:", os.cpu_count())
-    # print("Number of CPUs per GPU:", os.environ["SLURM_JOB_CPUS_PER_NODE"])
+    #############################################
+    # Check Devices
+    #############################################
+    print("\n")
+    print("Slurm & Device Information")
+    print("=========================================")
+    print("Slurm Job ID:", os.environ["SLURM_JOB_ID"])
+    print("Pytorch Cuda Available:", torch.cuda.is_available())
+    print("GPU ID:", os.environ["SLURM_JOB_GPUS"])
+    print("Number of System CPUs:", os.cpu_count())
+    print("Number of CPUs per GPU:", os.environ["SLURM_JOB_CPUS_PER_NODE"])
 
-    # print("\n")
-    # print("Model Training Information")
-    # print("=========================================")
+    print("\n")
+    print("Model Training Information")
+    print("=========================================")
 
     #############################################
     # Initialize Model
@@ -123,7 +123,6 @@ if __name__ == "__main__":
         eps=1e-08,
         weight_decay=0.01,
     )
-
 
     #############################################
     # Initialize Data
@@ -191,7 +190,7 @@ if __name__ == "__main__":
             "terminal_steps": args.terminal_steps,
             "num_cycles": args.num_cycles,
             "min_fraction": args.min_fraction,
-            "last_epoch": last_epoch,
+            # "last_epoch": last_epoch,  # Lightning takes care of this automatically
         },
         scheduled_sampling_scheduler=getattr(yoke.scheduled_sampling, args.schedule)(
             initial_schedule_prob=args.initial_schedule_prob,
@@ -217,21 +216,21 @@ if __name__ == "__main__":
         filename=f"study{args.studyIDX:03d}" + "_{epoch:04d}_{val_loss:.4f}",
         save_last=True,
     )
-    checkpoint_callback.CHECKPOINT_NAME_LAST = "{epoch:04d}_{val_loss:.4f}-last"
-
+    checkpoint_callback.CHECKPOINT_NAME_LAST = f"study{args.studyIDX:03d}" + "_{epoch:04d}_{val_loss:.4f}-last"
+    lr_monitor = LearningRateMonitor(logging_interval="step")
     trainer = L.Trainer(
         max_epochs=final_epoch + 1,
         limit_train_batches=args.train_batches,
         check_val_every_n_epoch=args.TRAIN_PER_VAL,
         limit_val_batches=args.val_batches,
-        # accelerator="gpu",
-        # devices=args.Ngpus,  # Number of GPUs per node
-        # num_nodes=args.Knodes,
-        # strategy="ddp",
+        accelerator="gpu",
+        devices=args.Ngpus,  # Number of GPUs per node
+        num_nodes=args.Knodes,
+        strategy="ddp",
         enable_progress_bar=True,
         logger=logger,
         log_every_n_steps=32,
-        callbacks=[checkpoint_callback],
+        callbacks=[checkpoint_callback, lr_monitor],
     )
 
     # Run training using Lightning.
