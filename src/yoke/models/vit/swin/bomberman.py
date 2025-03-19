@@ -29,8 +29,6 @@ from yoke.models.vit.embedding_encoders import (
 )
 
 from yoke.lr_schedulers import CosineWithWarmupScheduler
-from yoke.torch_training_utils import save_model_and_optimizer_hdf5
-from yoke.torch_training_utils import load_model_and_optimizer_hdf5
 
 
 class LodeRunner(nn.Module):
@@ -232,10 +230,28 @@ class Lightning_LodeRunner(LightningModule):
         self.register_buffer("in_vars", in_vars)
         self.register_buffer("out_vars", out_vars)
 
+    def configure_optimizers(self) -> torch.optim.Optimizer:
+        """Setup optimizer with scheduler."""
+        # Optimizer setup
+        optimizer = torch.optim.AdamW(self.model.parameters())
+
+        # Initialize LR scheduler
+        scheduler = self.lr_scheduler(optimizer, **self.scheduler_params)
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "interval": "step",  # Step scheduler every batch.
+                "frequency": 1,  # Step every batch (default for "step")
+            },
+        }
+
     def forward(self, X: torch.Tensor, lead_times: torch.Tensor) -> torch.Tensor:
         """Forward method for Lightning wrapper."""
         # Forward pass through the custom model
-        return self.model(X, lead_times=lead_times, in_vars=self.in_vars, out_vars=self.out_vars)
+        return self.model(
+            X, lead_times=lead_times, in_vars=self.in_vars, out_vars=self.out_vars
+        )
 
     def training_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:
         """Execute training step."""
@@ -293,22 +309,6 @@ class Lightning_LodeRunner(LightningModule):
 
         batch_loss = losses.mean()
         self.log("val_loss", batch_loss, sync_dist=True)
-
-    def configure_optimizers(self) -> torch.optim.Optimizer:
-        """Setup optimizer with scheduler."""
-        # Optimizer setup
-        optimizer = torch.optim.AdamW(self.model.parameters())
-
-        # Initialize LR scheduler
-        scheduler = self.lr_scheduler(optimizer, **self.scheduler_params)
-        return {
-            "optimizer": optimizer,
-            "lr_scheduler": {
-                "scheduler": scheduler,
-                "interval": "step",  # Step scheduler every batch.
-                "frequency": 1,  # Step every batch (default for "step")
-            },
-        }
 
 
 if __name__ == "__main__":
@@ -381,7 +381,9 @@ if __name__ == "__main__":
     loderunner_out = lode_runner(x, x_vars, out_vars, lead_times)
     print("LodeRunner-tiny output shape:", loderunner_out.shape)
     print("LodeRunner-tiny output has NaNs:", torch.isnan(loderunner_out).any())
-    print("LodeRunner-tiny parameters:", count_torch_params(lode_runner, trainable=True))
+    print(
+        "LodeRunner-tiny parameters:", count_torch_params(lode_runner, trainable=True)
+    )
 
     # Test lightning wrapper initialization.
     L_loderunner = Lightning_LodeRunner(
@@ -475,7 +477,9 @@ if __name__ == "__main__":
         patch_merge_scales=patch_merge_scales,
         verbose=False,
     ).to(device)
-    print("LodeRunner-huge parameters:", count_torch_params(lode_runner, trainable=True))
+    print(
+        "LodeRunner-huge parameters:", count_torch_params(lode_runner, trainable=True)
+    )
 
     # Giant size
     embed_dim = 512

@@ -8,16 +8,19 @@ data, *lsc240420*.
 ####################################
 # Packages
 ####################################
-import sys
+import itertools
 from pathlib import Path
-import typing
-from typing import Callable
 import random
+import sys
+import typing
+from typing import Callable, Dict
+
+import lightning.pytorch as L
 import numpy as np
 import pandas as pd
 import torch
-from torch.utils.data import Dataset
-import itertools
+from torch.utils.data import Dataset, DataLoader
+
 
 NoneStr = typing.Union[None, str]
 
@@ -749,7 +752,8 @@ class LSC_rho2rho_sequential_DataSet(Dataset):
         seq_len (int): Number of consecutive frames to return. This includes the
                        starting frame.
         half_image (bool): If True, returns half-images, otherwise full images.
-
+        hydro_fields (np.array, optional): Array of hydro field names to be included.
+        transform (Callable): Transform applied to loaded data sequence before returning.
     """
 
     def __init__(
@@ -759,6 +763,19 @@ class LSC_rho2rho_sequential_DataSet(Dataset):
         max_file_checks: int,
         seq_len: int,
         half_image: bool = True,
+        hydro_fields: np.array = np.array(
+            [
+                "density_case",
+                "density_cushion",
+                "density_maincharge",
+                "density_outside_air",
+                "density_striker",
+                "density_throw",
+                "Uvelocity",
+                "Wvelocity",
+            ]
+        ),
+        transform: Callable = None,
     ) -> None:
         """Initialization for LSC sequential dataset."""
         dir_path = Path(LSC_NPZ_DIR)
@@ -770,6 +787,7 @@ class LSC_rho2rho_sequential_DataSet(Dataset):
         self.max_file_checks = max_file_checks
         self.seq_len = seq_len
         self.half_image = half_image
+        self.transform = transform
 
         # Load the list of file prefixes
         with open(file_prefix_list) as f:
@@ -780,16 +798,7 @@ class LSC_rho2rho_sequential_DataSet(Dataset):
         self.Nsamples = len(self.file_prefix_list)
 
         # Fields to extract from the simulation
-        self.hydro_fields = [
-            "density_case",
-            "density_cushion",
-            "density_maincharge",
-            "density_outside_air",
-            "density_striker",
-            "density_throw",
-            "Uvelocity",
-            "Wvelocity",
-        ]
+        self.hydro_fields = hydro_fields
 
         # Random number generator
         self.rng = np.random.default_rng()
@@ -867,7 +876,73 @@ class LSC_rho2rho_sequential_DataSet(Dataset):
         # Combine frames into a single tensor of shape [seq_len, num_fields, H, W]
         img_seq = torch.stack(frames, dim=0)
 
+        # Apply transforms if requested.
+        if self.transform is not None:
+            img_seq = self.transform(img_seq)
+
         # Fixed time offset
         Dt = torch.tensor(0.25, dtype=torch.float32)
 
         return img_seq, Dt
+
+
+class LSCDataModule(L.LightningDataModule):
+    """Lightning data module for generic LSC datasets.
+
+    Args:
+        ds_name (str): Name of desired dataset in src.yoke.datasets.lsc_dataset
+        ds_params_train (Dict): Keyword arguments passed to dataset initializer
+            to generate the training dataset.
+        dl_params_train (Dict): Keyword arguments passed to training dataloader.
+        ds_params_val (Dict): Keyword arguments passed to dataset initializer
+            to generate the validation dataset.
+        dl_params_val (Dict): Keyword arguments passed to validation dataloader.
+        ds_params_test (Dict): Keyword arguments passed to dataset initializer
+            to generate the testing dataset.
+        dl_params_test (Dict): Keyword arguments passed to testing dataloader.
+    """
+
+    def __init__(
+        self,
+        ds_name: str,
+        ds_params_train: Dict,
+        dl_params_train: Dict,
+        ds_params_val: Dict,
+        dl_params_val: Dict,
+        ds_params_test: Dict = None,
+        dl_params_test: Dict = None,
+    ):
+        super().__init__()
+        self.ds_name = ds_name
+
+        self.ds_params_train = ds_params_train
+        self.dl_params_train = dl_params_train
+
+        self.ds_params_val = ds_params_val
+        self.dl_params_val = dl_params_val
+
+        self.ds_params_test = ds_params_test
+        self.dl_params_test = dl_params_test
+
+    def setup(self, stage=None):
+        # Define training and validation datasets.
+        ds = getattr(sys.modules[__name__], self.ds_name)
+        if (stage == "fit") or (stage is None):
+            self.ds_train = ds(**self.ds_params_train)
+            self.ds_val = ds(**self.ds_params_val)
+
+        # Define test dataset.
+        if (stage == "test") or (stage is None):
+            assert (
+                self.ds_params_test is not None
+            ), "Must pass `ds_params_test` and `dl_params_test`!"
+            self.ds_test = ds(**self.ds_params_test)
+
+    def train_dataloader(self):
+        return DataLoader(dataset=self.ds_train, **self.dl_params_train)
+
+    def val_dataloader(self):
+        return DataLoader(dataset=self.ds_val, **self.dl_params_val)
+
+    def test_dataloader(self):
+        return DataLoader(dataset=self.ds_test, **self.dl_params_test)

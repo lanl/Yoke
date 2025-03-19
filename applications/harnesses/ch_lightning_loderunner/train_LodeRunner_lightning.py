@@ -23,7 +23,7 @@ import torch
 import torch.nn as nn
 
 from yoke.models.vit.swin.bomberman import LodeRunner, Lightning_LodeRunner
-from yoke.datasets.lsc_dataset import LSC_rho2rho_sequential_DataSet
+from yoke.datasets.lsc_dataset import LSCDataModule
 import yoke.torch_training_utils as tr
 from yoke.lr_schedulers import CosineWithWarmupScheduler
 from yoke.helpers import cli
@@ -113,53 +113,25 @@ if __name__ == "__main__":
     )
 
     #############################################
-    # Initialize Optimizer
-    #############################################
-    # Using LR scheduler so optimizer LR is fixed and small.
-    optimizer = torch.optim.AdamW(
-        model.parameters(),
-        lr=args.anchor_lr,
-        betas=(0.9, 0.999),
-        eps=1e-08,
-        weight_decay=0.01,
-    )
-
-    #############################################
     # Initialize Data
     #############################################
-    train_dataset = LSC_rho2rho_sequential_DataSet(
-        LSC_NPZ_DIR=args.LSC_NPZ_DIR,
-        file_prefix_list=train_filelist,
-        max_file_checks=10,
-        seq_len=args.seq_len,  # Sequence length
-        half_image=True,
-    )
-
-    val_dataset = LSC_rho2rho_sequential_DataSet(
-        LSC_NPZ_DIR=args.LSC_NPZ_DIR,
-        file_prefix_list=validation_filelist,
-        max_file_checks=10,
-        seq_len=args.seq_len,  # Sequence length
-        half_image=True,
-    )
-
-    #############################################
-    # Training
-    #############################################
-    # Setup Dataloaders
-    train_dataloader = tr.make_dataloader(
-        train_dataset,
-        args.batch_size,
-        args.train_batches,
-        num_workers=args.num_workers,
-        prefetch_factor=args.prefetch_factor,
-    )
-    val_dataloader = tr.make_dataloader(
-        val_dataset,
-        args.batch_size,
-        args.val_batches,
-        num_workers=args.num_workers,
-        prefetch_factor=args.prefetch_factor,
+    ds_params = {
+        "LSC_NPZ_DIR": args.LSC_NPZ_DIR,
+        "max_file_checks": 10,
+        "seq_len": args.seq_len,
+        "half_image": True,
+    }
+    dl_params = {
+        "batch_size": args.batch_size,
+        "num_workers": args.num_workers,
+        "prefetch_factor": args.prefetch_factor,
+    }
+    lsc_datamodule = LSCDataModule(
+        ds_name="LSC_rho2rho_sequential_DataSet",
+        ds_params_train=ds_params | {"file_prefix_list": train_filelist},
+        ds_params_val=ds_params | {"file_prefix_list": validation_filelist},
+        dl_params_train=dl_params | {"shuffle": True, "persistent_workers": True},
+        dl_params_val=dl_params | {"shuffle": False, "persistent_workers": True},
     )
 
     #############################################
@@ -240,8 +212,7 @@ if __name__ == "__main__":
         ckpt_path = None
     trainer.fit(
         L_loderunner,
-        train_dataloaders=train_dataloader,
-        val_dataloaders=val_dataloader,
+        datamodule=lsc_datamodule,
         ckpt_path=ckpt_path,
     )
 
