@@ -363,24 +363,31 @@ def add_scheduled_sampling_args(
     Add scheduled sampling arguments to parser for harnesses in yoke.applications.harnesses
     """
     parser.add_argument(
-        "--scheduled_prob",
+        "--schedule",
+        action="store",
+        type=str,
+        default="inverse_sigmoid",
+        help="Name of a function in src.yoke.scheduled_sampling defining scheduled sampling schedule.",
+    )
+    parser.add_argument(
+        "--initial_schedule_prob",
         action="store",
         type=float,
         default=1.0,  # Initial probability of using ground truth
         help="Initial probability of using ground truth for scheduled sampling.",
     )
     parser.add_argument(
-        "--decay_rate",
+        "--decay_param",
         action="store",
         type=float,
-        default=1.0,  # Decay rate for scheduled_prob
-        help="Schedule probability multiplier after each epoch.",
+        default=100.0,  # Decay parameter for scheduled_prob
+        help="Parameter defining decay of scheduled sampling schedule.",
     )
     parser.add_argument(
         "--minimum_schedule_prob",
         action="store",
         type=float,
-        default=0.0,  # Initial probability of using ground truth
+        default=0.0,  # Minimum probability of using ground truth
         help="Minimum scheduled-sampling probability.",
     )
 
