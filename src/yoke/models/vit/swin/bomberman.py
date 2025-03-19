@@ -247,14 +247,14 @@ class Lightning_LodeRunner(LightningModule):
         for k, k_img in enumerate(torch.unbind(img_seq[:, :-1], dim=1)):
             if k == 0:
                 # Forward pass for the initial step
-                pred_img = self(k_img, lead_times[k:(k+1)])
+                pred_img = self(k_img, lead_times)
             else:
                 # Apply scheduled sampling
                 if random.random() < scheduled_prob:
                     current_input = k_img
                 else:
                     current_input = pred_img
-                pred_img = self(current_input, lead_times[k:(k+1)])
+                pred_img = self(current_input, lead_times)
 
             # Store the prediction
             pred_seq.append(pred_img)
@@ -279,7 +279,7 @@ class Lightning_LodeRunner(LightningModule):
         pred_seq = []
         for k, k_img in enumerate(torch.unbind(img_seq[:, :-1], dim=1)):
             # For now, stick to next time step prediction for validation step.
-            pred_img = self(k_img, lead_times[k:(k+1)])
+            pred_img = self(k_img, lead_times)
 
             # Store the prediction
             pred_seq.append(pred_img)
@@ -297,9 +297,7 @@ class Lightning_LodeRunner(LightningModule):
     def configure_optimizers(self) -> torch.optim.Optimizer:
         """Setup optimizer with scheduler."""
         # Optimizer setup
-        optimizer = torch.optim.AdamW(
-            self.model.parameters(),
-        )
+        optimizer = torch.optim.AdamW(self.model.parameters())
 
         # Initialize LR scheduler
         scheduler = self.lr_scheduler(optimizer, **self.scheduler_params)
@@ -311,32 +309,6 @@ class Lightning_LodeRunner(LightningModule):
                 "frequency": 1,  # Step every batch (default for "step")
             },
         }
-
-    # def on_save_checkpoint(self, checkpoint: dict) -> None:
-    #     """Custom save checkpoint."""
-    #     epoch = checkpoint.get("epoch", 0)  # Returns 0 if 'epoch' key doesn't exist.
-    #     filepath = self.save_h5_chkpt
-    #     save_model_and_optimizer_hdf5(
-    #         self.model,
-    #         self.optimizers()[0],
-    #         epoch=epoch,
-    #         filepath=filepath,
-    #     )
-    #     self.print(f"Saved HDF5 checkpoint: {filepath}")
-
-    # def on_load_checkpoint(self) -> None:
-    #     """Custom load checkpoint."""
-    #     filepath = self.load_h5_chkpt
-    #     try:
-    #         loaded_epoch = load_model_and_optimizer_hdf5(
-    #             self.model,
-    #             self.optimizers()[0],
-    #             filepath=filepath,
-    #         )
-    #         self.current_epoch_override = loaded_epoch
-    #         self.print(f"Loaded HDF5 checkpoint: {filepath}")
-    #     except FileNotFoundError:
-    #         self.print(f"Checkpoint file not found: {filepath}. Starting fresh!")
 
 
 if __name__ == "__main__":
