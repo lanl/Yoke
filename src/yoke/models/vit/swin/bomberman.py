@@ -259,7 +259,7 @@ class Lightning_LodeRunner(LightningModule):
         # scheduled sampling.
         img_seq, lead_times = batch  # Unpack batch
         pred_seq = []
-        scheduled_prob = self.scheduled_sampling_scheduler(self.global_step)
+        scheduled_prob = self.scheduled_sampling_scheduler(self.current_epoch)
         for k, k_img in enumerate(torch.unbind(img_seq[:, :-1], dim=1)):
             if k == 0:
                 # Forward pass for the initial step
