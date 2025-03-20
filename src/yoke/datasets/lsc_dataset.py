@@ -925,24 +925,26 @@ class LSCDataModule(L.LightningDataModule):
         self.dl_params_test = dl_params_test
 
     def setup(self, stage=None):
-        # Define training and validation datasets.
-        ds = getattr(sys.modules[__name__], self.ds_name)
-        if (stage == "fit") or (stage is None):
-            self.ds_train = ds(**self.ds_params_train)
-            self.ds_val = ds(**self.ds_params_val)
-
-        # Define test dataset.
-        if (stage == "test") or (stage is None):
-            assert (
-                self.ds_params_test is not None
-            ), "Must pass `ds_params_test` and `dl_params_test`!"
-            self.ds_test = ds(**self.ds_params_test)
+        # Currently, LSC datasets are fast to instantiate.  As such, to
+        # facilitate "dynamic" datasets that may change throughout 
+        # training, dataset instantiation is done on-the-fly when
+        # preparing dataloaders.
+        pass
 
     def train_dataloader(self):
-        return DataLoader(dataset=self.ds_train, **self.dl_params_train)
+        ds_ref = getattr(sys.modules[__name__], self.ds_name)
+        ds_train = ds_ref(**self.ds_params_train)
+        self.ds_train = ds_train
+        return DataLoader(dataset=ds_train, **self.dl_params_train)
 
     def val_dataloader(self):
-        return DataLoader(dataset=self.ds_val, **self.dl_params_val)
+        ds_ref = getattr(sys.modules[__name__], self.ds_name)
+        ds_val = ds_ref(**self.ds_params_val)
+        self.ds_val = ds_val
+        return DataLoader(dataset=ds_val, **self.dl_params_val)
 
     def test_dataloader(self):
-        return DataLoader(dataset=self.ds_test, **self.dl_params_test)
+        ds_ref = getattr(sys.modules[__name__], self.ds_name)
+        ds_test = ds_ref(**self.ds_params_test)
+        self.ds_test = ds_test
+        return DataLoader(dataset=ds_test, **self.dl_params_test)
