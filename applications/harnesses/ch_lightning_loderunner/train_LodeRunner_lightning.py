@@ -103,7 +103,7 @@ if __name__ == "__main__":
             "Wvelocity",
         ],
         image_size=(1120, 400),
-        patch_size=(5, 5),  # Since using half-image, halve patch size.
+        patch_size=(5, 5),
         embed_dim=args.embed_dim,
         emb_factor=2,
         num_heads=8,
@@ -137,17 +137,6 @@ if __name__ == "__main__":
     #############################################
     # Lightning wrap
     #############################################
-    # Get start_epoch from checkpoint filename
-    # Format: study{args.studyIDX:03d}_epoch={epoch:04d}_val_loss={val_loss:.4f}.ckpt
-    if args.continuation:
-        starting_epoch = int(
-            re.search(r"epoch=(?P<epoch>\d+)_", args.checkpoint)["epoch"]
-        )
-        last_epoch = args.train_batches * (starting_epoch - 1)
-    else:
-        starting_epoch = 0
-        last_epoch = -1
-
     in_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7])
     out_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7])
     L_loderunner = Lightning_LodeRunner(
@@ -162,7 +151,6 @@ if __name__ == "__main__":
             "terminal_steps": args.terminal_steps,
             "num_cycles": args.num_cycles,
             "min_fraction": args.min_fraction,
-            # "last_epoch": last_epoch,  # Lightning takes care of this automatically
         },
         scheduled_sampling_scheduler=getattr(yoke.scheduled_sampling, args.schedule)(
             initial_schedule_prob=args.initial_schedule_prob,
@@ -174,11 +162,19 @@ if __name__ == "__main__":
     # Prepare Lightning trainer.
     logger = L.loggers.CSVLogger(
         save_dir="./",
-        flush_logs_every_n_steps=32,
+        flush_logs_every_n_steps=min(args.train_batches, args.val_batches),
     )
 
-    cycle_epochs = min(args.cycle_epochs, args.total_epochs - starting_epoch + 1)
-    final_epoch = starting_epoch + cycle_epochs - 1
+    # Determine starting and final epochs for this round of training.
+    # Format: study{args.studyIDX:03d}_epoch={epoch:04d}_val_loss={val_loss:.4f}.ckpt
+    if args.continuation:
+        starting_epoch = (
+            int(re.search(r"epoch=(?P<epoch>\d+)_", args.checkpoint)["epoch"]) + 1
+        )
+    else:
+        starting_epoch = 0
+
+    # Prepare trainer.
     checkpoint_callback = ModelCheckpoint(
         save_top_k=-1,
         every_n_epochs=args.TRAIN_PER_VAL,
@@ -188,10 +184,13 @@ if __name__ == "__main__":
         filename=f"study{args.studyIDX:03d}" + "_{epoch:04d}_{val_loss:.4f}",
         save_last=True,
     )
-    checkpoint_callback.CHECKPOINT_NAME_LAST = f"study{args.studyIDX:03d}" + "_{epoch:04d}_{val_loss:.4f}-last"
+    checkpoint_callback.CHECKPOINT_NAME_LAST = (
+        f"study{args.studyIDX:03d}" + "_{epoch:04d}_{val_loss:.4f}-last"
+    )
     lr_monitor = LearningRateMonitor(logging_interval="step")
+    final_epoch = min(starting_epoch + args.cycle_epochs, args.total_epochs) - 1
     trainer = L.Trainer(
-        max_epochs=final_epoch + 1,
+        max_epochs=final_epoch+1,
         limit_train_batches=args.train_batches,
         check_val_every_n_epoch=args.TRAIN_PER_VAL,
         limit_val_batches=args.val_batches,
@@ -201,7 +200,7 @@ if __name__ == "__main__":
         strategy="ddp",
         enable_progress_bar=True,
         logger=logger,
-        log_every_n_steps=32,
+        log_every_n_steps=min(args.train_batches, args.val_batches),
         callbacks=[checkpoint_callback, lr_monitor],
     )
 
@@ -222,11 +221,11 @@ if __name__ == "__main__":
     # Run only in main process, otherwise we'll get NGPUs copies of the chain due
     # to the way Lightning tries to parallelize the script.
     if trainer.is_global_zero:
-        FINISHED_TRAINING = final_epoch + 1 > args.total_epochs
+        FINISHED_TRAINING = (final_epoch+1) > args.total_epochs
         if not FINISHED_TRAINING:
             new_slurm_file = tr.continuation_setup(
                 checkpoint_callback.last_model_path,
                 args.studyIDX,
-                last_epoch=final_epoch,
+                last_epoch=final_epoch+1,
             )
             os.system(f"sbatch {new_slurm_file}")
