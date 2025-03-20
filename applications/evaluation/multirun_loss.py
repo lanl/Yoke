@@ -73,8 +73,12 @@ args = parser.parse_args()
 csv_list = glob.glob(
     os.path.join(args.basedir, "study_*", "lightning_logs", "version_*", "metrics.csv")
 )
+
+# Filter files.
 study_re = r"study_(?P<ind>\d+)"
 study_inds = np.array([int(re.search(study_re, f)["ind"]) for f in csv_list])
+version_re = r"version_(?P<ind>\d+)"
+version_inds = np.array([int(re.search(version_re, f)["ind"]) for f in csv_list])
 if args.idx_range is None:
     idx_range = [np.min(study_inds), np.max(study_inds)]
 else:
@@ -82,6 +86,16 @@ else:
 keep_inds = (study_inds >= idx_range[0]) & (study_inds <= idx_range[1])
 csv_list = np.array(csv_list)[keep_inds]
 study_inds = study_inds[keep_inds]
+version_inds = version_inds[keep_inds]
+
+if args.version_range is None:
+    version_range = [np.min(version_inds), np.max(version_inds)]
+else:
+    version_range = args.version_range
+keep_inds = (version_inds >= version_range[0]) & (version_inds <= version_range[1])
+csv_list = np.array(csv_list)[keep_inds]
+study_inds = study_inds[keep_inds]
+version_inds = version_inds[keep_inds]
 
 # Plot losses for each study.
 fig, ax = plt.subplots()
