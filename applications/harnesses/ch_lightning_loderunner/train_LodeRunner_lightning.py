@@ -221,7 +221,7 @@ if __name__ == "__main__":
     # Run only in main process, otherwise we'll get NGPUs copies of the chain due
     # to the way Lightning tries to parallelize the script.
     if trainer.is_global_zero:
-        FINISHED_TRAINING = (final_epoch+1) > args.total_epochs
+        FINISHED_TRAINING = (final_epoch+1) >= args.total_epochs
         if not FINISHED_TRAINING:
             new_slurm_file = tr.continuation_setup(
                 checkpoint_callback.last_model_path,
