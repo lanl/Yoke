@@ -22,7 +22,6 @@ from yoke.models.vit.swin.bomberman import LodeRunner, Lightning_LodeRunner
 import yoke.torch_training_utils as tr
 from yoke.helpers import cli
 
-import matplotlib
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
@@ -39,7 +38,11 @@ descr_str = (
     "Create animation of single hydro-field for LodeRunner on lsc240420 "
     "simulation IDX."
 )
-parser = argparse.ArgumentParser(prog="Animation of LodeRunner", description=descr_str)
+parser = argparse.ArgumentParser(
+    prog="Animation of LodeRunner",
+    description=descr_str,
+    fromfile_prefix_chars="@",
+)
 
 parser.add_argument(
     "--checkpoint",
@@ -54,7 +57,7 @@ parser.add_argument(
     "-D",
     action="store",
     type=str,
-    default="/lustre/vescratch1/exempt/artimis/mpmm/lsc240420/",
+    default="/lustre/scratch5/exempt/artimis/mpmm/lsc240420/",
     help="Directory to find NPZ files.",
 )
 
@@ -209,26 +212,30 @@ if __name__ == "__main__":
             # Concatenate images channel first.
             true_img = torch.tensor(np.stack(true_img_list, axis=0)).to(torch.float32)
             true_img = torch.unsqueeze(true_img, 0)
+            true_img = true_img.to(model.device)
+            Dt = Dt.to(model.device)
 
-            # Sum for true average density
-            true_rho = true_img.detach().numpy()[0]
-            true_rho = true_rho[0:6, :, :].sum(0)
             if k == 0:
                 # Make a prediction from ground truth input.
                 pred_img = model(true_img, Dt)
-                pred_rho = np.squeeze(pred_img.detach().numpy())
-                pred_rho = pred_rho[0:6, :, :].sum(0)
-
             else:
                 # Evaluate LodeRunner from last prediction
-                pred_img = model(pred_img, Dt)
-                pred_rho = np.squeeze(pred_img.detach().numpy())
-                pred_rho = pred_rho[0:6, :, :].sum(0)
+                pred_img = model(pred_img.to(model.device), Dt)
+
+            pred_img = pred_img.detach().cpu()
+            true_img = true_img.detach().cpu()
+            Dt = Dt.detach().cpu()
+            pred_rho = np.squeeze(pred_img.numpy())
+            pred_rho = pred_rho[0:6, :, :].sum(0)
 
             # Compute loss.
             loss_per_image[m, k] = loss(
-                pred_img.detach().cpu().squeeze(), true_img.detach().cpu().squeeze()
+                pred_img.squeeze(), true_img.squeeze()
             )
+
+            # Sum for true average density
+            true_rho = true_img.numpy()[0]
+            true_rho = true_rho[0:6, :, :].sum(0)
 
             # Plot Truth/Prediction/Discrepancy panel.
             fig1, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(16, 6))
@@ -289,7 +296,7 @@ if __name__ == "__main__":
                 dpi=300,
             )
             plt.close()
-
+        model = model.cpu()  # free up GPU before next model load just in case
         fig, ax = plt.subplots()
         plt.plot(Dt * np.arange(len(npz_list)), loss_per_image[m], ".")
         # ax.set_yscale("log")
