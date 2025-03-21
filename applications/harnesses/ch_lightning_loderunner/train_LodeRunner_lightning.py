@@ -84,9 +84,9 @@ if __name__ == "__main__":
     print("Number of System CPUs:", os.cpu_count())
     print("Number of CPUs per GPU:", os.environ["SLURM_JOB_CPUS_PER_NODE"])
 
-    print("\n")
-    print("Model Training Information")
-    print("=========================================")
+    # print("\n")
+    # print("Model Training Information")
+    # print("=========================================")
 
     #############################################
     # Initialize Model
@@ -117,7 +117,7 @@ if __name__ == "__main__":
     #############################################
     ds_params = {
         "LSC_NPZ_DIR": args.LSC_NPZ_DIR,
-        "max_file_checks": 10,
+        "max_file_checks": 1000,
         "seq_len": args.seq_len,
         "half_image": True,
     }
@@ -137,27 +137,38 @@ if __name__ == "__main__":
     #############################################
     # Lightning wrap
     #############################################
-    in_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7])
-    out_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7])
-    L_loderunner = Lightning_LodeRunner(
-        model,
-        in_vars=in_vars,
-        out_vars=out_vars,
-        loss_fn=nn.MSELoss(reduction="none"),
-        lr_scheduler=CosineWithWarmupScheduler,
-        scheduler_params={
+    lm_kwargs = {
+        "model": model,
+        "in_vars": torch.tensor([0, 1, 2, 3, 4, 5, 6, 7]),
+        "out_vars": torch.tensor([0, 1, 2, 3, 4, 5, 6, 7]),
+        "loss_fn": nn.MSELoss(reduction="none"),
+        "lr_scheduler": CosineWithWarmupScheduler,
+        "scheduler_params": {
             "warmup_steps": args.warmup_steps,
             "anchor_lr": args.anchor_lr,
             "terminal_steps": args.terminal_steps,
             "num_cycles": args.num_cycles,
             "min_fraction": args.min_fraction,
         },
-        scheduled_sampling_scheduler=getattr(yoke.scheduled_sampling, args.schedule)(
+        "scheduled_sampling_scheduler": getattr(yoke.scheduled_sampling, args.schedule)(
             initial_schedule_prob=args.initial_schedule_prob,
             decay_param=args.decay_param,
             minimum_schedule_prob=args.minimum_schedule_prob,
         ),
-    )
+    }
+    if args.continuation or (args.checkpoint is None):
+        L_loderunner = Lightning_LodeRunner(**lm_kwargs)
+    else:
+        # This condition is used to load pretrained weights without continuing training.
+        L_loderunner = Lightning_LodeRunner.load_from_checkpoint(
+            checkpoint_path=args.checkpoint,
+            strict=False,
+            **lm_kwargs,
+        )
+
+    # Freeze the U-Net backbone.
+    if args.freeze_backbone:
+        tr.freeze_torch_params(L_loderunner.model.unet)
 
     # Prepare Lightning trainer.
     logger = L.loggers.CSVLogger(
@@ -190,14 +201,14 @@ if __name__ == "__main__":
     lr_monitor = LearningRateMonitor(logging_interval="step")
     final_epoch = min(starting_epoch + args.cycle_epochs, args.total_epochs) - 1
     trainer = L.Trainer(
-        max_epochs=final_epoch+1,
+        max_epochs=final_epoch + 1,
         limit_train_batches=args.train_batches,
         check_val_every_n_epoch=args.TRAIN_PER_VAL,
         limit_val_batches=args.val_batches,
-        accelerator="gpu",
-        devices=args.Ngpus,  # Number of GPUs per node
-        num_nodes=args.Knodes,
-        strategy="ddp",
+        # accelerator="gpu",
+        # devices=args.Ngpus,  # Number of GPUs per node
+        # num_nodes=args.Knodes,
+        # strategy="ddp",
         enable_progress_bar=True,
         logger=logger,
         log_every_n_steps=min(args.train_batches, args.val_batches),
@@ -221,11 +232,11 @@ if __name__ == "__main__":
     # Run only in main process, otherwise we'll get NGPUs copies of the chain due
     # to the way Lightning tries to parallelize the script.
     if trainer.is_global_zero:
-        FINISHED_TRAINING = (final_epoch+1) >= args.total_epochs
+        FINISHED_TRAINING = (final_epoch + 1) >= args.total_epochs
         if not FINISHED_TRAINING:
             new_slurm_file = tr.continuation_setup(
                 checkpoint_callback.last_model_path,
                 args.studyIDX,
-                last_epoch=final_epoch+1,
+                last_epoch=final_epoch + 1,
             )
             os.system(f"sbatch {new_slurm_file}")

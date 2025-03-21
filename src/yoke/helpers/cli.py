@@ -257,8 +257,13 @@ def add_training_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParse
         "--checkpoint",
         action="store",
         type=str,
-        default="None",
+        default=None,
         help="Path to checkpoint to continue training from",
+    )
+    parser.add_argument(
+        "--freeze_backbone",
+        action="store_true",
+        help="Freeze model backbone while training.",
     )
     parser.add_argument(
         "--num_workers",
