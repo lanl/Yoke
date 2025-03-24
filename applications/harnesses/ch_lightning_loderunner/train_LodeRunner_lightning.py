@@ -190,7 +190,7 @@ if __name__ == "__main__":
     lr_monitor = LearningRateMonitor(logging_interval="step")
     final_epoch = min(starting_epoch + args.cycle_epochs, args.total_epochs) - 1
     trainer = L.Trainer(
-        max_epochs=final_epoch+1,
+        max_epochs=final_epoch + 1,
         limit_train_batches=args.train_batches,
         check_val_every_n_epoch=args.TRAIN_PER_VAL,
         limit_val_batches=args.val_batches,
@@ -221,11 +221,11 @@ if __name__ == "__main__":
     # Run only in main process, otherwise we'll get NGPUs copies of the chain due
     # to the way Lightning tries to parallelize the script.
     if trainer.is_global_zero:
-        FINISHED_TRAINING = (final_epoch+1) >= args.total_epochs
+        FINISHED_TRAINING = (final_epoch + 1) >= args.total_epochs
         if not FINISHED_TRAINING:
             new_slurm_file = tr.continuation_setup(
                 checkpoint_callback.last_model_path,
                 args.studyIDX,
-                last_epoch=final_epoch+1,
+                last_epoch=final_epoch + 1,
             )
             os.system(f"sbatch {new_slurm_file}")
