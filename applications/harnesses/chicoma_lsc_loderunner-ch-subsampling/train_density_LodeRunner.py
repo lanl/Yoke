@@ -25,7 +25,7 @@ import yoke.torch_training_utils as tr
 from yoke.parallel_utils import LodeRunner_DataParallel
 from yoke.lr_schedulers import CosineWithWarmupScheduler
 from yoke.helpers import cli
-import yoke.utils.logger as ylogger
+import yoke.helpers.logger as ylogger
 
 #############################################
 # Inputs

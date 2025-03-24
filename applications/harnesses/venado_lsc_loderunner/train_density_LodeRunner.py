@@ -24,7 +24,7 @@ from yoke.datasets.lsc_dataset import LSC_rho2rho_temporal_DataSet
 import yoke.torch_training_utils as tr
 from yoke.parallel_utils import LodeRunner_DataParallel
 from yoke.helpers import cli
-import yoke.utils.logger as yl
+import yoke.helpers.logger as yl
 
 #############################################
 # Inputs
