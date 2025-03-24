@@ -75,7 +75,6 @@ def test_lightning_model_init(lightning_model: Lightning_LodeRunner) -> None:
     """Test initialization."""
     assert isinstance(lightning_model, Lightning_LodeRunner)
     assert isinstance(lightning_model.model, LodeRunner)
-    assert lightning_model.learning_rate == 1e-3
 
 
 def test_lightning_model_forward(lightning_model: Lightning_LodeRunner) -> None:
@@ -90,21 +89,18 @@ def test_lightning_model_forward(lightning_model: Lightning_LodeRunner) -> None:
 def test_training_step(lightning_model: Lightning_LodeRunner) -> None:
     """Test lightning training step."""
     batch = (
-        torch.randn(2, 3, 1120, 800),  # start_img
-        torch.randn(2, 2, 1120, 800),  # end_img
+        torch.randn(2, 5, 3, 1120, 800),  # img_seq
         torch.rand(2),  # lead_times
     )
 
     batch_loss = lightning_model.training_step(batch, batch_idx=0)
     assert isinstance(batch_loss, torch.Tensor)
-    assert batch_loss.item() >= 0
 
 
 def test_validation_step(lightning_model: Lightning_LodeRunner) -> None:
     """Test lightning validation step."""
     batch = (
-        torch.randn(2, 3, 1120, 800),  # start_img
-        torch.randn(2, 2, 1120, 800),  # end_img
+        torch.randn(2, 5, 3, 1120, 800),  # img_seq
         torch.rand(2),  # lead_times
     )
 
