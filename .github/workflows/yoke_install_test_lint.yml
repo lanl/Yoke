@@ -65,6 +65,12 @@ jobs:
         ruff check tests --preview
         ruff format tests --check --diff
       continue-on-error: false
+    - name: Lint utilities
+      run: |
+        ruff check src/yoke
+        ruff check src/yoke --preview
+        ruff format src/yoke --check --diff
+      continue-on-error: false
     - name: Lint datasets
       run: |
         ruff check src/yoke/datasets
