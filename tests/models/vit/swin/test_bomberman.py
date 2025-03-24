@@ -89,7 +89,7 @@ def test_lightning_model_forward(lightning_model: Lightning_LodeRunner) -> None:
 def test_training_step(lightning_model: Lightning_LodeRunner) -> None:
     """Test lightning training step."""
     batch = (
-        torch.randn(2, 5, 3, 1120, 800),  # img_seq
+        torch.randn(2, 2, 3, 1120, 800),  # img_seq
         torch.rand(2),  # lead_times
     )
 
@@ -100,7 +100,7 @@ def test_training_step(lightning_model: Lightning_LodeRunner) -> None:
 def test_validation_step(lightning_model: Lightning_LodeRunner) -> None:
     """Test lightning validation step."""
     batch = (
-        torch.randn(2, 5, 3, 1120, 800),  # img_seq
+        torch.randn(2, 2, 3, 1120, 800),  # img_seq
         torch.rand(2),  # lead_times
     )
 
