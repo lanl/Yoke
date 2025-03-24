@@ -19,7 +19,6 @@ import numpy as np
 import torch
 
 from yoke.models.vit.swin.bomberman import LodeRunner, Lightning_LodeRunner
-import yoke.torch_training_utils as tr
 from yoke.helpers import cli
 
 import matplotlib.pyplot as plt
@@ -229,9 +228,7 @@ if __name__ == "__main__":
             pred_rho = pred_rho[0:6, :, :].sum(0)
 
             # Compute loss.
-            loss_per_image[m, k] = loss(
-                pred_img.squeeze(), true_img.squeeze()
-            )
+            loss_per_image[m, k] = loss(pred_img.squeeze(), true_img.squeeze())
 
             # Sum for true average density
             true_rho = true_img.numpy()[0]
@@ -332,4 +329,4 @@ if __name__ == "__main__":
     plt.close()
 
     if args.verbose:
-        print(f"Done.")
+        print("Done.")

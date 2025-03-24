@@ -1,6 +1,4 @@
-"""
-This script reads multiple `Yoke` record files and plots the network learning curves.
-"""
+"""Script to plot multiple network learning curves."""
 
 import argparse
 import glob
@@ -139,13 +137,15 @@ for n, study_idx in enumerate(studies):
     train_loss = np.concatenate(train_loss)
     val_loss = np.concatenate(val_loss)
     ax.plot(
-        epoch, train_loss,
+        epoch,
+        train_loss,
         color=study_color[n],
         **trn_plt_properties,
         label=f"Training: study {study_idx}",
     )
     ax.plot(
-        epoch, val_loss,
+        epoch,
+        val_loss,
         color=study_color[n],
         **val_plt_properties,
         label=f"Validation: study {study_idx}",
