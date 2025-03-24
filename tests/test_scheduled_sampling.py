@@ -22,12 +22,12 @@ def assert_valid_schedule(
         minimum_schedule_prob=minimum_schedule_prob,
     )
     scheduled_prob = schedule_fxn(epochs)
-    assert np.all(
-        scheduled_prob <= 1.0
-    ), "`scheduled_prob` should be less than or equal to 1.0!"
-    assert np.all(
-        scheduled_prob >= minimum_schedule_prob
-    ), "`scheduled_prob` should be greater than or equal to `minimum_schedule_prob`!"
+    assert np.all(scheduled_prob <= 1.0), (
+        "`scheduled_prob` should be less than or equal to 1.0!"
+    )
+    assert np.all(scheduled_prob >= minimum_schedule_prob), (
+        "`scheduled_prob` should be greater than or equal to `minimum_schedule_prob`!"
+    )
 
 
 def test_exponential() -> None:
