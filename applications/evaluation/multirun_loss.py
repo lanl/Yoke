@@ -60,9 +60,7 @@ parser.add_argument(
     help="Directory for saving images.",
 )
 
-parser.add_argument(
-    "--savefig", "-S", action="store_true", help="Flag to save figures."
-)
+parser.add_argument("--savefig", "-S", action="store_true", help="Flag to save figures.")
 
 args = parser.parse_args()
 
