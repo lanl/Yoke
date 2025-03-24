@@ -925,7 +925,7 @@ class LSCDataModule(L.LightningDataModule):
         self.ds_params_test = ds_params_test
         self.dl_params_test = dl_params_test
 
-    def setup(self, stage: str=None) -> None:
+    def setup(self, stage: str = None) -> None:
         """Data module setup called on all devices."""
         # Currently, LSC datasets are fast to instantiate.  As such, to
         # facilitate "dynamic" datasets that may change throughout
