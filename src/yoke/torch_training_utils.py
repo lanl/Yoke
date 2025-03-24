@@ -38,6 +38,18 @@ def count_torch_params(model, trainable=True):
     return sum(plist)
 
 
+def freeze_torch_params(model):
+    """Freeze all parameters in a PyTorch model in place.
+
+    Args:
+        model (nn.Module): model to freeze.
+
+    """
+    for p in model.parameters():
+        if hasattr(p, "requires_grad"):
+            p.requires_grad = False
+
+
 ######################################################
 # Helper function for model/optimizer saving/loading
 ######################################################
