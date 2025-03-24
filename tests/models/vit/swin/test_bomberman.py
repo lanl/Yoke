@@ -2,6 +2,7 @@
 
 import pytest
 import torch
+import torch.nn as nn
 from torch.optim.lr_scheduler import _LRScheduler
 
 from yoke.models.vit.swin.bomberman import LodeRunner, Lightning_LodeRunner
@@ -43,9 +44,10 @@ def lightning_model(loderunner_model: LodeRunner) -> Lightning_LodeRunner:
         model=loderunner_model,
         in_vars=torch.tensor([0, 1, 2]),
         out_vars=torch.tensor([0, 1]),
-        learning_rate=1e-3,
-        lrscheduler=MockScheduler,
+        lr_scheduler=MockScheduler,
         scheduler_params={"dummy_param": 1},
+        loss_fn=nn.MSELoss(reduction="none"),
+        scheduled_sampling_scheduler=lambda global_step: 1.0,
     )
 
 
