@@ -40,7 +40,7 @@ parser.add_argument(
     action="store",
     type=int,
     default=None,
-    help="Index range of studies to plot curves for.  None uses all found in directory",
+    help="Index range of studies to plot curves for.",
 )
 
 parser.add_argument(
@@ -49,7 +49,7 @@ parser.add_argument(
     action="store",
     type=int,
     default=None,
-    help="Index range of lightning log versions to use for each run.  None uses all and assumes they correspond to a chained run",
+    help="Index range of lightning log versions to use for each run.",
 )
 
 parser.add_argument(

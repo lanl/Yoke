@@ -297,7 +297,7 @@ if __name__ == "__main__":
         fig, ax = plt.subplots()
         plt.plot(Dt * np.arange(len(npz_list)), loss_per_image[m], ".")
         # ax.set_yscale("log")
-        plt.xlabel("time ($\mu$s)")
+        plt.xlabel(r"time ($\mu$s)")
         plt.ylabel("MSE")
         fig.savefig(
             os.path.join(
@@ -316,7 +316,7 @@ if __name__ == "__main__":
         )
     # ax.set_yscale("log")
     plt.legend()
-    plt.xlabel("time ($\mu$s)")
+    plt.xlabel(r"time ($\mu$s)")
     plt.ylabel("MSE")
     fig.savefig(
         os.path.join(
