@@ -43,7 +43,7 @@ def lightning_model(loderunner_model: LodeRunner) -> Lightning_LodeRunner:
     return Lightning_LodeRunner(
         model=loderunner_model,
         in_vars=torch.tensor([0, 1, 2]),
-        out_vars=torch.tensor([0, 1]),
+        out_vars=torch.tensor([0, 1, 2]),
         lr_scheduler=MockScheduler,
         scheduler_params={"dummy_param": 1},
         loss_fn=nn.MSELoss(reduction="none"),
