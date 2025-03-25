@@ -31,8 +31,7 @@ srun /usr/bin/echo $CUDA_AVAILABLE_DEVICES
 # Load correct conda environment
 module load python/3.11-anaconda-2023.07
 source activate
-#conda activate <YOKE_TORCH_ENV>
-conda activate /usr/projects/artimis/conda/envs/torch_ch_gpu_241112/
+conda activate <YOKE_TORCH_ENV>
 
 # Currently need to set an environment variable for MKL
 # threading. Believed to be related to Numpy.

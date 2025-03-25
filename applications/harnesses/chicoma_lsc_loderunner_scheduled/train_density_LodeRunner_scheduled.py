@@ -20,6 +20,7 @@ from yoke.models.vit.swin.bomberman import LodeRunner
 from yoke.datasets.lsc_dataset import LSC_rho2rho_sequential_DataSet
 import yoke.torch_training_utils as tr
 from yoke.parallel_utils import LodeRunner_DataParallel
+from yoke.lr_schedulers import CosineWithWarmupScheduler
 from yoke.helpers import cli
 
 
@@ -39,7 +40,7 @@ parser = cli.add_filepath_args(parser=parser)
 parser = cli.add_computing_args(parser=parser)
 parser = cli.add_model_args(parser=parser)
 parser = cli.add_training_args(parser=parser)
-parser = cli.add_step_lr_scheduler_args(parser=parser)
+parser = cli.add_cosine_lr_scheduler_args(parser=parser)
 parser = cli.add_scheduled_sampling_args(parser=parser)
 
 
@@ -69,9 +70,6 @@ if __name__ == "__main__":
     block_structure = tuple(args.block_structure)
 
     # Training Parameters
-    initial_learningrate = args.init_learnrate
-    LRepoch_per_step = args.LRepoch_per_step
-    LRdecay = args.LRdecay
     batch_size = args.batch_size
 
     # Scheduled Sampling Parameters
@@ -155,7 +153,7 @@ if __name__ == "__main__":
     #############################################
     optimizer = torch.optim.AdamW(
         model.parameters(),
-        lr=initial_learningrate,
+        lr=args.anchor_lr,
         betas=(0.9, 0.999),
         eps=1e-08,
         weight_decay=0.01,
@@ -194,11 +192,20 @@ if __name__ == "__main__":
     #############################################
     # Setup LR scheduler
     #############################################
-    stepLRsched = torch.optim.lr_scheduler.StepLR(
+    # We will take a scheduler step every back-prop step so the number of steps
+    # is the number of previous batches.
+    if starting_epoch == 0:
+        last_epoch = -1
+    else:
+        last_epoch = train_batches * (starting_epoch - 1)
+    LRsched = CosineWithWarmupScheduler(
         optimizer,
-        step_size=LRepoch_per_step,
-        gamma=LRdecay,
-        last_epoch=starting_epoch - 1,
+        anchor_lr=args.anchor_lr,
+        terminal_steps=args.terminal_steps,
+        warmup_steps=args.warmup_steps,
+        num_cycles=args.num_cycles,
+        min_fraction=args.min_fraction,
+        last_epoch=last_epoch,
     )
 
     #############################################
@@ -267,6 +274,7 @@ if __name__ == "__main__":
             validation_data=val_dataloader,
             model=model,
             optimizer=optimizer,
+            LRsched=LRsched,
             loss_fn=loss_fn,
             epochIDX=epochIDX,
             train_per_val=train_per_val,
@@ -275,9 +283,6 @@ if __name__ == "__main__":
             device=device,
             scheduled_prob=scheduled_prob,
         )
-
-        # Increment LR scheduler
-        stepLRsched.step()
 
         endTime = time.time()
         epoch_time = (endTime - startTime) / 60

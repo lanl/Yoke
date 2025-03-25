@@ -23,231 +23,36 @@ from yoke.models.vit.swin.bomberman import LodeRunner
 from yoke.datasets.lsc_dataset import LSC_rho2rho_temporal_DataSet
 import yoke.torch_training_utils as tr
 from yoke.parallel_utils import LodeRunner_DataParallel
-import yoke.utils.logger as yl
+from yoke.lr_schedulers import CosineWithWarmupScheduler
+from yoke.helpers import cli
+import yoke.helpers.logger as ylogger
 
 #############################################
 # Inputs
 #############################################
 descr_str = (
-    "Trains LodeRunner architecture on single-timstep input and output of the "
-    "lsc240420 per-material density fields."
+    "Trains LodeRunner architecture with channel subsampling with single-timstep input"
+    " and output of the lsc240420 per-material density fields."
 )
 parser = argparse.ArgumentParser(
     prog="Initial LodeRunner Training", description=descr_str, fromfile_prefix_chars="@"
 )
+parser = cli.add_cosine_lr_scheduler_args(parser=parser)
 
-#############################################
-# Channel Subset Study Param
-#############################################
-parser.add_argument(
-    "--channel_map_size",
-    action="store",
-    type=int,
-    default=0,
-    help="Index into the list of tuple of input and output channel subsets",
+parser = cli.add_default_args(parser=parser)
+parser = cli.add_filepath_args(parser=parser)
+parser = cli.add_computing_args(parser=parser)
+parser = cli.add_model_args(parser=parser)
+parser = cli.add_training_args(parser=parser)
+parser = cli.add_step_lr_scheduler_args(parser=parser)
+parser = cli.add_ch_subsampling_args(parser=parser)
+
+# Change some default filepaths.
+parser.set_defaults(
+    train_filelist="lsc240420_prefixes_train_80pct.txt",
+    validation_filelist="lsc240420_prefixes_validation_10pct.txt",
+    test_filelist="lsc240420_prefixes_test_10pct.txt",
 )
-
-#############################################
-# Data Parallelism
-#############################################
-parser.add_argument(
-    '--multigpu',
-    action='store_true',
-    help='Supports multiple GPUs on a single node.'
-)
-
-#############################################
-# Learning Problem
-#############################################
-parser.add_argument(
-    "--studyIDX",
-    action="store",
-    type=int,
-    default=1,
-    help="Study ID number to match hyperparameters",
-)
-
-#############################################
-# File Paths
-#############################################
-parser.add_argument(
-    "--FILELIST_DIR",
-    action="store",
-    type=str,
-    default=os.path.join(os.path.dirname(__file__), "../../filelists/"),
-    help="Directory where filelists are located.",
-)
-
-parser.add_argument(
-    "--LSC_NPZ_DIR",
-    action="store",
-    type=str,
-    default=os.path.join(os.path.dirname(__file__), "../../../data_examples/lsc240420/"),
-    help="Directory in which LSC *.npz files live.",
-)
-
-parser.add_argument(
-    "--train_filelist",
-    action="store",
-    type=str,
-    default="lsc240420_prefixes_train_80pct.txt",
-    help="Path to list of files to train on.",
-)
-
-parser.add_argument(
-    "--validation_filelist",
-    action="store",
-    type=str,
-    default="lsc240420_prefixes_validation_10pct.txt",
-    help="Path to list of files to validate on.",
-)
-
-parser.add_argument(
-    "--test_filelist",
-    action="store",
-    type=str,
-    default="lsc240420_prefixes_test_10pct.txt",
-    help="Path to list of files to test on.",
-)
-
-#############################################
-# Model Parameters
-#############################################
-parser.add_argument(
-    "--block_structure",
-    action="store",
-    type=int,
-    nargs="+",
-    default=[1, 1, 3, 1],
-    help="List of number of SW-MSA layers in each SWIN block.",
-)
-
-parser.add_argument(
-    "--embed_dim",
-    action="store",
-    type=int,
-    default=128,
-    help="Initial embedding dimension for SWIN-Unet.",
-)
-
-#############################################
-# Training Parameters
-#############################################
-parser.add_argument(
-    "--init_learnrate",
-    action="store",
-    type=float,
-    default=1e-3,
-    help="Initial learning rate",
-)
-
-parser.add_argument(
-    "--LRepoch_per_step",
-    action="store",
-    type=float,
-    default=10,
-    help="Number of epochs per LR reduction.",
-)
-
-parser.add_argument(
-    "--LRdecay", action="store", type=float, default=0.5, help="LR decay factor."
-)
-
-parser.add_argument(
-    "--batch_size", action="store", type=int, default=64, help="Batch size"
-)
-
-parser.add_argument(
-    "--num_workers",
-    action="store",
-    type=int,
-    default=4,
-    help=("Number of processes simultaneously loading batches of data. "
-          "NOTE: If set too big workers will swamp memory!!")
-)
-
-parser.add_argument(
-    "--prefetch_factor",
-    action="store",
-    type=int,
-    default=2,
-    help=("Number of batches each worker preloads ahead of time. "
-          "NOTE: If set too big preload will swamp memory!!")
-)
-
-#############################################
-# Epoch Parameters
-#############################################
-parser.add_argument(
-    "--total_epochs", action="store", type=int, default=10, help="Total training epochs"
-)
-
-parser.add_argument(
-    "--cycle_epochs",
-    action="store",
-    type=int,
-    default=5,
-    help=(
-        "Number of epochs between saving the model and re-queueing "
-        "training process; must be able to be completed in the "
-        "set wall time"
-    ),
-)
-
-parser.add_argument(
-    "--train_batches",
-    action="store",
-    type=int,
-    default=250,
-    help="Number of batches to train on in a given epoch",
-)
-
-parser.add_argument(
-    "--val_batches",
-    action="store",
-    type=int,
-    default=25,
-    help="Number of batches to validate on in a given epoch",
-)
-
-parser.add_argument(
-    "--TRAIN_PER_VAL",
-    action="store",
-    type=int,
-    default=10,
-    help="Number of training epochs between each validation epoch",
-)
-
-parser.add_argument(
-    "--trn_rcrd_filename",
-    action="store",
-    type=str,
-    default="./default_training.csv",
-    help="Filename for text file of training loss and metrics on each batch",
-)
-
-parser.add_argument(
-    "--val_rcrd_filename",
-    action="store",
-    type=str,
-    default="./default_validation.csv",
-    help="Filename for text file of validation loss and metrics on each batch",
-)
-
-parser.add_argument(
-    "--continuation",
-    action="store_true",
-    help="Indicates if training is being continued or restarted",
-)
-
-parser.add_argument(
-    "--checkpoint",
-    action="store",
-    type=str,
-    default="None",
-    help="Path to checkpoint to continue training from",
-)
-
 
 ############################################
 # Select n channles randomly for an epoch
@@ -273,7 +78,7 @@ if __name__ == "__main__":
     #############################################
     # Process Inputs
     #############################################
-    yl.configure_logger("yoke_logger", level=logging.INFO)
+    ylogger.configure_logger("yoke_logger", level=logging.INFO)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()
@@ -291,10 +96,11 @@ if __name__ == "__main__":
     block_structure = tuple(args.block_structure)
 
     # Training Parameters
-    initial_learningrate = args.init_learnrate
-    LRepoch_per_step = args.LRepoch_per_step
-    LRdecay = args.LRdecay
-    batch_size = args.batch_size
+    anchor_lr = args.anchor_lr
+    num_cycles = args.num_cycles
+    min_fraction = args.min_fraction
+    terminal_steps = args.terminal_steps
+    warmup_steps = args.warmup_steps
 
     # Number of workers controls how batches of data are prefetched and,
     # possibly, pre-loaded onto GPUs. If the number of workers is large they
@@ -303,6 +109,7 @@ if __name__ == "__main__":
     prefetch_factor = args.prefetch_factor
 
     # Epoch Parameters
+    batch_size = args.batch_size
     total_epochs = args.total_epochs
     cycle_epochs = args.cycle_epochs
     train_batches = args.train_batches
@@ -346,8 +153,8 @@ if __name__ == "__main__":
 
     model = LodeRunner(
         default_vars=hydro_fields,
-        image_size=(1120, 800),
-        patch_size=(10, 10),
+        image_size=(1120, 400),
+        patch_size=(10, 5),
         embed_dim=embed_dim,
         emb_factor=2,
         num_heads=8,
@@ -374,7 +181,7 @@ if __name__ == "__main__":
     #############################################
     optimizer = torch.optim.AdamW(
         model.parameters(),
-        lr=initial_learningrate,
+        lr=1e-6,
         betas=(0.9, 0.999),
         eps=1e-08,
         weight_decay=0.01,
@@ -411,13 +218,22 @@ if __name__ == "__main__":
                 state[k] = v.to(device)
 
     #############################################
-    # Setup LR scheduler
+    # LR scheduler
     #############################################
-    stepLRsched = torch.optim.lr_scheduler.StepLR(
+    # We will take a scheduler step every back-prop step so the number of steps
+    # is the number of previous batches.
+    if starting_epoch == 0:
+        last_epoch = -1
+    else:
+        last_epoch = train_batches * (starting_epoch - 1)
+    LRsched = CosineWithWarmupScheduler(
         optimizer,
-        step_size=LRepoch_per_step,
-        gamma=LRdecay,
-        last_epoch=starting_epoch - 1,
+        anchor_lr=anchor_lr,
+        terminal_steps=terminal_steps,
+        warmup_steps=warmup_steps,
+        num_cycles=num_cycles,
+        min_fraction=min_fraction,
+        last_epoch=last_epoch,
     )
 
     #############################################
@@ -432,10 +248,8 @@ if __name__ == "__main__":
     SEED = 42
 
     max_channels = len(hydro_fields)
-    yl.logger.info(f"Max Channel  : {max_channels}")
-
+    ylogger.logger.info(f"Max Channel  : {max_channels}")
     channel_map_size = args.channel_map_size
-    yl.logger.info(f"channel_map_size = {channel_map_size}")
 
     # Change hydrofields to array to enable slicing with channel map
     hydro_fields = np.array(hydro_fields)
@@ -443,12 +257,13 @@ if __name__ == "__main__":
         # Randomly select 'channel_map_size' number of channels from for the epoch
         channel_map = rand_channel_map(max_channels, channel_map_size, SEED)
 
+        # Blank spaces in the log strings are for next line alignment
         log_str = (
             f"Epoch {epochIDX:04d}, "
-            f"Nchannels:{channel_map_size:03d}, "
+            f"Nchannels:{channel_map_size:03d}/{max_channels}, \n          "
             f"Channel Map:{channel_map}"
             )
-        yl.logger.info(log_str)
+        ylogger.logger.info(log_str)
 
         #############################################
         # Initialize Data
@@ -460,7 +275,7 @@ if __name__ == "__main__":
             file_prefix_list=train_filelist,
             max_timeIDX_offset=2,  # This could be a variable.
             max_file_checks=10,
-            half_image=False,
+            half_image=True,
             hydro_fields=hydro_fields[channel_map],
         )
         val_dataset = LSC_rho2rho_temporal_DataSet(
@@ -468,7 +283,7 @@ if __name__ == "__main__":
             file_prefix_list=validation_filelist,
             max_timeIDX_offset=2,  # This could be a variable.
             max_file_checks=10,
-            half_image=False,
+            half_image=True,
             hydro_fields=hydro_fields[channel_map],
         )
         test_dataset = LSC_rho2rho_temporal_DataSet(
@@ -476,7 +291,7 @@ if __name__ == "__main__":
             file_prefix_list=test_filelist,
             max_timeIDX_offset=2,  # This could be a variable.
             max_file_checks=10,
-            half_image=False,
+            half_image=True,
             hydro_fields=hydro_fields[channel_map],
         )
 
@@ -503,23 +318,21 @@ if __name__ == "__main__":
         startTime = time.time()
 
         # Train an Epoch
-        tr.train_simple_loderunner_epoch(
+        tr.train_LRsched_loderunner_epoch(
             channel_map,
             training_data=train_dataloader,
             validation_data=val_dataloader,
             model=model,
             optimizer=optimizer,
             loss_fn=loss_fn,
+            LRsched=LRsched,
             epochIDX=epochIDX,
             train_per_val=train_per_val,
             train_rcrd_filename=trn_rcrd_filename,
             val_rcrd_filename=val_rcrd_filename,
             device=device,
-            verbose=False
+            verbose=False,
         )
-
-        # Increment LR scheduler
-        stepLRsched.step()
 
         endTime = time.time()
         epoch_time = (endTime - startTime) / 60

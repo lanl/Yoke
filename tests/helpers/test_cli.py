@@ -42,3 +42,8 @@ def test_add_step_lr_scheduler_args() -> None:
 def test_add_cosine_lr_scheduler_args() -> None:
     """Ensure cosine lr scheduler argparser runs without crashing."""
     cli.add_cosine_lr_scheduler_args(argparse.ArgumentParser())
+
+
+def test_add_scheduled_sampling_args() -> None:
+    """Ensure scheduled sampling argparser runs without crashing."""
+    cli.add_scheduled_sampling_args(argparse.ArgumentParser())
