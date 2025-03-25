@@ -162,7 +162,7 @@ if __name__ == "__main__":
             minimum_schedule_prob=args.minimum_schedule_prob,
         ),
     }
-    if args.continuation or (args.checkpoint is None):
+    if args.continuation or (args.checkpoint is None) or args.only_load_backbone:
         L_loderunner = Lightning_LodeRunner(**lm_kwargs)
     else:
         # This condition is used to load pretrained weights without continuing training.
@@ -171,6 +171,16 @@ if __name__ == "__main__":
             strict=False,
             **lm_kwargs,
         )
+
+    # Load U-Net backbone if needed.
+    if args.only_load_backbone:
+        ckpt = torch.load(args.checkpoint, map_location=torch.device("cpu"))
+        unet_weights = {
+            k.replace("model.unet.", ""): v
+            for k, v in ckpt["state_dict"].items()
+            if k.startswith("model.unet.")
+        }
+        L_loderunner.model.unet.load_state_dict(unet_weights)
 
     # Freeze the U-Net backbone.
     if args.freeze_backbone:
