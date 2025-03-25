@@ -1,6 +1,4 @@
-"""
-This script reads multiple `Yoke` record files and plots the network learning curves.
-"""
+"""Script to plot multiple network learning curves."""
 
 import argparse
 import glob
@@ -42,7 +40,7 @@ parser.add_argument(
     action="store",
     type=int,
     default=None,
-    help="Index range of studies to plot curves for.  None uses all found in directory",
+    help="Index range of studies to plot curves for.",
 )
 
 parser.add_argument(
@@ -51,7 +49,7 @@ parser.add_argument(
     action="store",
     type=int,
     default=None,
-    help="Index range of lightning log versions to use for each run.  None uses all and assumes they correspond to a chained run",
+    help="Index range of lightning log versions to use for each run.",
 )
 
 parser.add_argument(
@@ -62,9 +60,7 @@ parser.add_argument(
     help="Directory for saving images.",
 )
 
-parser.add_argument(
-    "--savefig", "-S", action="store_true", help="Flag to save figures."
-)
+parser.add_argument("--savefig", "-S", action="store_true", help="Flag to save figures.")
 
 args = parser.parse_args()
 
@@ -139,13 +135,15 @@ for n, study_idx in enumerate(studies):
     train_loss = np.concatenate(train_loss)
     val_loss = np.concatenate(val_loss)
     ax.plot(
-        epoch, train_loss,
+        epoch,
+        train_loss,
         color=study_color[n],
         **trn_plt_properties,
         label=f"Training: study {study_idx}",
     )
     ax.plot(
-        epoch, val_loss,
+        epoch,
+        val_loss,
         color=study_color[n],
         **val_plt_properties,
         label=f"Validation: study {study_idx}",

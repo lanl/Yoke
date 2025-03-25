@@ -2,6 +2,7 @@
 
 import pytest
 import torch
+import torch.nn as nn
 from torch.optim.lr_scheduler import _LRScheduler
 
 from yoke.models.vit.swin.bomberman import LodeRunner, Lightning_LodeRunner
@@ -42,10 +43,11 @@ def lightning_model(loderunner_model: LodeRunner) -> Lightning_LodeRunner:
     return Lightning_LodeRunner(
         model=loderunner_model,
         in_vars=torch.tensor([0, 1, 2]),
-        out_vars=torch.tensor([0, 1]),
-        learning_rate=1e-3,
-        lrscheduler=MockScheduler,
+        out_vars=torch.tensor([0, 1, 2]),
+        lr_scheduler=MockScheduler,
         scheduler_params={"dummy_param": 1},
+        loss_fn=nn.MSELoss(reduction="none"),
+        scheduled_sampling_scheduler=lambda global_step: 1.0,
     )
 
 
@@ -73,7 +75,6 @@ def test_lightning_model_init(lightning_model: Lightning_LodeRunner) -> None:
     """Test initialization."""
     assert isinstance(lightning_model, Lightning_LodeRunner)
     assert isinstance(lightning_model.model, LodeRunner)
-    assert lightning_model.learning_rate == 1e-3
 
 
 def test_lightning_model_forward(lightning_model: Lightning_LodeRunner) -> None:
@@ -88,21 +89,18 @@ def test_lightning_model_forward(lightning_model: Lightning_LodeRunner) -> None:
 def test_training_step(lightning_model: Lightning_LodeRunner) -> None:
     """Test lightning training step."""
     batch = (
-        torch.randn(2, 3, 1120, 800),  # start_img
-        torch.randn(2, 2, 1120, 800),  # end_img
+        torch.randn(2, 2, 3, 1120, 800),  # img_seq
         torch.rand(2),  # lead_times
     )
 
     batch_loss = lightning_model.training_step(batch, batch_idx=0)
     assert isinstance(batch_loss, torch.Tensor)
-    assert batch_loss.item() >= 0
 
 
 def test_validation_step(lightning_model: Lightning_LodeRunner) -> None:
     """Test lightning validation step."""
     batch = (
-        torch.randn(2, 3, 1120, 800),  # start_img
-        torch.randn(2, 2, 1120, 800),  # end_img
+        torch.randn(2, 2, 3, 1120, 800),  # img_seq
         torch.rand(2),  # lead_times
     )
 

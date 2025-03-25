@@ -274,7 +274,8 @@ class Lightning_LodeRunner(LightningModule):
         scheduler_params (dict): Keyword arguments to initialize scheduler
         loss_fn (Callable): Loss function used to evaluate predictions at each timestep.
         scheduled_sampling_scheduler (Callable): Function that accepts the current
-            training step and returns a number in [0, 1] for scheduled sampling probability.
+            training step and returns a number in [0, 1] for scheduled sampling
+            probability.
     """
 
     def __init__(
@@ -352,8 +353,9 @@ class Lightning_LodeRunner(LightningModule):
         # self.log("train_loss_per_sample", losses, on_epoch=True, on_step=True)
 
         batch_loss = losses.mean()
-        self.log("train_loss", batch_loss, sync_dist=True)
-        self.log("scheduled_prob", scheduled_prob, sync_dist=True)  # temp test
+        if hasattr(self, "Trainer"):  # Only log if there is a Trainer
+            self.log("train_loss", batch_loss, sync_dist=True)
+            self.log("scheduled_prob", scheduled_prob, sync_dist=True)  # temp test
 
         return batch_loss
 
@@ -377,7 +379,8 @@ class Lightning_LodeRunner(LightningModule):
         # self.log("val_loss_per_sample", losses, on_epoch=True, on_step=True)
 
         batch_loss = losses.mean()
-        self.log("val_loss", batch_loss, sync_dist=True)
+        if hasattr(self, "Trainer"):  # Only log if there is a Trainer
+            self.log("val_loss", batch_loss, sync_dist=True)
 
 
 if __name__ == "__main__":
@@ -450,9 +453,7 @@ if __name__ == "__main__":
     loderunner_out = lode_runner(x, x_vars, out_vars, lead_times)
     print("LodeRunner-tiny output shape:", loderunner_out.shape)
     print("LodeRunner-tiny output has NaNs:", torch.isnan(loderunner_out).any())
-    print(
-        "LodeRunner-tiny parameters:", count_torch_params(lode_runner, trainable=True)
-    )
+    print("LodeRunner-tiny parameters:", count_torch_params(lode_runner, trainable=True))
 
     # Test lightning wrapper initialization.
     L_loderunner = Lightning_LodeRunner(
@@ -546,9 +547,7 @@ if __name__ == "__main__":
         patch_merge_scales=patch_merge_scales,
         verbose=False,
     ).to(device)
-    print(
-        "LodeRunner-huge parameters:", count_torch_params(lode_runner, trainable=True)
-    )
+    print("LodeRunner-huge parameters:", count_torch_params(lode_runner, trainable=True))
 
     # Giant size
     embed_dim = 512

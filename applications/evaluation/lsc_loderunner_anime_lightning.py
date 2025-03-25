@@ -19,7 +19,6 @@ import numpy as np
 import torch
 
 from yoke.models.vit.swin.bomberman import LodeRunner, Lightning_LodeRunner
-import yoke.torch_training_utils as tr
 from yoke.helpers import cli
 
 import matplotlib.pyplot as plt
@@ -35,8 +34,7 @@ plt.rcParams["figure.figsize"] = (6, 6)
 ###################################################################
 # Define command line argument parser
 descr_str = (
-    "Create animation of single hydro-field for LodeRunner on lsc240420 "
-    "simulation IDX."
+    "Create animation of single hydro-field for LodeRunner on lsc240420 simulation IDX."
 )
 parser = argparse.ArgumentParser(
     prog="Animation of LodeRunner",
@@ -135,9 +133,7 @@ if __name__ == "__main__":
 
     # Assemble filenames
     # Example: lsc240420_id00201_pvi_idx00100.npz
-    npz_glob = os.path.join(
-        args.indir, f"lsc240420_id{args.runID:05d}_pvi_idx?????.npz"
-    )
+    npz_glob = os.path.join(args.indir, f"lsc240420_id{args.runID:05d}_pvi_idx?????.npz")
     npz_list = sorted(glob.glob(npz_glob))
     if VERBOSE:
         print("NPZ files:", npz_list)
@@ -192,7 +188,7 @@ if __name__ == "__main__":
         loss = torch.nn.functional.mse_loss
         for k, npzfile in enumerate(npz_list):
             if args.verbose:
-                print(f"Evaluating file {k+1} of {len(npz_list)}...")
+                print(f"Evaluating file {k + 1} of {len(npz_list)}...")
             # Get index
             pviIDX = npzfile.split("idx")[1]
             pviIDX = int(pviIDX.split(".")[0])
@@ -229,9 +225,7 @@ if __name__ == "__main__":
             pred_rho = pred_rho[0:6, :, :].sum(0)
 
             # Compute loss.
-            loss_per_image[m, k] = loss(
-                pred_img.squeeze(), true_img.squeeze()
-            )
+            loss_per_image[m, k] = loss(pred_img.squeeze(), true_img.squeeze())
 
             # Sum for true average density
             true_rho = true_img.numpy()[0]
@@ -300,7 +294,7 @@ if __name__ == "__main__":
         fig, ax = plt.subplots()
         plt.plot(Dt * np.arange(len(npz_list)), loss_per_image[m], ".")
         # ax.set_yscale("log")
-        plt.xlabel("time ($\mu$s)")
+        plt.xlabel(r"time ($\mu$s)")
         plt.ylabel("MSE")
         fig.savefig(
             os.path.join(
@@ -314,12 +308,10 @@ if __name__ == "__main__":
 
     fig, ax = plt.subplots()
     for m, ckpt in enumerate(args.checkpoint):
-        plt.plot(
-            Dt * np.arange(len(npz_list)), loss_per_image[m], ".", label=f"ckpt{m}"
-        )
+        plt.plot(Dt * np.arange(len(npz_list)), loss_per_image[m], ".", label=f"ckpt{m}")
     # ax.set_yscale("log")
     plt.legend()
-    plt.xlabel("time ($\mu$s)")
+    plt.xlabel(r"time ($\mu$s)")
     plt.ylabel("MSE")
     fig.savefig(
         os.path.join(
@@ -332,4 +324,4 @@ if __name__ == "__main__":
     plt.close()
 
     if args.verbose:
-        print(f"Done.")
+        print("Done.")

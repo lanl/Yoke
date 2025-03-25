@@ -1,6 +1,4 @@
-"""
-Scheduled sampling functions.
-"""
+"""Scheduled sampling functions."""
 
 import numpy as np
 
@@ -15,8 +13,11 @@ def exponential(
     decay_param: float = 1.0,
     minimum_schedule_prob: float = 0.0,
 ) -> float:
-    return lambda x: max(
-        initial_schedule_prob * (decay_param**x), minimum_schedule_prob
+    """Exponential decay sampling function."""
+    return lambda x: np.clip(
+        initial_schedule_prob * (decay_param**x),
+        a_min=minimum_schedule_prob,
+        a_max=1.0,
     )
 
 
@@ -25,11 +26,13 @@ def inverse_sigmoid(
     decay_param: float = 1.0,
     minimum_schedule_prob: float = 0.0,
 ) -> float:
-    return lambda x: max(
+    """Inverse sigmoid scheduled sampling function."""
+    return lambda x: np.clip(
         initial_schedule_prob
         * decay_param
         / (decay_param + np.exp(x / decay_param) - 1.0),
-        minimum_schedule_prob,
+        a_min=minimum_schedule_prob,
+        a_max=1.0,
     )
 
 
@@ -38,6 +41,9 @@ def linear(
     decay_param: float = 0.0,
     minimum_schedule_prob: float = 0.0,
 ) -> float:
-    return lambda x: max(
-        initial_schedule_prob * (1.0 - decay_param * x), minimum_schedule_prob
+    """Linear scheduled sampling function."""
+    return lambda x: np.clip(
+        initial_schedule_prob * (1.0 - decay_param * x),
+        a_min=minimum_schedule_prob,
+        a_max=1.0,
     )
