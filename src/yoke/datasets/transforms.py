@@ -34,9 +34,9 @@ class ResizePadCrop(torch.nn.Module):
                 img,
                 pad=(
                     0,
-                    max(0, img.shape[1] - self.scaled_image_size[1]),
+                    max(0, self.scaled_image_size[1] -  img.shape[-1]),
                     0,
-                    max(0, img.shape[0] - self.scaled_image_size[0]),
+                    max(0, self.scaled_image_size[0] - img.shape[-2]),
                 ),
                 mode=self.pad_mode,
                 value=self.pad_value,
