@@ -62,19 +62,19 @@ class LodeRunner(nn.Module):
     def __init__(
         self,
         default_vars: list[str],
-        image_size: (int, int) = (1120, 800),
-        patch_size: (int, int) = (10, 10),
+        image_size: Iterable[int, int] = (1120, 800),
+        patch_size: Iterable[int, int] = (10, 10),
         embed_dim: int = 128,
         emb_factor: int = 2,
         num_heads: int = 8,
-        block_structure: (int, int, int, int) = (1, 1, 3, 1),
-        window_sizes: [(int, int), (int, int), (int, int), (int, int)] = [
+        block_structure: Iterable[int, int, int, int] = (1, 1, 3, 1),
+        window_sizes: Iterable[(int, int), (int, int), (int, int), (int, int)] = [
             (8, 8),
             (8, 8),
             (4, 4),
             (2, 2),
         ],
-        patch_merge_scales: [(int, int), (int, int), (int, int)] = [
+        patch_merge_scales: Iterable[(int, int), (int, int), (int, int)] = [
             (2, 2),
             (2, 2),
             (2, 2),
@@ -102,9 +102,9 @@ class LodeRunner(nn.Module):
             window_sizes=window_sizes,
             patch_merge_scales=patch_merge_scales,
         )
-        assert np.all(
-            valid
-        ), "Invalid combination of image_size, patch_size, window_sizes, and patch_merge_scales!"
+        assert np.all(valid), (
+            "Invalid combination of image_size, patch_size, window_sizes, and patch_merge_scales!"
+        )
 
         # First embed the image as a sequence of tokenized patches. Each
         # channel is embedded independently.
