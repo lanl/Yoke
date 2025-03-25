@@ -24,6 +24,7 @@ import torch.nn as nn
 
 from yoke.models.vit.swin.bomberman import LodeRunner, Lightning_LodeRunner
 from yoke.datasets.lsc_dataset import LSCDataModule
+from yoke.datasets.transforms import ResizePadCrop
 import yoke.torch_training_utils as tr
 from yoke.lr_schedulers import CosineWithWarmupScheduler
 from yoke.helpers import cli
@@ -83,10 +84,9 @@ if __name__ == "__main__":
     print("GPU ID:", os.environ["SLURM_JOB_GPUS"])
     print("Number of System CPUs:", os.cpu_count())
     print("Number of CPUs per GPU:", os.environ["SLURM_JOB_CPUS_PER_NODE"])
-
-    # print("\n")
-    # print("Model Training Information")
-    # print("=========================================")
+    print("\n")
+    print("Model Training Information")
+    print("=========================================")
 
     #############################################
     # Initialize Model
@@ -102,7 +102,9 @@ if __name__ == "__main__":
             "Uvelocity",
             "Wvelocity",
         ],
-        image_size=(1120, 400),
+        image_size=(1120, 400)
+        if args.scaled_image_size is None
+        else args.scaled_image_size,
         patch_size=(5, 5),
         embed_dim=args.embed_dim,
         emb_factor=2,
@@ -115,11 +117,15 @@ if __name__ == "__main__":
     #############################################
     # Initialize Data
     #############################################
+    transform = ResizePadCrop(
+        scale_factor=args.scale_factor, scaled_image_size=args.scaled_image_size
+    )
     ds_params = {
         "LSC_NPZ_DIR": args.LSC_NPZ_DIR,
         "max_file_checks": 1000,
         "seq_len": args.seq_len,
         "half_image": True,
+        "transform": transform,
     }
     dl_params = {
         "batch_size": args.batch_size,
@@ -205,10 +211,10 @@ if __name__ == "__main__":
         limit_train_batches=args.train_batches,
         check_val_every_n_epoch=args.TRAIN_PER_VAL,
         limit_val_batches=args.val_batches,
-        # accelerator="gpu",
-        # devices=args.Ngpus,  # Number of GPUs per node
-        # num_nodes=args.Knodes,
-        # strategy="ddp",
+        accelerator="gpu",
+        devices=args.Ngpus,  # Number of GPUs per node
+        num_nodes=args.Knodes,
+        strategy="ddp",
         enable_progress_bar=True,
         logger=logger,
         log_every_n_steps=min(args.train_batches, args.val_batches),
