@@ -35,9 +35,7 @@ def validate_patch_and_window(
                                              each patch-merge layer.
     """
     ## Walk through LodeRunner stages and verify size compatibility.
-    valid = np.zeros(
-        (len(window_sizes), 2, 2), dtype=bool
-    )  # [stage, action, dimension]
+    valid = np.zeros((len(window_sizes), 2, 2), dtype=bool)  # [stage, action, dimension]
     image_size = np.array(image_size)
     patch_size = np.array(patch_size)
     window_sizes = np.array(window_sizes)
@@ -111,14 +109,7 @@ def choose_downsample_factor(
     """Choose downsample factor close to desired factor to minimize pading."""
 
     # Define a loss function for optimizing scale factor.
-    def total_pad(
-        scale_factor,
-        image_size,
-        patch_size,
-        patch_merge_scales,
-        window_sizes,
-        pad_options,
-    ):
+    def loss(scale_factor: float) -> int:
         ds_size = np.floor(image_size * scale_factor)
         pad_dim0, pad_dim1 = find_valid_pad(
             image_size=ds_size,
@@ -134,15 +125,6 @@ def choose_downsample_factor(
             + pad_dim1[0] * ds_size[0]
             + pad_dim0[0] * pad_dim1[0]
         )
-
-    loss = lambda x: total_pad(
-        x,
-        image_size=image_size,
-        patch_size=patch_size,
-        patch_merge_scales=patch_merge_scales,
-        window_sizes=window_sizes,
-        pad_options=pad_options,
-    )
 
     # Search for a scale factor close to the requested scale factor.
     res = scipy.optimize.minimize(
