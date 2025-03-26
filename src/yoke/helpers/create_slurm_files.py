@@ -27,7 +27,7 @@ class MkSlurm:
 
     def generateSlurm(self):
         template = self._sysconfig
-        slurm_args_string = ""
+        slurm_arg_params = {}
 
         if 'generated-params' in self._config and 'run-config' in self._config['generated-params']:
             run_config = self._config['generated-params']['run-config']
@@ -35,39 +35,48 @@ class MkSlurm:
             run_config = template['generated-params']['run-config']['default-mode']
 
         run_config_params = template['generated-params']['run-config'][run_config]
-
-        run_config_slurm_lines = map(lambda x: generateSingleRowSlurm(x[0], x[1]), run_config_params.items())
-        slurm_args_string += "".join(run_config_slurm_lines)
+        for arg in run_config_params:
+            if arg not in slurm_arg_params:
+                slurm_arg_params[arg] = run_config_params[arg]
 
         if 'generated-params' in self._config and 'log' in self._config['generated-params']:
             log = self._config['generated-params']['log']
         else:
             log = template['generated-params']['log']
-        log_slurm_lines = map(lambda x: generateSingleRowSlurm(x[0], f'{log}{x[1]}'), [('output', '.out'), ('error', '.err')])
-        slurm_args_string += "".join(log_slurm_lines)
+        # construct [('output', f'{log}.out'), ('error', f'{log}.err')] using map
+        if 'output' not in log:
+            slurm_arg_params['output'] = f'{log}.out'
+        if 'error' not in log:
+            slurm_arg_params['error'] = f'{log}.err'
 
         if 'generated-params' in self._config and 'email' in self._config['generated-params']:
             emails = self._config['generated-params']['email']
             if emails is not None and len(emails) > 0:
-                email_slurm_lines = map(lambda x: generateSingleRowSlurm(x[0], x[1]), [('mail-user', ','.join(emails)), ('mail-type', 'ALL')])
-                slurm_args_string += "".join(email_slurm_lines)
-
+                if 'mail-user' not in slurm_arg_params:
+                    slurm_arg_params['mail-user'] = ','.join(emails)
+                if 'mail-type' not in slurm_arg_params:
+                    slurm_arg_params['mail-type'] = 'ALL'
 
         if 'generated-params' in self._config and 'verbose' in self._config['generated-params']:
             verbose = self._config['generated-params']['verbose']
         else:
             verbose = template['generated-params']['verbose']
+
         if verbose > 0:
             verbose_slurm_lines = '#SBATCH -' + 'v' * verbose + '\n'
-        slurm_args_string += verbose_slurm_lines
+        else:
+            verbose_slurm_lines = ''
 
         custom_params = {}
         if 'custom-params' in self._config:
             custom_params = self._config['custom-params']
         default_params = template['custom-params']
         for k in default_params:
-            if k in custom_params:
-                slurm_args_string += generateSingleRowSlurm(k, custom_params[k])
-            else:
-                slurm_args_string += generateSingleRowSlurm(k, default_params[k])
+            if k not in custom_params:
+                custom_params[k] = default_params[k]
+        # override slurm_arg_params with custom_params
+        for k in custom_params:
+            slurm_arg_params[k] = custom_params[k]
+        # generate slurm_args_string
+        slurm_args_string = ''.join([generateSingleRowSlurm(k, slurm_arg_params[k]) for k in slurm_arg_params]) + verbose_slurm_lines
         return self._template.replace("[SLURM-PARAMS]", slurm_args_string)
