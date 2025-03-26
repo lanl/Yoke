@@ -13,4 +13,5 @@ Welcome to the Yoke documentation!
    :caption: Contents:
    :glob:
 
-   src.rst
+   source/modules.rst
+   source/tests.rst
