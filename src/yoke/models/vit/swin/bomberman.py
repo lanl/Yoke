@@ -284,9 +284,9 @@ class Lightning_LodeRunner(LightningModule):
         # self.log("train_loss_per_sample", losses, on_epoch=True, on_step=True)
 
         batch_loss = losses.mean()
-        if hasattr(self, "trainer"):
+        if hasattr(self, "Trainer") or hasattr(self, "logger"):
             self.log("train_loss", batch_loss, sync_dist=True)
-            self.log("scheduled_prob", scheduled_prob, sync_dist=True)  # temp test
+            self.log("scheduled_prob", scheduled_prob, sync_dist=True)
 
         return batch_loss
 
@@ -310,7 +310,7 @@ class Lightning_LodeRunner(LightningModule):
         # self.log("val_loss_per_sample", losses, on_epoch=True, on_step=True)
 
         batch_loss = losses.mean()
-        if hasattr(self, "trainer"):
+        if hasattr(self, "Trainer") or hasattr(self, "logger"):
             self.log("val_loss", batch_loss, sync_dist=True)
 
 

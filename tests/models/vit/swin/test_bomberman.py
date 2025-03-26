@@ -40,7 +40,7 @@ def loderunner_model() -> LodeRunner:
 @pytest.fixture
 def lightning_model(loderunner_model: LodeRunner) -> Lightning_LodeRunner:
     """Fixture for Lightning_LodeRunner tests."""
-    lightning_loderunner = Lightning_LodeRunner(
+    return Lightning_LodeRunner(
         model=loderunner_model,
         in_vars=torch.tensor([0, 1, 2]),
         out_vars=torch.tensor([0, 1, 2]),
@@ -49,11 +49,6 @@ def lightning_model(loderunner_model: LodeRunner) -> Lightning_LodeRunner:
         loss_fn=nn.MSELoss(reduction="none"),
         scheduled_sampling_scheduler=lambda global_step: 1.0,
     )
-
-    # Add a dummy trainer to pass some checks.
-    lightning_loderunner.trainer = object()
-
-    return lightning_loderunner
 
 
 def test_loderunner_init(loderunner_model: LodeRunner) -> None:
