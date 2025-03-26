@@ -18,6 +18,7 @@ import numpy as np
 
 import torch
 
+from yoke.datasets.transforms import ResizePadCrop
 from yoke.models.vit.swin.bomberman import LodeRunner, Lightning_LodeRunner
 from yoke.helpers import cli
 
@@ -40,14 +41,6 @@ parser = argparse.ArgumentParser(
     prog="Animation of LodeRunner",
     description=descr_str,
     fromfile_prefix_chars="@",
-)
-
-parser.add_argument(
-    "--checkpoint",
-    action="store",
-    type=str,
-    nargs="+",
-    help="Paths to .ckpt model checkpoint(s) to evaluate.",
 )
 
 parser.add_argument(
@@ -84,6 +77,12 @@ parser.add_argument(
 )
 
 parser = cli.add_model_args(parser=parser)
+parser = cli.add_training_args(parser=parser)
+
+# Update checkpoint argument to allow multiple checkpoints.
+for action in parser._actions:
+    if "--checkpoint" in action.option_strings:
+        action.nargs = "+"
 
 
 def print_NPZ_keys(npzfile: str = "./lsc240420_id00201_pvi_idx00100.npz") -> None:
@@ -149,12 +148,11 @@ if __name__ == "__main__":
         "Uvelocity",
         "Wvelocity",
     ]
-    image_size = [1120, 400]
     patch_size = (5, 5)
     window_sizes = [(2, 2) for _ in range(4)]
     loderunner = LodeRunner(
         default_vars=default_vars,
-        image_size=image_size,
+        image_size=args.scaled_image_size,
         patch_size=patch_size,
         embed_dim=args.embed_dim,
         emb_factor=2,
@@ -166,6 +164,11 @@ if __name__ == "__main__":
             (2, 2),
             (2, 2),
         ],
+    )
+
+    # Define data transforms.
+    transform = ResizePadCrop(
+        scale_factor=args.scale_factor, scaled_image_size=args.scaled_image_size
     )
 
     # Prepare some inputs.
@@ -210,6 +213,8 @@ if __name__ == "__main__":
             true_img = torch.unsqueeze(true_img, 0)
             true_img = true_img.to(model.device)
             Dt = Dt.to(model.device)
+
+            true_img = transform(true_img)
 
             if k == 0:
                 # Make a prediction from ground truth input.
@@ -290,6 +295,7 @@ if __name__ == "__main__":
                 dpi=300,
             )
             plt.close()
+
         model = model.cpu()  # free up GPU before next model load just in case
         fig, ax = plt.subplots()
         plt.plot(Dt * np.arange(len(npz_list)), loss_per_image[m], ".")
@@ -306,6 +312,19 @@ if __name__ == "__main__":
         )
         plt.close()
 
+        # Prepare an animated gif.
+        os.system(
+            "convert -delay 20 -loop 0 "
+            + os.path.join(
+                args.outdir, f"loderunner_prediction_ckpt{m}_id{args.runID:05d}*.png "
+            )
+            + os.path.join(
+                args.outdir,
+                f"loderunner_prediction_ckpt{m}_id{args.runID:05d}.gif",
+            )
+        )
+
+    # Plot loss.
     fig, ax = plt.subplots()
     for m, ckpt in enumerate(args.checkpoint):
         plt.plot(Dt * np.arange(len(npz_list)), loss_per_image[m], ".", label=f"ckpt{m}")
