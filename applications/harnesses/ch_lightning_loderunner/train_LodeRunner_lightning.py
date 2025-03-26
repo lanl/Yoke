@@ -21,6 +21,7 @@ import lightning.pytorch as L
 from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
 import torch
 import torch.nn as nn
+import numpy as np
 
 from yoke.models.vit.swin.bomberman import LodeRunner, Lightning_LodeRunner
 from yoke.datasets.lsc_dataset import LSCDataModule
@@ -29,6 +30,7 @@ import yoke.torch_training_utils as tr
 from yoke.lr_schedulers import CosineWithWarmupScheduler
 from yoke.helpers import cli
 import yoke.scheduled_sampling
+from yoke.losses.masked_loss import CroppedLoss2D
 
 
 #############################################
@@ -122,7 +124,7 @@ if __name__ == "__main__":
     )
     ds_params = {
         "LSC_NPZ_DIR": args.LSC_NPZ_DIR,
-        "max_file_checks": 1000,
+        "max_file_checks": 10,
         "seq_len": args.seq_len,
         "half_image": True,
         "transform": transform,
@@ -143,11 +145,22 @@ if __name__ == "__main__":
     #############################################
     # Lightning wrap
     #############################################
+    loss_mask = torch.zeros(args.scaled_image_size, dtype=torch.float)
+    valid_im_size = np.floor(args.scale_factor * np.array(args.image_size)).astype(int)
+    loss = CroppedLoss2D(
+        loss_fxn=nn.MSELoss(reduction="none"),
+        crop=(
+            0,
+            0,
+            min(valid_im_size[0], args.scaled_image_size[0]),
+            min(valid_im_size[1], args.scaled_image_size[1]),
+        ),
+    )
     lm_kwargs = {
         "model": model,
         "in_vars": torch.tensor([0, 1, 2, 3, 4, 5, 6, 7]),
         "out_vars": torch.tensor([0, 1, 2, 3, 4, 5, 6, 7]),
-        "loss_fn": nn.MSELoss(reduction="none"),
+        "loss_fn": loss,
         "lr_scheduler": CosineWithWarmupScheduler,
         "scheduler_params": {
             "warmup_steps": args.warmup_steps,

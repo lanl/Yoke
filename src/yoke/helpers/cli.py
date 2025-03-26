@@ -281,6 +281,14 @@ def add_training_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParse
         ),
     )
     parser.add_argument(
+        "--image_size",
+        action="store",
+        type=int,
+        nargs="+",
+        default=(1120, 400),
+        help="Size of loaded images before rescaling.",
+    )
+    parser.add_argument(
         "--scale_factor",
         action="store",
         type=float,
@@ -292,7 +300,7 @@ def add_training_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParse
         action="store",
         type=int,
         nargs="+",
-        default=None,
+        default=(1120, 400),
         help="Rescaled image will be padded or cropped to this size.",
     )
     return parser
