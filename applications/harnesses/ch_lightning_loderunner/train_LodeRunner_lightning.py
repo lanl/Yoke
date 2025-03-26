@@ -18,6 +18,7 @@ import os
 import re
 
 import lightning.pytorch as L
+from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
 import torch
 import torch.nn as nn
@@ -170,11 +171,8 @@ if __name__ == "__main__":
     if args.freeze_backbone:
         tr.freeze_torch_params(L_loderunner.model.unet)
 
-    # Prepare Lightning trainer.
-    logger = L.loggers.CSVLogger(
-        save_dir="./",
-        flush_logs_every_n_steps=min(args.train_batches, args.val_batches),
-    )
+    # Prepare Lightning logger.
+    logger = TensorBoardLogger(save_dir="./")
 
     # Determine starting and final epochs for this round of training.
     # Format: study{args.studyIDX:03d}_epoch={epoch:04d}_val_loss={val_loss:.4f}.ckpt

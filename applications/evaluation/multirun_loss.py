@@ -1,6 +1,4 @@
-"""
-This script reads multiple `Yoke` record files and plots the network learning curves.
-"""
+"""Script to plot multiple network learning curves."""
 
 import argparse
 import glob
@@ -11,6 +9,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from tensorboard.backend.event_processing import event_accumulator
 
 
 # Use LaTeX font
@@ -27,7 +26,6 @@ parser = argparse.ArgumentParser(
     description=descr_str,
     fromfile_prefix_chars="@",
 )
-
 parser.add_argument(
     "--basedir",
     action="store",
@@ -35,25 +33,22 @@ parser.add_argument(
     default="./study_directory",
     help="Directory to look for studies.",
 )
-
 parser.add_argument(
     "--idx_range",
     nargs="+",
     action="store",
     type=int,
     default=None,
-    help="Index range of studies to plot curves for.  None uses all found in directory",
+    help="Index range of studies to plot curves for.",
 )
-
 parser.add_argument(
     "--version_range",
     nargs="+",
     action="store",
     type=int,
     default=None,
-    help="Index range of lightning log versions to use for each run.  None uses all and assumes they correspond to a chained run",
+    help="Index range of lightning log versions to use for each run.",
 )
-
 parser.add_argument(
     "--savedir",
     action="store",
@@ -61,30 +56,49 @@ parser.add_argument(
     default="./",
     help="Directory for saving images.",
 )
-
 parser.add_argument(
-    "--savefig", "-S", action="store_true", help="Flag to save figures."
+    "--logger",
+    action="store",
+    type=str,
+    choices={"TensorBoardLogger", "CSVLogger"},
+    default="TensorBoardLogger",
+    help="Logger in lightning.pytorch.loggers that was used.",
 )
-
+parser.add_argument("--savefig", "-S", action="store_true", help="Flag to save figures.")
 args = parser.parse_args()
 
 
 # Search for results files of the form version_*/metrics.csv (For Lightning training).
-csv_list = glob.glob(
-    os.path.join(args.basedir, "study_*", "lightning_logs", "version_*", "metrics.csv")
-)
+if args.logger == "CSVLogger":
+    log_list = glob.glob(
+        os.path.join(
+            args.basedir, "study_*", "lightning_logs", "version_*", "metrics.csv"
+        )
+    )
+elif args.logger == "TensorBoardLogger":
+    log_list = glob.glob(
+        os.path.join(
+            args.basedir,
+            "study_*",
+            "lightning_logs",
+            "version_*",
+            "events.out.tfevents.*",
+        )
+    )
+else:
+    raise ValueError(f"Logger {args.logger} not currently supported.")
 
 # Filter files.
 study_re = r"study_(?P<ind>\d+)"
-study_inds = np.array([int(re.search(study_re, f)["ind"]) for f in csv_list])
+study_inds = np.array([int(re.search(study_re, f)["ind"]) for f in log_list])
 version_re = r"version_(?P<ind>\d+)"
-version_inds = np.array([int(re.search(version_re, f)["ind"]) for f in csv_list])
+version_inds = np.array([int(re.search(version_re, f)["ind"]) for f in log_list])
 if args.idx_range is None:
     idx_range = [np.min(study_inds), np.max(study_inds)]
 else:
     idx_range = args.idx_range
 keep_inds = (study_inds >= idx_range[0]) & (study_inds <= idx_range[1])
-csv_list = np.array(csv_list)[keep_inds]
+log_list = np.array(log_list)[keep_inds]
 study_inds = study_inds[keep_inds]
 version_inds = version_inds[keep_inds]
 
@@ -93,7 +107,7 @@ if args.version_range is None:
 else:
     version_range = args.version_range
 keep_inds = (version_inds >= version_range[0]) & (version_inds <= version_range[1])
-csv_list = np.array(csv_list)[keep_inds]
+log_list = np.array(log_list)[keep_inds]
 study_inds = study_inds[keep_inds]
 version_inds = version_inds[keep_inds]
 
@@ -117,18 +131,35 @@ val_plt_properties = {
 for n, study_idx in enumerate(studies):
     # Isolate current training files.
     current_study = study_inds == study_idx
-    current_files = csv_list[current_study]
+    current_files = log_list[current_study]
 
     # Load training losses.
     train_loss = []
     val_loss = []
     epoch = []
     for f in current_files:
-        df = pd.read_csv(
-            f,
-            sep=",",
-            engine="python",
-        )
+        if args.logger == "CSVLogger":
+            # Read CSV log file as a pandas dataframe.
+            df = pd.read_csv(
+                f,
+                sep=",",
+                engine="python",
+            )
+        elif args.logger == "TensorBoardLogger":
+            # Extract train_loss, val_loss, and epoch from the tensorboard log.
+            ea = event_accumulator.EventAccumulator(path=f)
+            ea.Reload()
+            train_loss_df = pd.DataFrame(ea.Scalars("train_loss")).rename(
+                columns={"value": "train_loss"}
+            )
+            val_loss_df = pd.DataFrame(ea.Scalars("val_loss")).rename(
+                columns={"value": "val_loss"}
+            )
+            epoch_df = pd.DataFrame(ea.Scalars("epoch")).rename(
+                columns={"value": "epoch"}
+            )
+            df = pd.merge(epoch_df, train_loss_df, on="step", how="outer")
+            df = pd.merge(df, val_loss_df, on="step", how="outer")
         if len(df) > 0:
             train_loss.append(df["train_loss"].to_numpy())
             val_loss.append(df["val_loss"].to_numpy())
@@ -139,13 +170,15 @@ for n, study_idx in enumerate(studies):
     train_loss = np.concatenate(train_loss)
     val_loss = np.concatenate(val_loss)
     ax.plot(
-        epoch, train_loss,
+        epoch,
+        train_loss,
         color=study_color[n],
         **trn_plt_properties,
         label=f"Training: study {study_idx}",
     )
     ax.plot(
-        epoch, val_loss,
+        epoch,
+        val_loss,
         color=study_color[n],
         **val_plt_properties,
         label=f"Validation: study {study_idx}",

@@ -11,7 +11,7 @@ Usage:
 EXAMPLE USAGE:
 
     STEP 1:
-    import yoke.utils.logger as yl
+    import yoke.helpers.logger as yl
 
     STEP 2:
     yl.init()

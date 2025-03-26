@@ -13,7 +13,7 @@ from pathlib import Path
 import random
 import sys
 import typing
-from typing import Callable, Dict
+from typing import Callable
 
 import lightning.pytorch as L
 import numpy as np
@@ -891,27 +891,28 @@ class LSCDataModule(L.LightningDataModule):
 
     Args:
         ds_name (str): Name of desired dataset in src.yoke.datasets.lsc_dataset
-        ds_params_train (Dict): Keyword arguments passed to dataset initializer
+        ds_params_train (dict): Keyword arguments passed to dataset initializer
             to generate the training dataset.
-        dl_params_train (Dict): Keyword arguments passed to training dataloader.
-        ds_params_val (Dict): Keyword arguments passed to dataset initializer
+        dl_params_train (dict): Keyword arguments passed to training dataloader.
+        ds_params_val (dict): Keyword arguments passed to dataset initializer
             to generate the validation dataset.
-        dl_params_val (Dict): Keyword arguments passed to validation dataloader.
-        ds_params_test (Dict): Keyword arguments passed to dataset initializer
+        dl_params_val (dict): Keyword arguments passed to validation dataloader.
+        ds_params_test (dict): Keyword arguments passed to dataset initializer
             to generate the testing dataset.
-        dl_params_test (Dict): Keyword arguments passed to testing dataloader.
+        dl_params_test (dict): Keyword arguments passed to testing dataloader.
     """
 
     def __init__(
         self,
         ds_name: str,
-        ds_params_train: Dict,
-        dl_params_train: Dict,
-        ds_params_val: Dict,
-        dl_params_val: Dict,
-        ds_params_test: Dict = None,
-        dl_params_test: Dict = None,
-    ):
+        ds_params_train: dict,
+        dl_params_train: dict,
+        ds_params_val: dict,
+        dl_params_val: dict,
+        ds_params_test: dict = None,
+        dl_params_test: dict = None,
+    ) -> None:
+        """LSCDataModule initialization method."""
         super().__init__()
         self.ds_name = ds_name
 
@@ -924,26 +925,30 @@ class LSCDataModule(L.LightningDataModule):
         self.ds_params_test = ds_params_test
         self.dl_params_test = dl_params_test
 
-    def setup(self, stage=None):
+    def setup(self, stage: str = None) -> None:
+        """Data module setup called on all devices."""
         # Currently, LSC datasets are fast to instantiate.  As such, to
-        # facilitate "dynamic" datasets that may change throughout 
+        # facilitate "dynamic" datasets that may change throughout
         # training, dataset instantiation is done on-the-fly when
         # preparing dataloaders.
         pass
 
-    def train_dataloader(self):
+    def train_dataloader(self) -> DataLoader:
+        """Prepare the training dataset and dataloader."""
         ds_ref = getattr(sys.modules[__name__], self.ds_name)
         ds_train = ds_ref(**self.ds_params_train)
         self.ds_train = ds_train
         return DataLoader(dataset=ds_train, **self.dl_params_train)
 
-    def val_dataloader(self):
+    def val_dataloader(self) -> DataLoader:
+        """Prepare the validation dataset and dataloader."""
         ds_ref = getattr(sys.modules[__name__], self.ds_name)
         ds_val = ds_ref(**self.ds_params_val)
         self.ds_val = ds_val
         return DataLoader(dataset=ds_val, **self.dl_params_val)
 
-    def test_dataloader(self):
+    def test_dataloader(self) -> DataLoader:
+        """Prepare the testing dataset and dataloader."""
         ds_ref = getattr(sys.modules[__name__], self.ds_name)
         ds_test = ds_ref(**self.ds_params_test)
         self.ds_test = ds_test
