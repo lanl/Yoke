@@ -51,7 +51,7 @@ def lightning_model(loderunner_model: LodeRunner) -> Lightning_LodeRunner:
         loss_fn=nn.MSELoss(reduction="none"),
         scheduled_sampling_scheduler=lambda global_step: 1.0,
     )
-    lightning_loderunner.trainer = Trainer()
+    lightning_loderunner.trainer = Trainer(logger=False)
     return lightning_loderunner
 
 
