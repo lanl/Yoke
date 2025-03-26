@@ -236,6 +236,7 @@ if __name__ == "__main__":
         last_epoch=last_epoch,
     )
 
+
     #############################################
     # Training Loop
     #############################################
@@ -248,8 +249,13 @@ if __name__ == "__main__":
     SEED = 42
 
     max_channels = len(hydro_fields)
-    ylogger.logger.info(f"Max Channel  : {max_channels}")
     channel_map_size = args.channel_map_size
+    ylogger.logger.info(f"max_channels  : {max_channels}")
+    log_str = (
+        f"total_epochs{total_epochs:7d}, "
+        f"cycle_epochs{cycle_epochs:7d}, "
+    )
+    ylogger.logger.info(log_str)
 
     # Change hydrofields to array to enable slicing with channel map
     hydro_fields = np.array(hydro_fields)

@@ -15,10 +15,9 @@
 #SBATCH --account=w25_artimis_g
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=64
-#SBATCH --partition=gpu_debug
-#SBATCH --reservation=gpu_debug
+#SBATCH --partition=gpu
 #SBATCH --constraint=gpu40
-#SBATCH --time=02:00:00
+#SBATCH --time=16:00:00
 #SBATCH --output=study<studyIDX>_epoch0001.out
 #SBATCH --error=study<studyIDX>_epoch0001.err
 #SBATCH -vvv
@@ -45,7 +44,7 @@ export date00=`date`
 # nvpid=$!
 
 # Start the Code
-python <train_script> @study<studyIDX>_START.input
+PYTHONPATH=/usr/projects/artimis/mpmm/spandit/chicoma/ch_yoke/src:$PYTHONPATH python <train_script> @study<studyIDX>_START.input
 #pypid=$!
 
 # Kill GPU monitoring after python process finishes
