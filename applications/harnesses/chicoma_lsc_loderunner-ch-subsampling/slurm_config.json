@@ -1,6 +1,10 @@
 {
-    "jobname": "loderunner_chfe_study<studyIDX>",
-    "debug": true,
-    "log": "study<studyIDX>_epoch<epochIDX>",
-    "email": []
+    "system": "chicoma",
+    "generated-params": {
+        "run-config": "debug",
+        "email": []
+    },
+    "custom-params": {
+        "job-name": "lr_subsamp_std<studyIDX>_ep<epochIDX>"
+    }
 }

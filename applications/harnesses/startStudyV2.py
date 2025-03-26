@@ -24,7 +24,7 @@ training_input_tmpl = "./training_input.tmpl"
 training_START_input = "./training_START.input"
 
 slrm_obj = create_slurm_files.MkSlurm(
-    config_path='./slurm_config.json', output_path='./'
+    config_path='./slurm_config.json'
 )
 slurm_tmpl_data = slrm_obj.generateSlurm()
 
