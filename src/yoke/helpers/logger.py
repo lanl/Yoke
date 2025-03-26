@@ -12,7 +12,8 @@ Example Usage:
 
 .. code-block:: python
 
-    import yoke.utils.logger as yl
+    STEP 1:
+    import yoke.helpers.logger as yl
 
     yl.init()
 
