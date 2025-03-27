@@ -8,13 +8,13 @@ emulator.
 
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 import random
 
+import numpy as np
 import torch
 from torch import nn
 from torch.optim.lr_scheduler import _LRScheduler
-
 from lightning.pytorch import LightningModule
 
 from yoke.models.vit.swin.unet import SwinUnetBackbone
@@ -27,6 +27,7 @@ from yoke.models.vit.embedding_encoders import (
     TimeEmbed,
 )
 from yoke.lr_schedulers import CosineWithWarmupScheduler
+from yoke.helpers.training_design import validate_patch_and_window
 
 
 class LodeRunner(nn.Module):
