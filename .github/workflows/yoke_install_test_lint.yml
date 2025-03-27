@@ -77,6 +77,13 @@ jobs:
         ruff format tests --check --diff
       continue-on-error: false
 
+    - name: Lint scheduled sampling
+      run: |
+        ruff check src/yoke/scheduled_sampling.py
+        ruff check src/yoke/scheduled_sampling.py --preview
+        ruff format src/yoke/scheduled_sampling.py --check --diff
+      continue-on-error: false
+
     - name: Lint datasets
       run: |
         ruff check src/yoke/datasets
