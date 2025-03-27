@@ -10,7 +10,6 @@ YOKE_PATH = os.path.join(os.path.dirname(__file__), "../../..")
 
 def add_default_args(parser: argparse.ArgumentParser = None) -> argparse.ArgumentParser:
     """Prepare a default argparse.ArgumentParser."""
-    """Prepare a default argparse.ArgumentParser."""
     if parser is None:
         parser = argparse.ArgumentParser(
             prog="HARNESS START", description="Starts execution of training harness"
@@ -54,7 +53,6 @@ def add_default_args(parser: argparse.ArgumentParser = None) -> argparse.Argumen
 
 
 def add_filepath_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    """Add filepath related arguments to parser."""
     """Add filepath related arguments to parser."""
     parser.add_argument(
         "--FILELIST_DIR",
@@ -124,7 +122,6 @@ def add_filepath_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParse
 
 def add_computing_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     """Add computing-related (e.g., parallel processing) related arguments to parser."""
-    """Add computing-related (e.g., parallel processing) related arguments to parser."""
     parser.add_argument(
         "--multigpu",
         action="store_true",
@@ -141,7 +138,6 @@ def add_computing_args(parser: argparse.ArgumentParser) -> argparse.ArgumentPars
 
 
 def add_model_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    """Add model arguments to parser."""
     """Add model arguments to parser."""
     parser.add_argument(
         "--featureList",
@@ -171,7 +167,6 @@ def add_model_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
         action="store",
         type=int,
         default=96,
-        default=96,
         help="Initial embedding dimension for SWIN-Unet.",
     )
 
@@ -179,7 +174,6 @@ def add_model_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
 
 
 def add_training_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    """Add training arguments to parser."""
     """Add training arguments to parser."""
     parser.add_argument(
         "--batch_size", action="store", type=int, default=64, help="Batch size"
@@ -254,7 +248,6 @@ def add_training_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParse
         action="store",
         type=str,
         default=None,
-        default=None,
         help="Path to checkpoint to continue training from",
     )
     parser.add_argument(
@@ -317,7 +310,6 @@ def add_step_lr_scheduler_args(
     parser: argparse.ArgumentParser,
 ) -> argparse.ArgumentParser:
     """Add StepLR arguments to parser."""
-    """Add StepLR arguments to parser."""
     parser.add_argument(
         "--init_learnrate",
         action="store",
@@ -342,7 +334,6 @@ def add_step_lr_scheduler_args(
 def add_cosine_lr_scheduler_args(
     parser: argparse.ArgumentParser,
 ) -> argparse.ArgumentParser:
-    """Add CosineWithWarmupScheduler arguments to parser."""
     """Add CosineWithWarmupScheduler arguments to parser."""
     parser.add_argument(
         "--anchor_lr",
@@ -397,19 +388,7 @@ def add_scheduled_sampling_args(
             "defining scheduled sampling schedule."
         ),
     )
-    """Add scheduled sampling arguments to parser."""
     parser.add_argument(
-        "--schedule",
-        action="store",
-        type=str,
-        default="inverse_sigmoid",
-        help=(
-            "Name of a function in src.yoke.scheduled_sampling "
-            "defining scheduled sampling schedule."
-        ),
-    )
-    parser.add_argument(
-        "--initial_schedule_prob",
         "--initial_schedule_prob",
         action="store",
         type=float,
@@ -418,11 +397,8 @@ def add_scheduled_sampling_args(
     )
     parser.add_argument(
         "--decay_param",
-        "--decay_param",
         action="store",
         type=float,
-        default=100.0,  # Decay parameter for scheduled_prob
-        help="Parameter defining decay of scheduled sampling schedule.",
         default=100.0,  # Decay parameter for scheduled_prob
         help="Parameter defining decay of scheduled sampling schedule.",
     )
@@ -431,18 +407,15 @@ def add_scheduled_sampling_args(
         action="store",
         type=float,
         default=0.0,  # Minimum probability of using ground truth
-        default=0.0,  # Minimum probability of using ground truth
         help="Minimum scheduled-sampling probability.",
     )
 
     return parser
 
 
-
 def add_ch_subsampling_args(
     parser: argparse.ArgumentParser,
 ) -> argparse.ArgumentParser:
-    """Add channel subsampling arguments to parser."""
     """Add channel subsampling arguments to parser."""
     parser.add_argument(
         "--channel_map_size",
