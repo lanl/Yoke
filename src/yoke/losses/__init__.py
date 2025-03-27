@@ -1,1 +1,1 @@
-"""Modules for custom loss functions."""
+"""All custom loss functions in YOKE live here."""

@@ -166,7 +166,7 @@ def add_model_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
         "--embed_dim",
         action="store",
         type=int,
-        default=128,
+        default=96,
         help="Initial embedding dimension for SWIN-Unet.",
     )
 
@@ -383,7 +383,10 @@ def add_scheduled_sampling_args(
         action="store",
         type=str,
         default="inverse_sigmoid",
-        help="Name of a function in src.yoke.scheduled_sampling defining scheduled sampling schedule.",
+        help=(
+            "Name of a function in src.yoke.scheduled_sampling "
+            "defining scheduled sampling schedule."
+        ),
     )
     parser.add_argument(
         "--initial_schedule_prob",

@@ -102,9 +102,9 @@ class LodeRunner(nn.Module):
             window_sizes=window_sizes,
             patch_merge_scales=patch_merge_scales,
         )
-        assert np.all(valid), (
-            "Invalid combination of image_size, patch_size, window_sizes, and patch_merge_scales!"
-        )
+        assert np.all(
+            valid
+        ), "Invalid combination of image_size, patch_size, window_sizes, and patch_merge_scales!"
 
         # First embed the image as a sequence of tokenized patches. Each
         # channel is embedded independently.
@@ -295,9 +295,9 @@ class Lightning_LodeRunner(LightningModule):
         # self.log("train_loss_per_sample", losses, on_epoch=True, on_step=True)
 
         batch_loss = losses.mean()
-        if hasattr(self, "logger"):  # Only log if there is a logger
+        if hasattr(self, "trainer") and self.trainer.training:
             self.log("train_loss", batch_loss, sync_dist=True)
-            self.log("scheduled_prob", scheduled_prob, sync_dist=True)  # temp test
+            self.log("scheduled_prob", scheduled_prob, sync_dist=True)
 
         return batch_loss
 
@@ -321,7 +321,7 @@ class Lightning_LodeRunner(LightningModule):
         # self.log("val_loss_per_sample", losses, on_epoch=True, on_step=True)
 
         batch_loss = losses.mean()
-        if hasattr(self, "logger"):  # Only log if there is a logger
+        if hasattr(self, "trainer") and self.trainer.training:
             self.log("val_loss", batch_loss, sync_dist=True)
 
 
