@@ -9,9 +9,7 @@ YOKE_PATH = os.path.join(os.path.dirname(__file__), "../../..")
 
 
 def add_default_args(parser: argparse.ArgumentParser = None) -> argparse.ArgumentParser:
-    """
-    Prepare a default argparse.ArgumentParser for harnesses in yoke.applications.harnesses
-    """
+    """Prepare a default argparse.ArgumentParser."""
     if parser is None:
         parser = argparse.ArgumentParser(
             prog="HARNESS START", description="Starts execution of training harness"
@@ -55,9 +53,7 @@ def add_default_args(parser: argparse.ArgumentParser = None) -> argparse.Argumen
 
 
 def add_filepath_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    """
-    Add filepath related arguments to parser for harnesses in yoke.applications.harnesses
-    """
+    """Add filepath related arguments to parser."""
     parser.add_argument(
         "--FILELIST_DIR",
         action="store",
@@ -125,9 +121,7 @@ def add_filepath_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParse
 
 
 def add_computing_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    """
-    Add computing-related (e.g., parallel processing) related arguments to parser for harnesses in yoke.applications.harnesses
-    """
+    """Add computing-related (e.g., parallel processing) related arguments to parser."""
     parser.add_argument(
         "--multigpu",
         action="store_true",
@@ -144,9 +138,7 @@ def add_computing_args(parser: argparse.ArgumentParser) -> argparse.ArgumentPars
 
 
 def add_model_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    """
-    Add model arguments to parser for harnesses in yoke.applications.harnesses
-    """
+    """Add model arguments to parser."""
     parser.add_argument(
         "--featureList",
         action="store",
@@ -174,7 +166,7 @@ def add_model_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
         "--embed_dim",
         action="store",
         type=int,
-        default=128,
+        default=96,
         help="Initial embedding dimension for SWIN-Unet.",
     )
 
@@ -182,9 +174,7 @@ def add_model_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
 
 
 def add_training_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    """
-    Add training arguments to parser for harnesses in yoke.applications.harnesses
-    """
+    """Add training arguments to parser."""
     parser.add_argument(
         "--batch_size", action="store", type=int, default=64, help="Batch size"
     )
@@ -292,9 +282,7 @@ def add_training_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParse
 def add_step_lr_scheduler_args(
     parser: argparse.ArgumentParser,
 ) -> argparse.ArgumentParser:
-    """
-    Add StepLR arguments to parser for harnesses in yoke.applications.harnesses
-    """
+    """Add StepLR arguments to parser."""
     parser.add_argument(
         "--init_learnrate",
         action="store",
@@ -319,9 +307,7 @@ def add_step_lr_scheduler_args(
 def add_cosine_lr_scheduler_args(
     parser: argparse.ArgumentParser,
 ) -> argparse.ArgumentParser:
-    """
-    Add CosineWithWarmupScheduler arguments to parser for harnesses in yoke.applications.harnesses
-    """
+    """Add CosineWithWarmupScheduler arguments to parser."""
     parser.add_argument(
         "--anchor_lr",
         action="store",
@@ -364,15 +350,16 @@ def add_cosine_lr_scheduler_args(
 def add_scheduled_sampling_args(
     parser: argparse.ArgumentParser,
 ) -> argparse.ArgumentParser:
-    """
-    Add scheduled sampling arguments to parser for harnesses in yoke.applications.harnesses
-    """
+    """Add scheduled sampling arguments to parser."""
     parser.add_argument(
         "--schedule",
         action="store",
         type=str,
         default="inverse_sigmoid",
-        help="Name of a function in src.yoke.scheduled_sampling defining scheduled sampling schedule.",
+        help=(
+            "Name of a function in src.yoke.scheduled_sampling "
+            "defining scheduled sampling schedule."
+        ),
     )
     parser.add_argument(
         "--initial_schedule_prob",
@@ -398,12 +385,11 @@ def add_scheduled_sampling_args(
 
     return parser
 
+
 def add_ch_subsampling_args(
     parser: argparse.ArgumentParser,
 ) -> argparse.ArgumentParser:
-    """
-    Add channel subsampling arguments to parser for harnesses in yoke.applications.harnesses
-    """
+    """Add channel subsampling arguments to parser."""
     parser.add_argument(
         "--channel_map_size",
         action="store",

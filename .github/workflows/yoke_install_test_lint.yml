@@ -91,6 +91,13 @@ jobs:
         ruff format src/yoke/datasets --check --diff
       continue-on-error: false
 
+    - name: Lint helper utilities.
+      run: |
+        ruff check src/yoke/helpers
+        ruff check src/yoke/helpers --preview
+        ruff format src/yoke/helpers --check --diff
+      continue-on-error: false
+
     - name: Lint models
       run: |
         ruff check src/yoke/models
