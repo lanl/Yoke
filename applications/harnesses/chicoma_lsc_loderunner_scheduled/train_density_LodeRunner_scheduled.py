@@ -73,8 +73,8 @@ if __name__ == "__main__":
     batch_size = args.batch_size
 
     # Scheduled Sampling Parameters
-    scheduled_prob = args.scheduled_prob
-    decay_rate = args.decay_rate
+    scheduled_prob = args.initial_schedule_prob
+    decay_rate = args.decay_param
     minimum_schedule_prob = args.minimum_schedule_prob
 
     # Number of workers controls how batches of data are prefetched and,
