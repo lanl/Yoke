@@ -3,11 +3,11 @@
 import numpy as np
 
 
-## Exponential, inverse sigmoid, and linear from Bengio et al. 2015
-## "Scheduled Sampling for Sequence Prediction with
-## Recurrent Neural Networks"
-## https://proceedings.neurips.cc/paper/2015/hash/e995f98d56967d946471af29d7bf99f1-Abstract.html
-## with slight modifications.
+# Exponential, inverse sigmoid, and linear from Bengio et al. 2015
+# "Scheduled Sampling for Sequence Prediction with
+# Recurrent Neural Networks"
+# https://proceedings.neurips.cc/paper/2015/hash/e995f98d56967d946471af29d7bf99f1-Abstract.html
+# with slight modifications.
 
 
 def exponential(
