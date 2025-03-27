@@ -19,7 +19,7 @@ class ResizePadCrop(torch.nn.Module):
             pad_mode=="constant".
         pad_position (Iterable[str, str]): Pad value locations (i.e.,
             "top" or "bottom" for dim0, "left" or "right" for dim1).  The default
-            ("top", "right") corresponds to the geomtry of the LSC data where most
+            ("bottom", "right") corresponds to the geometry of the LSC data where most
             dynamics occur in the bottom-left of the image.
     """
 
@@ -29,7 +29,7 @@ class ResizePadCrop(torch.nn.Module):
         scaled_image_size: Iterable[int, int] = None,
         pad_mode: str = "constant",
         pad_value: float = 0.0,
-        pad_position: Iterable[str, str] = ("top", "right"),
+        pad_position: Iterable[str, str] = ("bottom", "right"),
     ) -> None:
         """Initialize transform."""
         super().__init__()
