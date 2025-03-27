@@ -98,7 +98,7 @@ def find_valid_pad(
 
 
 def choose_downsample_factor(
-    image_size: Iterable[int, int] = (1120, 400),
+    image_size: np.array = np.array([1120, 400]),
     patch_size: int = 5,
     window_sizes: Iterable = [(2, 2) for _ in range(4)],
     patch_merge_scales: Iterable = [(2, 2) for _ in range(3)],

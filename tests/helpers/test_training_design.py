@@ -55,7 +55,7 @@ def test_find_valid_pad() -> None:
 
 def test_choose_downsample_factor() -> None:
     """Ensure choose_downsample_factor() runs without crashing."""
-    image_size = (1120, 400)
+    image_size = np.array([1120, 400])
     patch_size = 5
     window_sizes = [(2, 2) for _ in range(4)]
     patch_merge_scales = [(2, 2) for _ in range(3)]
