@@ -105,7 +105,7 @@ if __name__ == "__main__":
             "Uvelocity",
             "Wvelocity",
         ],
-        image_size=(1120, 400)
+        image_size=args.image_size
         if args.scaled_image_size is None
         else args.scaled_image_size,
         patch_size=(5, 5),
