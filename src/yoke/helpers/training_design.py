@@ -48,6 +48,7 @@ def validate_patch_and_window(
     # Stage 1 patching (dividing input image into patches):
     valid[0, 0] = (image_size % patch_size) == 0
     new_grid = image_size // patch_size
+
     # Stage 1 windowing (grouping patches into a window view):
     valid[0, 1] = (new_grid % window_sizes[0, :]) == 0
 
@@ -56,6 +57,7 @@ def validate_patch_and_window(
         # Patch merging (grouping patches into new, larger patches):
         valid[s, 0] = (new_grid % patch_merge_scales[s - 1, :]) == 0
         new_grid = new_grid // patch_merge_scales[s - 1, :]
+
         # Windowing:
         valid[s, 1] = (new_grid % window_sizes[s, :]) == 0
 
@@ -106,7 +108,7 @@ def choose_downsample_factor(
     desired_scale_factor: float = 1.0,
     max_scale_dev: float = 0.5,
 ) -> float:
-    """Choose downsample factor close to desired factor to minimize pading."""
+    """Choose downsample factor close to desired factor to minimize padding."""
 
     # Define a loss function for optimizing scale factor.
     def loss(scale_factor: float) -> int:
