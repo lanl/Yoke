@@ -121,7 +121,9 @@ if __name__ == "__main__":
     # Initialize Data
     #############################################
     transform = ResizePadCrop(
-        scale_factor=args.scale_factor, scaled_image_size=args.scaled_image_size
+        scale_factor=args.scale_factor,
+        scaled_image_size=args.scaled_image_size,
+        pad_position=("top", "right"),
     )
     ds_params = {
         "LSC_NPZ_DIR": args.LSC_NPZ_DIR,
@@ -146,17 +148,22 @@ if __name__ == "__main__":
     #############################################
     # Lightning wrap
     #############################################
+    # Define a cropped loss function (used to ignore padding on rescaled images).
     loss_mask = torch.zeros(args.scaled_image_size, dtype=torch.float)
+    scaled_image_size = np.array(args.scaled_image_size)
     valid_im_size = np.floor(args.scale_factor * np.array(args.image_size)).astype(int)
+    pad = scaled_image_size - valid_im_size
     loss = CroppedLoss2D(
         loss_fxn=nn.MSELoss(reduction="none"),
         crop=(
+            pad[0],
             0,
-            0,
-            min(valid_im_size[0], args.scaled_image_size[0]),
+            min(valid_im_size[0], args.scaled_image_size[0]) - pad[0],
             min(valid_im_size[1], args.scaled_image_size[1]),
-        ),
+        ),  # corresponds to pad_position=("top", "right") in ResizePadCrop
     )
+
+    # Prepare the Lightning module.
     lm_kwargs = {
         "model": model,
         "in_vars": torch.tensor([0, 1, 2, 3, 4, 5, 6, 7]),
