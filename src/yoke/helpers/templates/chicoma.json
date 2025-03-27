@@ -1,0 +1,27 @@
+{
+    "scheduler": "slurm",
+    "generated-params": {
+        "run-config": {
+            "debug": {
+                "nodes": 1,
+                "partition": "gpu-debug",
+                "reservation": "gpu-debug",
+                "time": "02:00:00"
+            },
+            "prod": {
+                "partition": "gpu",
+                "time": "16:00:00"
+            },
+            "default-mode": "prod"
+        },
+        "log": "study<studyIDX>_epoch<epochIDX>",
+        "verbose": 3
+    },
+    "custom-params": {
+        "job-name": "loderunner_chfe_study<studyIDX>",
+        "account": "w25_artimis_g",
+        "nodes": 1,
+        "ntasks-per-node": 64,
+        "constraint": "gpu40"
+    }
+}
