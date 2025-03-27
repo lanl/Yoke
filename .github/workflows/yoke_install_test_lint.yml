@@ -77,11 +77,25 @@ jobs:
         ruff format tests --check --diff
       continue-on-error: false
 
+    - name: Lint scheduled sampling
+      run: |
+        ruff check src/yoke/scheduled_sampling.py
+        ruff check src/yoke/scheduled_sampling.py --preview
+        ruff format src/yoke/scheduled_sampling.py --check --diff
+      continue-on-error: false
+
     - name: Lint datasets
       run: |
         ruff check src/yoke/datasets
         ruff check src/yoke/datasets --preview
         ruff format src/yoke/datasets --check --diff
+      continue-on-error: false
+
+    - name: Lint helper utilities.
+      run: |
+        ruff check src/yoke/helpers
+        ruff check src/yoke/helpers --preview
+        ruff format src/yoke/helpers --check --diff
       continue-on-error: false
 
     - name: Lint models
@@ -94,3 +108,11 @@ jobs:
     - name: Build documentation
       run: |
         sphinx-build -b html docs/ docs/_build/html
+
+    - name: lint losses
+      run: |
+        ruff check src/yoke/losses
+        ruff check src/yoke/losses --preview
+        ruff format src/yoke/losses --check --diff
+      continue-on-error: false
+

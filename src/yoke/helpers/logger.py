@@ -1,5 +1,4 @@
-"""
-logger.py
+"""Custom logging functionality.
 
 This module provides logging configuration for Python applications. It sets up a
 logger with a custom formatter that includes log level, timestamp, filename, line
@@ -18,18 +17,12 @@ Example Usage:
     yl.init()
 
     # Or, initialize with one of the logging levels below.
-    yl.init(logging.DEBUG)
-    yl.init(logging.INFO)
-    yl.init(logging.WARNING)
-    yl.init(logging.ERROR)
-    yl.init(logging.CRITICAL)
+    yl.init(<logging.DEBUG | loggin.INFO | loggin.WARNING
+        | logging.ERROR | loggin.CRITIICAL>)
 
-    # Alternately, after yl.init(), logging level can be set as below.
-    yl.logger.setLevel(logging.DEBUG)
-    yl.logger.setLevel(logging.INFO)
-    yl.logger.setLevel(logging.WARNING)
-    yl.logger.setLevel(logging.ERROR)
-    yl.logger.setLevel(logging.CRITICAL)
+    # Alternately, after yl.init(), loggin level can be set as below.
+    yl.logger.selLevel(<logging.DEBUG | loggin.INFO | loggin.WARNING
+        | logging.ERROR | loggin.CRITIICAL>)
 
     # Use logging.
     logger.debug("DEBUG message.")       # For debug level messages
@@ -56,17 +49,17 @@ logger = None
 def configure_logger(
     name: str, level: int = logging.CRITICAL, log_time: bool = False
 ) -> logging.Logger:
-    """
-    Configures and returns a logger instance.
+    """Configures and returns a logger instance.
 
     Args:
-        name (str): The name of the logger, typically set to `__name__` for the calling module.
-        level (int, optional): The logging level. Defaults to `logging.DEBUG`.
+        name (str): The name of the logger, typically set to `__name__` for the
+            calling module.
+        level (int): The logging level. Defaults to `logging.DEBUG`.
+        log_time (bool): Flag indicating time should be logged.
 
     Returns:
         logging.Logger: A configured logger instance.
     """
-
     global logger
 
     # Create a logger with the specified name and level
@@ -93,6 +86,7 @@ def configure_logger(
     logger.addHandler(console_handler)
 
     return logger
+
 
 def get_logger() -> logging.Logger:
     """"

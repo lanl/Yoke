@@ -8,6 +8,9 @@ emulator.
 
 """
 
+from collections.abc import Callable
+import random
+
 import torch
 from torch import nn
 from torch.optim.lr_scheduler import _LRScheduler
@@ -26,8 +29,6 @@ from yoke.models.vit.embedding_encoders import (
 )
 
 from yoke.lr_schedulers import CosineWithWarmupScheduler
-from yoke.torch_training_utils import save_model_and_optimizer_hdf5
-from yoke.torch_training_utils import load_model_and_optimizer_hdf5
 
 
 class LodeRunner(nn.Module):
@@ -200,11 +201,12 @@ class Lightning_LodeRunner(LightningModule):
         model (nn.Module): Pre-initialized nn.Module to wrap
         in_vars (torch.Tensor): Input channels to train LodeRunner on
         out_vars (torch.Tensor): Output channels to train LodeRunner on
-        learning_rate (float): Initial learning rate for optimizer. Ignored if a
-                               scheduler is used.
-        lrscheduler (_LRScheduler): Learning-rate scheduler to use with optimizer
+        lr_scheduler (_LRScheduler): Learning-rate scheduler to use with optimizer
         scheduler_params (dict): Keyword arguments to initialize scheduler
-
+        loss_fn (Callable): Loss function used to evaluate predictions at each timestep.
+        scheduled_sampling_scheduler (Callable): Function that accepts the current
+            training step and returns a number in [0, 1] for scheduled sampling
+            probability.
     """
 
     def __init__(
@@ -212,110 +214,104 @@ class Lightning_LodeRunner(LightningModule):
         model: nn.Module,
         in_vars: torch.Tensor = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7]),
         out_vars: torch.Tensor = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7]),
-        learning_rate: float = 1e-3,
-        lrscheduler: _LRScheduler = None,
+        lr_scheduler: _LRScheduler = None,
         scheduler_params: dict = None,
+        loss_fn: Callable = nn.MSELoss(reduction="none"),
+        scheduled_sampling_scheduler: Callable = lambda global_step: 1.0,
     ) -> None:
         """Initialization for Lightning wrapper."""
         super().__init__()
         self.model = model
-        self.in_vars = in_vars
-        self.out_vars = out_vars
-        self.learning_rate = learning_rate
-        self.lrscheduler = lrscheduler
+        self.lr_scheduler = lr_scheduler or CosineWithWarmupScheduler
         self.scheduler_params = scheduler_params or {}
-        self.loss_fn = nn.MSELoss(reduction="none")
+        self.scheduled_sampling_scheduler = scheduled_sampling_scheduler
+        self.loss_fn = loss_fn
 
-        # These attributes will be dynamically set during training
-        self.load_h5_chkpt = "./dummy_load.hdf5"
-        self.save_h5_chkpt = "./dummy_save.hdf5"
+        # Register buffers to ensure auto-transfer to devices as needed.
+        self.register_buffer("in_vars", in_vars)
+        self.register_buffer("out_vars", out_vars)
+
+    def configure_optimizers(self) -> torch.optim.Optimizer:
+        """Setup optimizer with scheduler."""
+        # Optimizer setup
+        optimizer = torch.optim.AdamW(self.model.parameters())
+
+        # Initialize LR scheduler
+        scheduler = self.lr_scheduler(optimizer, **self.scheduler_params)
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "interval": "step",  # Step scheduler every batch.
+                "frequency": 1,  # Step every batch (default for "step")
+            },
+        }
 
     def forward(self, X: torch.Tensor, lead_times: torch.Tensor) -> torch.Tensor:
         """Forward method for Lightning wrapper."""
         # Forward pass through the custom model
-        return self.model(X, self.in_vars, self.out_vars, lead_times)
+        return self.model(
+            X, lead_times=lead_times, in_vars=self.in_vars, out_vars=self.out_vars
+        )
 
     def training_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:
         """Execute training step."""
-        # Assume batch includes all required inputs
-        start_img, end_img, lead_times = batch  # Unpack batch
-        preds = self(start_img, lead_times)  # Forward pass
+        # Compute forward pass, accounting for special training schemes like
+        # scheduled sampling.
+        img_seq, lead_times = batch  # Unpack batch
+        pred_seq = []
+        scheduled_prob = self.scheduled_sampling_scheduler(self.current_epoch)
+        for k, k_img in enumerate(torch.unbind(img_seq[:, :-1], dim=1)):
+            if k == 0:
+                # Forward pass for the initial step
+                pred_img = self(k_img, lead_times)
+            else:
+                # Apply scheduled sampling
+                if random.random() < scheduled_prob:
+                    current_input = k_img
+                else:
+                    current_input = pred_img
+                pred_img = self(current_input, lead_times)
 
-        # Per-sample MSE
-        losses = self.loss_fn(preds, end_img)
-        if hasattr(self, "Trainer"):  # Only log if there is a Trainer
-            self.log("train_loss_per_sample", losses, on_epoch=True, on_step=True)
+            # Store the prediction
+            pred_seq.append(pred_img)
+
+        # Combine predictions into a tensor of shape [B, SeqLength, C, H, W]
+        pred_seq = torch.stack(pred_seq, dim=1)
+
+        # Per-sample loss
+        losses = self.loss_fn(pred_seq, img_seq[:, 1:])
+        # self.log("train_loss_per_sample", losses, on_epoch=True, on_step=True)
 
         batch_loss = losses.mean()
-        if hasattr(self, "Trainer"):  # Only log if there is a Trainer
-            self.log("train_loss", batch_loss)
+        if hasattr(self, "trainer") and self.trainer.training:
+            self.log("train_loss", batch_loss, sync_dist=True)
+            self.log("scheduled_prob", scheduled_prob, sync_dist=True)
 
         return batch_loss
 
     def validation_step(self, batch: torch.Tensor, batch_idx: int) -> None:
         """Execute validation step."""
-        start_img, end_img, lead_times = batch  # Unpack batch
-        preds = self(start_img, lead_times)  # Forward pass
+        # Compute forward pass.
+        img_seq, lead_times = batch  # Unpack batch
+        pred_seq = []
+        for k, k_img in enumerate(torch.unbind(img_seq[:, :-1], dim=1)):
+            # For now, stick to next time step prediction for validation step.
+            pred_img = self(k_img, lead_times)
 
-        # Per-sample MSE
-        losses = self.loss_fn(preds, end_img)
-        if hasattr(self, "Trainer"):  # Only log if there is a Trainer
-            self.log("val_loss_per_sample", losses, on_epoch=True, on_step=True)
+            # Store the prediction
+            pred_seq.append(pred_img)
+
+        # Combine predictions into a tensor of shape [B, SeqLength, C, H, W]
+        pred_seq = torch.stack(pred_seq, dim=1)
+
+        # Per-sample loss
+        losses = self.loss_fn(pred_seq, img_seq[:, 1:])
+        # self.log("val_loss_per_sample", losses, on_epoch=True, on_step=True)
 
         batch_loss = losses.mean()
-        if hasattr(self, "Trainer"):  # Only log if there is a Trainer
-            self.log("val_loss", batch_loss)
-
-    def configure_optimizers(self) -> torch.optim.Optimizer:
-        """Setup optimizer with scheduler."""
-        # Optimizer setup
-        optimizer = torch.optim.AdamW(
-            self.model.parameters(),
-            lr=self.learning_rate,
-            betas=(0.9, 0.999),
-            eps=1e-08,
-            weight_decay=0.01,
-        )
-
-        if self.lrscheduler:
-            # Initialize LR scheduler
-            scheduler = self.lrscheduler(optimizer, **self.scheduler_params)
-            return {
-                "optimizer": optimizer,
-                "lr_scheduler": {
-                    "scheduler": scheduler,
-                    "interval": "step",  # Step scheduler every batch.
-                    "frequency": 1,  # Step every batch (default for "step")
-                },
-            }
-
-        return optimizer
-
-    def on_save_checkpoint(self, checkpoint: dict) -> None:
-        """Custom save checkpoint."""
-        epoch = checkpoint.get("epoch", 0)  # Returns 0 if 'epoch' key doesn't exist.
-        filepath = self.save_h5_chkpt
-        save_model_and_optimizer_hdf5(
-            self.model,
-            self.optimizers()[0],
-            epoch=epoch,
-            filepath=filepath,
-        )
-        self.print(f"Saved HDF5 checkpoint: {filepath}")
-
-    def on_load_checkpoint(self) -> None:
-        """Custom load checkpoint."""
-        filepath = self.load_h5_chkpt
-        try:
-            loaded_epoch = load_model_and_optimizer_hdf5(
-                self.model,
-                self.optimizers()[0],
-                filepath=filepath,
-            )
-            self.current_epoch_override = loaded_epoch
-            self.print(f"Loaded HDF5 checkpoint: {filepath}")
-        except FileNotFoundError:
-            self.print(f"Checkpoint file not found: {filepath}. Starting fresh!")
+        if hasattr(self, "trainer") and self.trainer.validating:
+            self.log("val_loss", batch_loss, sync_dist=True)
 
 
 if __name__ == "__main__":
