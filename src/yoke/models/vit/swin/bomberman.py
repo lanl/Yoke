@@ -8,10 +8,9 @@ emulator.
 
 """
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable
 import random
 
-import numpy as np
 import torch
 from torch import nn
 from torch.optim.lr_scheduler import _LRScheduler
@@ -28,7 +27,6 @@ from yoke.models.vit.embedding_encoders import (
     TimeEmbed,
 )
 from yoke.lr_schedulers import CosineWithWarmupScheduler
-from yoke.helpers.training_design import validate_patch_and_window
 
 
 class LodeRunner(nn.Module):
@@ -321,7 +319,7 @@ class Lightning_LodeRunner(LightningModule):
         # self.log("val_loss_per_sample", losses, on_epoch=True, on_step=True)
 
         batch_loss = losses.mean()
-        if hasattr(self, "trainer") and self.trainer.training:
+        if hasattr(self, "trainer") and self.trainer.validating:
             self.log("val_loss", batch_loss, sync_dist=True)
 
 
