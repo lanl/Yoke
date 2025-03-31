@@ -17,6 +17,6 @@ def test_resize_pad_crop() -> None:
         (2, 3, 4, *image_size)
     )  # [batch, sequence length, variables, Y, X]
     out = tform(image)
-    assert (
-        out.shape[-2:] == scaled_image_size
-    ), "ResizePadCrop() output not the expected size!"
+    assert out.shape[-2:] == scaled_image_size, (
+        "ResizePadCrop() output not the expected size!"
+    )

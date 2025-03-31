@@ -29,9 +29,9 @@ def test_validate_patch_and_window() -> None:
         window_sizes=window_sizes,
         patch_merge_scales=patch_merge_scales,
     )
-    assert not np.all(
-        invalid
-    ), "validate_patch_and_window() failing to detect invalid shapes!"
+    assert not np.all(invalid), (
+        "validate_patch_and_window() failing to detect invalid shapes!"
+    )
 
 
 def test_find_valid_pad() -> None:
@@ -48,9 +48,9 @@ def test_find_valid_pad() -> None:
         patch_merge_scales=patch_merge_scales,
         pad_options=pad_options,
     )
-    assert (len(pad_dim0) > 0) and (
-        len(pad_dim1) > 0
-    ), "find_valid_pad() unable to find usable pad!"
+    assert (len(pad_dim0) > 0) and (len(pad_dim1) > 0), (
+        "find_valid_pad() unable to find usable pad!"
+    )
 
 
 def test_choose_downsample_factor() -> None:
