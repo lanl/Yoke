@@ -34,7 +34,7 @@ def validate_patch_and_window(
     patch_merge_scales (list(3*(int, int))): Height and width scales used in
                                              each patch-merge layer.
     """
-    ## Walk through LodeRunner stages and verify size compatibility.
+    # Walk through LodeRunner stages and verify size compatibility.
     valid = np.zeros((len(window_sizes), 2, 2), dtype=bool)  # [stage, action, dimension]
     image_size = np.array(image_size)
     patch_size = np.array(patch_size)
