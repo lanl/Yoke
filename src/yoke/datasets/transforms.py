@@ -12,7 +12,8 @@ class ResizePadCrop(torch.nn.Module):
     spatial dimension), pad the image, and then crop to the desired shape.
 
     Args:
-        scale_factor (float): Scale factor for image size rescaling.
+        interp_kwargs (dict): Keyword arguments passed to
+            torch.nn.functional.interpolate().
         scaled_image_size (Iterable[int, int]): Desired shape of the output image.
         pad_mode (str): Padding mode passed to torch.functional.nn.pad()
         pad_value (float): Padding value used by torch.functional.nn.pad() when
@@ -25,7 +26,7 @@ class ResizePadCrop(torch.nn.Module):
 
     def __init__(
         self,
-        scale_factor: float = 1.0,
+        interp_kwargs: dict = {"scale_factor": 1.0},
         scaled_image_size: Iterable[int, int] = None,
         pad_mode: str = "constant",
         pad_value: float = 0.0,
@@ -33,7 +34,7 @@ class ResizePadCrop(torch.nn.Module):
     ) -> None:
         """Initialize transform."""
         super().__init__()
-        self.scale_factor = scale_factor
+        self.interp_kwargs = interp_kwargs
         self.scaled_image_size = scaled_image_size
         self.pad_mode = pad_mode
         self.pad_value = pad_value
@@ -51,7 +52,7 @@ class ResizePadCrop(torch.nn.Module):
     def forward(self, img: torch.Tensor) -> torch.Tensor:
         """Resize, pad, and crop input `img` to desired size."""
         # Resize image.
-        img = torch.nn.functional.interpolate(input=img, scale_factor=self.scale_factor)
+        img = torch.nn.functional.interpolate(input=img, **self.interp_kwargs)
 
         # Pad and crop image to desired size.
         if self.scaled_image_size is not None:

@@ -11,7 +11,7 @@ def test_resize_pad_crop() -> None:
     scale_factor = 0.5
     scaled_image_size = (511, 230)  # arbitrary choice to test pad and crop
     tform = transforms.ResizePadCrop(
-        scale_factor=scale_factor, scaled_image_size=scaled_image_size
+        interp_kwargs={"scale_factor": scale_factor}, scaled_image_size=scaled_image_size
     )
     image = torch.randn(
         (2, 3, 4, *image_size)

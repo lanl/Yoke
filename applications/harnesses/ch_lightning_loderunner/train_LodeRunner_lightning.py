@@ -121,7 +121,7 @@ if __name__ == "__main__":
     # Initialize Data
     #############################################
     transform = ResizePadCrop(
-        scale_factor=args.scale_factor,
+        interp_kwargs={"scale_factor": args.scale_factor},
         scaled_image_size=args.scaled_image_size,
         pad_position=("bottom", "right"),
     )
