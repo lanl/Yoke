@@ -101,9 +101,10 @@ class LodeRunner(nn.Module):
             window_sizes=window_sizes,
             patch_merge_scales=patch_merge_scales,
         )
-        assert np.all(
-            valid
-        ), "Invalid combination of image_size, patch_size, window_sizes, and patch_merge_scales!"
+        assert np.all(valid), (
+            "Invalid combination of image_size, patch_size, window_sizes, "
+            "and patch_merge_scales!"
+        )
 
         # First embed the image as a sequence of tokenized patches. Each
         # channel is embedded independently.
