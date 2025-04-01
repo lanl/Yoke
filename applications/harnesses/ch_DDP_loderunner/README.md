@@ -1,5 +1,5 @@
-LodeRunner Training - DDP - Venado
-==================================
+LodeRunner Training - DDP - Chicoma
+===================================
 
 An example setup training LodeRunner using PyTorch
 `DistributedDataParallel`.
