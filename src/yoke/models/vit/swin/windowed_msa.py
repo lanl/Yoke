@@ -72,9 +72,9 @@ class WindowMSA(nn.Module):
         except AssertionError as e:
             msg_tuple = (
                 "Patch-grid 2:",
-                patch_grid_size[0],
+                patch_grid_size[1],
                 "Window-size 2:",
-                window_size[0],
+                window_size[1],
             )
             e.args += msg_tuple
             raise
@@ -225,9 +225,9 @@ class ShiftedWindowMSA(nn.Module):
         except AssertionError as e:
             msg_tuple = (
                 "Patch-grid 2:",
-                patch_grid_size[0],
+                patch_grid_size[1],
                 "Window-size 2:",
-                window_size[0],
+                window_size[1],
             )
             e.args += msg_tuple
             raise
@@ -444,9 +444,9 @@ class WindowCosMSA(nn.Module):
         except AssertionError as e:
             msg_tuple = (
                 "Patch-grid 2:",
-                patch_grid_size[0],
+                patch_grid_size[1],
                 "Window-size 2:",
-                window_size[0],
+                window_size[1],
             )
             e.args += msg_tuple
             raise
@@ -604,26 +604,10 @@ class ShiftedWindowCosMSA(nn.Module):
         except AssertionError as e:
             msg_tuple = (
                 "Patch-grid 2:",
-                patch_grid_size[0],
+                patch_grid_size[1],
                 "Window-size 2:",
-                window_size[0],
+                window_size[1],
             )
-            e.args += msg_tuple
-            raise
-
-        try:
-            msg = "Window height not divisble by 2!!!"
-            assert window_size[0] % 2 == 0, msg
-        except AssertionError as e:
-            msg_tuple = ("Window height:", window_size[0])
-            e.args += msg_tuple
-            raise
-
-        try:
-            msg = "Window width not divisble by 2!!!"
-            assert window_size[1] % 2 == 0, msg
-        except AssertionError as e:
-            msg_tuple = ("Window width:", window_size[1])
             e.args += msg_tuple
             raise
 

@@ -8,27 +8,26 @@ emulator.
 
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 import random
 
+import numpy as np
 import torch
 from torch import nn
 from torch.optim.lr_scheduler import _LRScheduler
-
 from lightning.pytorch import LightningModule
 
 from yoke.models.vit.swin.unet import SwinUnetBackbone
 from yoke.models.vit.patch_embed import ParallelVarPatchEmbed
 from yoke.models.vit.patch_manipulation import Unpatchify
-
 from yoke.models.vit.aggregate_variables import AggVars
 from yoke.models.vit.embedding_encoders import (
     VarEmbed,
     PosEmbed,
     TimeEmbed,
 )
-
 from yoke.lr_schedulers import CosineWithWarmupScheduler
+from yoke.helpers.training_design import validate_patch_and_window
 
 
 class LodeRunner(nn.Module):
@@ -62,19 +61,19 @@ class LodeRunner(nn.Module):
     def __init__(
         self,
         default_vars: list[str],
-        image_size: (int, int) = (1120, 800),
-        patch_size: (int, int) = (10, 10),
+        image_size: Iterable[int, int] = (1120, 800),
+        patch_size: Iterable[int, int] = (10, 10),
         embed_dim: int = 128,
         emb_factor: int = 2,
         num_heads: int = 8,
-        block_structure: (int, int, int, int) = (1, 1, 3, 1),
-        window_sizes: [(int, int), (int, int), (int, int), (int, int)] = [
+        block_structure: Iterable[int, int, int, int] = (1, 1, 3, 1),
+        window_sizes: Iterable[(int, int), (int, int), (int, int), (int, int)] = [
             (8, 8),
             (8, 8),
             (4, 4),
             (2, 2),
         ],
-        patch_merge_scales: [(int, int), (int, int), (int, int)] = [
+        patch_merge_scales: Iterable[(int, int), (int, int), (int, int)] = [
             (2, 2),
             (2, 2),
             (2, 2),
@@ -94,6 +93,18 @@ class LodeRunner(nn.Module):
         self.block_structure = block_structure
         self.window_sizes = window_sizes
         self.patch_merge_scales = patch_merge_scales
+
+        # Validate patch_size, window_sizes, and patch_merge_scales before proceeding.
+        valid = validate_patch_and_window(
+            image_size=image_size,
+            patch_size=patch_size,
+            window_sizes=window_sizes,
+            patch_merge_scales=patch_merge_scales,
+        )
+        assert np.all(valid), (
+            "Invalid combination of image_size, patch_size, window_sizes, "
+            "and patch_merge_scales!"
+        )
 
         # First embed the image as a sequence of tokenized patches. Each
         # channel is embedded independently.

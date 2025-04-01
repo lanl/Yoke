@@ -22,13 +22,16 @@ from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
 import torch
 import torch.nn as nn
+import numpy as np
 
 from yoke.models.vit.swin.bomberman import LodeRunner, Lightning_LodeRunner
 from yoke.datasets.lsc_dataset import LSCDataModule
+from yoke.datasets.transforms import ResizePadCrop
 import yoke.torch_training_utils as tr
 from yoke.lr_schedulers import CosineWithWarmupScheduler
 from yoke.helpers import cli
 import yoke.scheduled_sampling
+from yoke.losses.masked_loss import CroppedLoss2D
 
 
 #############################################
@@ -84,14 +87,16 @@ if __name__ == "__main__":
     print("GPU ID:", os.environ["SLURM_JOB_GPUS"])
     print("Number of System CPUs:", os.cpu_count())
     print("Number of CPUs per GPU:", os.environ["SLURM_JOB_CPUS_PER_NODE"])
-
-    # print("\n")
-    # print("Model Training Information")
-    # print("=========================================")
+    print("\n")
+    print("Model Training Information")
+    print("=========================================")
 
     #############################################
     # Initialize Model
     #############################################
+    image_size = (
+        args.image_size if args.scaled_image_size is None else args.scaled_image_size
+    )
     model = LodeRunner(
         default_vars=[
             "density_case",
@@ -103,7 +108,7 @@ if __name__ == "__main__":
             "Uvelocity",
             "Wvelocity",
         ],
-        image_size=(1120, 400),
+        image_size=image_size,
         patch_size=(5, 5),
         embed_dim=args.embed_dim,
         emb_factor=2,
@@ -116,11 +121,17 @@ if __name__ == "__main__":
     #############################################
     # Initialize Data
     #############################################
+    transform = ResizePadCrop(
+        interp_kwargs={"scale_factor": args.scale_factor},
+        scaled_image_size=args.scaled_image_size,
+        pad_position=("bottom", "right"),
+    )
     ds_params = {
         "LSC_NPZ_DIR": args.LSC_NPZ_DIR,
-        "max_file_checks": 1000,
+        "max_file_checks": 10,
         "seq_len": args.seq_len,
         "half_image": True,
+        "transform": transform,
     }
     dl_params = {
         "batch_size": args.batch_size,
@@ -138,11 +149,26 @@ if __name__ == "__main__":
     #############################################
     # Lightning wrap
     #############################################
+    # Define a cropped loss function (used to ignore padding on rescaled images).
+    loss_mask = torch.zeros(args.scaled_image_size, dtype=torch.float)
+    scaled_image_size = np.array(args.scaled_image_size)
+    valid_im_size = np.floor(args.scale_factor * np.array(args.image_size)).astype(int)
+    loss = CroppedLoss2D(
+        loss_fxn=nn.MSELoss(reduction="none"),
+        crop=(
+            0,
+            0,
+            min(valid_im_size[0], args.scaled_image_size[0]),
+            min(valid_im_size[1], args.scaled_image_size[1]),
+        ),  # corresponds to pad_position=("bottom", "right") in ResizePadCrop
+    )
+
+    # Prepare the Lightning module.
     lm_kwargs = {
         "model": model,
         "in_vars": torch.tensor([0, 1, 2, 3, 4, 5, 6, 7]),
         "out_vars": torch.tensor([0, 1, 2, 3, 4, 5, 6, 7]),
-        "loss_fn": nn.MSELoss(reduction="none"),
+        "loss_fn": loss,
         "lr_scheduler": CosineWithWarmupScheduler,
         "scheduler_params": {
             "warmup_steps": args.warmup_steps,
@@ -157,7 +183,7 @@ if __name__ == "__main__":
             minimum_schedule_prob=args.minimum_schedule_prob,
         ),
     }
-    if args.continuation or (args.checkpoint is None):
+    if args.continuation or (args.checkpoint is None) or args.only_load_backbone:
         L_loderunner = Lightning_LodeRunner(**lm_kwargs)
     else:
         # This condition is used to load pretrained weights without continuing training.
@@ -166,6 +192,16 @@ if __name__ == "__main__":
             strict=False,
             **lm_kwargs,
         )
+
+    # Load U-Net backbone if needed.
+    if args.only_load_backbone:
+        ckpt = torch.load(args.checkpoint, map_location=torch.device("cpu"))
+        unet_weights = {
+            k.replace("model.unet.", ""): v
+            for k, v in ckpt["state_dict"].items()
+            if k.startswith("model.unet.")
+        }
+        L_loderunner.model.unet.load_state_dict(unet_weights)
 
     # Freeze the U-Net backbone.
     if args.freeze_backbone:
@@ -203,10 +239,10 @@ if __name__ == "__main__":
         limit_train_batches=args.train_batches,
         check_val_every_n_epoch=args.TRAIN_PER_VAL,
         limit_val_batches=args.val_batches,
-        # accelerator="gpu",
-        # devices=args.Ngpus,  # Number of GPUs per node
-        # num_nodes=args.Knodes,
-        # strategy="ddp",
+        accelerator="gpu",
+        devices=args.Ngpus,  # Number of GPUs per node
+        num_nodes=args.Knodes,
+        strategy="ddp",
         enable_progress_bar=True,
         logger=logger,
         log_every_n_steps=min(args.train_batches, args.val_batches),
