@@ -94,6 +94,9 @@ if __name__ == "__main__":
     #############################################
     # Initialize Model
     #############################################
+    image_size = (
+        args.image_size if args.scaled_image_size is None else args.scaled_image_size
+    )
     model = LodeRunner(
         default_vars=[
             "density_case",
@@ -105,9 +108,7 @@ if __name__ == "__main__":
             "Uvelocity",
             "Wvelocity",
         ],
-        image_size=args.image_size
-        if args.scaled_image_size is None
-        else args.scaled_image_size,
+        image_size=image_size,
         patch_size=(5, 5),
         embed_dim=args.embed_dim,
         emb_factor=2,
