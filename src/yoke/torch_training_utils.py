@@ -16,7 +16,6 @@ from torch.utils.data import DataLoader, RandomSampler
 from torch.utils.data.distributed import DistributedSampler
 import torch.distributed as dist
 
-
 def count_torch_params(model, trainable=True):
     """Count parameters in a pytorch model.
 
@@ -1517,6 +1516,7 @@ def train_simple_loderunner_epoch(
     val_batchsize = validation_data.batch_size
 
     train_rcrd_filename = train_rcrd_filename.replace("<epochIDX>", f"{epochIDX:04d}")
+
     # Train on all training samples
     with open(train_rcrd_filename, "a") as train_rcrd_file:
         for traindata in training_data:
