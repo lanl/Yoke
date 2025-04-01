@@ -89,8 +89,7 @@ def configure_logger(
 
 
 def get_logger() -> logging.Logger:
-    """"
-    Returns the logger instance.
+    """"Returns the logger instance.
 
     Returns:
         logging.Logger: The logger instance.

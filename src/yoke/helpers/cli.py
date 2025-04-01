@@ -9,14 +9,13 @@ YOKE_PATH = os.path.join(os.path.dirname(__file__), "../../..")
 
 
 def add_default_args(parser: argparse.ArgumentParser = None) -> argparse.ArgumentParser:
-    """
-    Prepare a default argparse.ArgumentParser for harnesses in yoke.applications.harnesses.
+    """Prepare a default ArgumentParser for harnesses.
 
     Args:
-        parser (argparse.ArgumentParser, optional): An optional argparse.ArgumentParser object to add arguments to.
+        parser (argparse.ArgumentParser, optional): An optional arg parser.
 
     Returns:
-        argparse.ArgumentParser: The argparse.ArgumentParser object with added arguments.
+        argparse.ArgumentParser: The parser with more arguments.
     """
     if parser is None:
         parser = argparse.ArgumentParser(
@@ -61,11 +60,10 @@ def add_default_args(parser: argparse.ArgumentParser = None) -> argparse.Argumen
 
 
 def add_filepath_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    """
-    Add filepath related arguments to parser for harnesses in yoke.applications.harnesses
+    """Add filepath related arguments to parser for harnesses.
 
     Args:
-        parser (argparse.ArgumentParser): An argparse.ArgumentParser object to add arguments to.
+        parser (argparse.ArgumentParser): A parser that doesn't have filepath arguments.
 
     Returns:
         argparse.ArgumentParser: The argparse.ArgumentParser object with added arguments.
@@ -137,14 +135,13 @@ def add_filepath_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParse
 
 
 def add_computing_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    """
-    Add computing-related (e.g., parallel processing) related arguments to parser for harnesses in yoke.applications.harnesses
+    """Add computing-related (e.g., parallel processing) arguments to parser.
 
     Args:
-        parser (argparse.ArgumentParser): An argparse.ArgumentParser object to add arguments to.
+        parser (argparse.ArgumentParser): An argument parser needing args.
 
     Returns:
-        argparse.ArgumentParser: The argparse.ArgumentParser object with added arguments.
+        argparse.ArgumentParser: The parser with all needed args.
     """
     parser.add_argument(
         "--multigpu",
@@ -162,11 +159,10 @@ def add_computing_args(parser: argparse.ArgumentParser) -> argparse.ArgumentPars
 
 
 def add_model_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    """
-    Add model arguments to parser for harnesses in yoke.applications.harnesses
+    """Add model arguments to parser for harnesses in yoke.applications.harnesses.
 
     Args:
-        parser (argparse.ArgumentParser): An argparse.ArgumentParser object to add arguments to.
+        parser (argparse.ArgumentParser): An argument parser object to add arguments to.
 
     Returns:
         argparse.ArgumentParser: The argparse.ArgumentParser object with added arguments.
@@ -206,11 +202,10 @@ def add_model_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
 
 
 def add_training_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    """
-    Add training arguments to parser for harnesses in yoke.applications.harnesses
+    """Add training arguments to parser for harnesses in yoke.applications.harnesses.
 
     Args:
-        parser (argparse.ArgumentParser): An argparse.ArgumentParser object to add arguments to.
+        parser (argparse.ArgumentParser): An argument parser to add arguments to.
 
     Returns:
         argparse.ArgumentParser: The argparse.ArgumentParser object with added arguments.
@@ -322,11 +317,10 @@ def add_training_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParse
 def add_step_lr_scheduler_args(
     parser: argparse.ArgumentParser,
 ) -> argparse.ArgumentParser:
-    """
-    Add StepLR arguments to parser for harnesses in yoke.applications.harnesses
+    """Add StepLR arguments to parser for harnesses in yoke.applications.harnesses.
 
     Args:
-        parser (argparse.ArgumentParser): An argparse.ArgumentParser object to add arguments to.
+        parser (argparse.ArgumentParser): An argument parser to add arguments to.
 
     Returns:
         argparse.ArgumentParser: The argparse.ArgumentParser object with added arguments.
@@ -355,11 +349,10 @@ def add_step_lr_scheduler_args(
 def add_cosine_lr_scheduler_args(
     parser: argparse.ArgumentParser,
 ) -> argparse.ArgumentParser:
-    """
-    Add CosineWithWarmupScheduler arguments to parser for harnesses in yoke.applications.harnesses
+    """Add arguments for the cosine with warmup learning rate scheduler.
 
     Args:
-        parser (argparse.ArgumentParser): An argparse.ArgumentParser object to add arguments to.
+        parser (argparse.ArgumentParser): An argument parser to add arguments to.
 
     Returns:
         argparse.ArgumentParser: The argparse.ArgumentParser object with added arguments.
@@ -406,11 +399,10 @@ def add_cosine_lr_scheduler_args(
 def add_scheduled_sampling_args(
     parser: argparse.ArgumentParser,
 ) -> argparse.ArgumentParser:
-    """
-    Add scheduled sampling arguments to parser for harnesses in yoke.applications.harnesses
+    """Add scheduled sampling arguments to parser for harnesses.
 
     Args:
-        parser (argparse.ArgumentParser): An argparse.ArgumentParser object to add arguments to.
+        parser (argparse.ArgumentParser): An argument parser to add arguments to.
 
     Returns:
         argparse.ArgumentParser: The argparse.ArgumentParser object with added arguments.
@@ -453,11 +445,10 @@ def add_scheduled_sampling_args(
 def add_ch_subsampling_args(
     parser: argparse.ArgumentParser,
 ) -> argparse.ArgumentParser:
-    """
-    Add channel subsampling arguments to parser for harnesses in yoke.applications.harnesses
+    """Add channel subsampling arguments to parser for harnesses.
 
     Args:
-        parser (argparse.ArgumentParser): An argparse.ArgumentParser object to add arguments to.
+        parser (argparse.ArgumentParser): An argument parser to add arguments to.
 
     Returns:
         argparse.ArgumentParser: The argparse.ArgumentParser object with added arguments.

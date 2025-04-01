@@ -14,7 +14,7 @@ def replace_keys(study_dict: dict, data: str) -> str:
         str: Data with keys replaced.
 
     Raises:
-        ValueError: If an unrecognized datatype is encountered in the hyperparameter list.
+        ValueError: If an unrecognized datatype is encountered in the list.
     """
     for key, value in study_dict.items():
         if key == "studyIDX":
