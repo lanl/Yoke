@@ -114,7 +114,7 @@ jobs:
 
     - name: Lint applications/harnesses/START_study.py
       run: |
-        ruff check src/yoke/applications/harnesses/START_study.py
-        ruff check src/yoke/applications/harnesses/START_study.py --preview
-        ruff format src/yoke/applications/harnesses/START_study.py --check --diff
+        ruff check applications/harnesses/START_study.py
+        ruff check applications/harnesses/START_study.py --preview
+        ruff format applications/harnesses/START_study.py --check --diff
       continue-on-error: false
