@@ -24,17 +24,15 @@ training_input_tmpl = "./training_input.tmpl"
 training_slurm_tmpl = "./training_slurm.tmpl"
 training_START_input = "./training_START.input"
 training_START_slurm = "./training_START.slurm"
-training_json = './slurm_config.json'
+training_json = "./slurm_config.json"
 
 slurm_tmpl_data = None
 if os.path.exists(training_json):
-    slrm_obj = create_slurm_files.MkSlurm(
-        config_path=training_json
-    )
+    slrm_obj = create_slurm_files.MkSlurm(config_path=training_json)
     slurm_tmpl_data = slrm_obj.generateSlurm()
 
 # List of files to copy
-with open(args.cpFile, "r") as cp_text_file:
+with open(args.cpFile) as cp_text_file:
     cp_file_list = [line.strip() for line in cp_text_file]
 
 # Process Hyperparameters File
@@ -75,12 +73,15 @@ for k, study in enumerate(studylist):
 
     with open(training_input_filepath, "w") as f:
         f.write(training_input_data)
+
     # Make new training_slurm.tmpl file
     if slurm_tmpl_data is None:
         with open(training_slurm_tmpl) as f:
             training_slurm_data = f.read()
+
     else:
         training_slurm_data = slurm_tmpl_data
+
     training_slurm_data = strings.replace_keys(study, training_slurm_data)
     training_slurm_filepath = os.path.join(studydirname, "training_slurm.tmpl")
 
@@ -104,9 +105,13 @@ for k, study in enumerate(studylist):
             START_slurm_data = f.read()
 
     if slurm_tmpl_data is not None:
-        START_slurm_data = strings.replace_keys(study, slurm_tmpl_data).replace("<epochIDX>", "0001")
+        START_slurm_data = strings.replace_keys(study, slurm_tmpl_data).replace(
+            "<epochIDX>", "0001"
+        )
+
     else:
         START_slurm_data = strings.replace_keys(study, START_slurm_data)
+
     START_slurm_name = "study{:03d}_START.slurm".format(study["studyIDX"])
     START_slurm_filepath = os.path.join(studydirname, START_slurm_name)
 
@@ -119,8 +124,5 @@ for k, study in enumerate(studylist):
 
     # Submit Job
     os.system(
-        (
-            f"cd {studydirname}; sbatch {START_slurm_name}; "
-            f"cd {os.path.dirname(__file__)}"
-        )
+        f"cd {studydirname}; sbatch {START_slurm_name}; cd {os.path.dirname(__file__)}"
     )
