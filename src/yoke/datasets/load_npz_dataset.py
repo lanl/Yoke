@@ -418,7 +418,7 @@ class temporal_DataSet(Dataset):
         start_npz.close()
         end_npz.close()
 
-        return start_img, end_img, Dt, self.channel_map
+        return start_img, self.channel_map, end_img, self.channel_map, Dt
 
 
 class sequential_DataSet(Dataset):
