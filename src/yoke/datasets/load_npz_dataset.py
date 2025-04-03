@@ -30,7 +30,9 @@ import re
 NoneStr = typing.Union[None, str]
 
 
-def combine_arrays_by_number(number_list, array_list) -> (np.ndarray, np.ndarray):
+def combine_arrays_by_number(
+    number_list: list, array_list: list
+    ) -> tuple[np.ndarray, np.ndarray]:
     """Groups and combines arrays based on repeated numbers in the number_list.
 
     Args:
@@ -72,10 +74,11 @@ def read_npz_NaN(npz: np.lib.npyio.NpzFile, field: str) -> np.ndarray:
 
 class labeledData:
     """A class to process datasets by relating input data to correct labels.
-    Use this to get correctly labeled hydro fields and channel maps
+
+    Use this to get correctly labeled hydro fields and channel maps.
     """
 
-    def __init__(self, NPZ_FILEPATH: str, CSV_FILEPATH: str):
+    def __init__(self, NPZ_FILEPATH: str, CSV_FILEPATH: str) -> None:
         """Initializes the dataset processor.
 
         Parameters:
@@ -144,8 +147,8 @@ class labeledData:
             print("\n ERROR: hydro_field information unavailable for specified dataset.")
             print(" -> See load_npz_dataset.py\n")
 
-    def get_active_hydro_indices(self):
-        """Returns the indices of self.active_hydro_field_names within self.hydro_field_names.
+    def get_active_hydro_indices(self) -> list:
+        """Returns the indices of active_hydro_field_names within hydro_field_names.
         """
         return [
             self.hydro_field_names.index(field)
@@ -153,8 +156,12 @@ class labeledData:
             if field in self.hydro_field_names
         ]
 
-    def cylex_data_loader(self, kinematic_variables=None, thermodynamic_variables=None):
-        """Pairs the data arrays in the .npz file with the corresponding elements of
+    def cylex_data_loader(
+        self, kinematic_variables: list = None, thermodynamic_variables: list = None
+        ) -> None:
+        """Data loader for the cylex dataset.
+
+        Pairs the data arrays in the .npz file with the corresponding elements of
         hydro_field_names by using the columns in the .csv design file.
         """
         design_df = pd.read_csv(
@@ -171,7 +178,8 @@ class labeledData:
             m.strip() for m in non_HE_mats
         ]  # Remove spaces before element names
 
-        # get the hydro_field_names and the corresponding channel indices for the given npz data:
+        # get the hydro_field_names and the corresponding channel indices
+        # for the given npz data:
         self.channel_map = []
         self.active_npz_field_names = []
         self.active_hydro_field_names = []
@@ -180,7 +188,8 @@ class labeledData:
             self.active_npz_field_names = self.active_hydro_field_names
         if thermodynamic_variables is None:
             # wall and background materials:
-            # In the csv file the materials are called as `wall_mat' and `back_mat' but in the npz files, back_mat is the material name.
+            # In the csv file the materials are called as `wall_mat' and `back_mat'
+            # but in the npz files, back_mat is the material name.
             self.active_npz_field_names = np.append(
                 self.active_npz_field_names,
                 ["density_wall", "density_" + non_HE_mats[1]],
@@ -198,10 +207,11 @@ class labeledData:
             )
         self.channel_map = self.get_active_hydro_indices()
 
-    def extract_letters(self, s) -> str:
+    def extract_letters(self, s: str) -> str:
+        """Match letters at the beginning until the first digit."""
         match = re.match(
             r"([a-zA-Z]+)\d", s
-        )  # Match letters at the beginning until the first digit
+        )
         return match.group(1) if match else None
 
     def get_study_and_key(self, npz_filepath: str) -> str:
@@ -216,7 +226,8 @@ class labeledData:
             npz_filepath (str): file path from working directory to .npz file
 
         Returns:
-            key (str): The correspond simulation key for the NPZ file. E.g., 'cx241203_id01250'
+            key (str): The corresponding simulation key for the NPZ file.
+                       E.g., 'cx241203_id01250'
             study (str): The name of the study/dataset. E.g., 'cx'
 
         """
@@ -235,12 +246,13 @@ class labeledData:
     def get_active_npz_field_names(self) -> list[str]:
         return self.active_npz_field_names
 
-    def get_channel_map(self) -> list[str]:
-        return self.channel_map
 
+def process_channel_data(
+    channel_map: list, img_list_combined: np.ndarray, active_hydro_field_names: list
+    ) -> tuple[list, np.ndarray, list]:
+    """ Processes channel data so that they are unique entries."
 
-def process_channel_data(channel_map, img_list_combined, active_hydro_field_names):
-    """Given a channel map, combined image lists, and active hydro field names,
+    Given a channel map, combined image lists, and active hydro field names,
     returns a channel map with unique values and the corresponding combined
     image list and active hydro field names.
 
@@ -273,8 +285,8 @@ def process_channel_data(channel_map, img_list_combined, active_hydro_field_name
 
 class temporal_DataSet(Dataset):
     """Temporal field-to-field mapping dataset.
-    Maps hydrofield .npz data to correct material labels in .csv 'design' file.
 
+    Maps hydrofield .npz data to correct material labels in .csv 'design' file.
     This dataset returns multi-channel images at two different times from a
     simulation. The *maximum time-offset* can be specified. The channels in the
     images returned are the densities for each material at a given time as well
@@ -413,9 +425,9 @@ class temporal_DataSet(Dataset):
         try:
             end_npz = np.load(self.NPZ_DIR + end_file)
 
-            # For now, we assume that the start and end files have the same materials, etc
-            # (it's hard to imagine a physical scenario in which Cu emerges from nothing,
-            #  but hey, we're not comparing with experiment so anything goes!)
+            # For now, we assume that the start and end files have the same materials,
+            # etc. (it's hard to imagine a physical scenario in which Cu emerges from
+            # nothing, but hey, we're not comparing with experiment so anything goes!)
 
         except Exception as e:
             print(
@@ -609,4 +621,3 @@ class sequential_DataSet(Dataset):
         Dt = torch.tensor(0.25, dtype=torch.float32)
 
         return img_seq, Dt, self.channel_map
-
