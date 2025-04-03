@@ -55,6 +55,11 @@ def add_default_args(parser: argparse.ArgumentParser = None) -> argparse.Argumen
             "study directory."
         ),
     )
+    parser.add_argument(
+        "--dryrun",
+        action="store_true",
+        help="Run through all setup steps without submitting jobs.",
+    )
 
     return parser
 
