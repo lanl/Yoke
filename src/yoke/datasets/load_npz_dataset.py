@@ -1,8 +1,4 @@
-#/usr/bin/env python
-
-""" 
-
-Functions and classes for torch DataSets which sample 2D arrays from npz files 
+""" Functions and classes for torch DataSets which sample 2D arrays from npz files 
 that corresponded to a pre-determined list of thermodynamic and kinetic variable 
 fields.
 
@@ -60,6 +56,7 @@ def combine_arrays_by_number(number_list, array_list):
 
     return unique_numbers, combined_arrays
 
+
 def read_npz_NaN(npz: np.lib.npyio.NpzFile, field: str) -> np.ndarray:
     """Extract a specific field from a .npz file and replace NaNs with 0.
 
@@ -72,6 +69,7 @@ def read_npz_NaN(npz: np.lib.npyio.NpzFile, field: str) -> np.ndarray:
 
     """
     return np.nan_to_num(npz[field], nan=0.0)
+
 
 class labeledData:
     """
@@ -225,7 +223,27 @@ class labeledData:
         return self.channel_map
 
 
-def process_channel_data(channel_map, img_list_combined, active_hydro_field_names): 
+def process_channel_data(channel_map, img_list_combined, active_hydro_field_names):
+    """
+    Given a channel map, combined image lists, and active hydro field names,
+    returns a channel map with unique values and the corresponding combined 
+    image list and active hydro field names.
+
+    Args:
+    - channel_map (list): list of indices of active channels (fields).
+    - img_list_combined (array): Numpy array combining multiple image lists 
+                                 where each image list is a list of images
+                                 for all hydro fields at a given epoch in a
+                                 simulation.
+    - active_hydro_field_names (list): list of active hydro fields.
+
+    Returns:
+    - channel_map (list): Unique channels.
+    - img_list_combined (array): Combined image lists corresponding to the
+                                 unique channels.
+    - active_hydro_field_names (list): list of active hydro fields corresponding
+                                       to the unique channels.
+    """
     unique_channels = np.unique(channel_map)
     if len(unique_channels) < len(channel_map):
         for i in np.arange(img_list_combined.shape[0]):
@@ -233,12 +251,36 @@ def process_channel_data(channel_map, img_list_combined, active_hydro_field_name
         if channel_map != unique_channels:
             print('\n ERROR: combination of repeated materials fail')
         active_hydro_field_names = (np.unique(active_hydro_field_names)).tolist()
-    return img_list_combined, channel_map, active_hydro_field_names
+    return channel_map, img_list_combined, active_hydro_field_names
 
 
 class temporal_DataSet(Dataset):
     """Temporal field-to-field mapping dataset.
     Maps hydrofield .npz data to correct material labels in .csv 'design' file.
+
+    This dataset returns multi-channel images at two different times from a
+    simulation. The *maximum time-offset* can be specified. The channels in the
+    images returned are the densities for each material at a given time as well
+    as the (R, Z)-velocity fields. The time-offset between the two images is
+    also returned.
+
+    NOTE: The way time indices are chosen necessitates *max_timeIDX_offset*
+    being less than or equal to 3 in the lsc240420 data.
+
+    Args:
+        NPZ_DIR (str): Directory storing NPZ files of the dataset being analyzed.
+        CSV_FILEPATH (str): Path to the 'design' file (CSV).
+        file_prefix_list (str): Text file listing unique prefixes corresponding
+                                to unique simulations.
+        max_timeIDX_offset (int): Maximum timesteps-ahead to attempt
+                                prediction for. A prediction image will be chosen
+                                within this timeframe at random.
+        max_file_checks (int): This dataset generates two random time indices and
+                                checks if the corresponding files exist. This
+                                argument controls the maximum number of times indices
+                                are generated before throwing an error.
+        half_image (bool): If True then returned images are NOT reflected about axis
+                                of symmetry and half-images are returned instead.
     """
 
     def __init__(
@@ -250,33 +292,7 @@ class temporal_DataSet(Dataset):
         max_file_checks: int,
         half_image: bool = True,
     ) -> None:  
-        """Initialization of timestep dataset.
-
-        This dataset returns multi-channel images at two different times from
-        a simulation. The *maximum time-offset* can
-        be specified. The channels in the images returned are the densities for
-        each material at a given time as well as the (R, Z)-velocity
-        fields. The time-offset between the two images is also returned.
-
-        NOTE: The way time indices are chosen necessitates *max_timeIDX_offset*
-        being less than or equal to 3 in the lsc240420 data.
-
-        Args:
-            NPZ_DIR (str): Directory storing NPZ files of the dataset being analyzed.
-            CSV_FILEPATH (str): Path to the 'design' file (CSV).
-            file_prefix_list (str): Text file listing unique prefixes corresponding
-                                    to unique simulations.
-            max_timeIDX_offset (int): Maximum timesteps-ahead to attempt
-                                      prediction for. A prediction image will be chosen
-                                      within this timeframe at random.
-            max_file_checks (int): This dataset generates two random time indices and
-                                   checks if the corresponding files exist. This
-                                   argument controls the maximum number of times indices
-                                   are generated before throwing an error.
-            half_image (bool): If True then returned images are NOT reflected about axis
-                               of symmetry and half-images are returned instead.
-
-        """
+        """Initialization of timestep dataset."""
         self.NPZ_DIR = NPZ_DIR
         self.CSV_FILEPATH = CSV_FILEPATH
         self.max_timeIDX_offset = max_timeIDX_offset
@@ -401,7 +417,7 @@ class temporal_DataSet(Dataset):
             end_img_list.append(tmp_img)
 
         img_list_combined = np.array([start_img_list, end_img_list])
-        img_list_combined, channel_map, active_hydro_field_names = process_channel_data(channel_map, img_list_combined, self.active_hydro_field_names)
+        channel_map, img_list_combined, active_hydro_field_names = process_channel_data(channel_map, img_list_combined, self.active_hydro_field_names)
         start_img_list = img_list_combined[0]
         end_img_list = img_list_combined[1]
         self.channel_map = channel_map
@@ -541,10 +557,8 @@ class sequential_DataSet(Dataset):
             data_npz.close()
 
             img_list_combined = np.array([field_imgs])
-            img_list_combined, channel_map, active_hydro_field_names = process_channel_data(channel_map, img_list_combined, active_hydro_field_names)
+            channel_map, img_list_combined, active_hydro_field_names = process_channel_data(channel_map, img_list_combined, active_hydro_field_names)
             field_imgs = img_list_combined[0]
-            #self.channel_map = channel_map
-            #self.active_hydro_field_names = active_hydro_field_names
 
             # Stack the fields for this frame
             field_tensor = torch.tensor(
