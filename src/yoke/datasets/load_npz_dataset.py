@@ -1,5 +1,7 @@
-""" Functions and classes for torch DataSets which sample 2D arrays from npz files 
-that corresponded to a pre-determined list of thermodynamic and kinetic variable 
+"""Npz data loader for loderunner.
+
+Functions and classes for torch DataSets which sample 2D arrays from npz files
+that corresponded to a pre-determined list of thermodynamic and kinetic variable
 fields.
 
 Currently available datasets:
@@ -18,26 +20,23 @@ Bryan Kaiser
 import sys
 from pathlib import Path
 import typing
-from typing import Callable
 import random
 import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
-import itertools
 import re
 
 NoneStr = typing.Union[None, str]
 
 
-def combine_arrays_by_number(number_list, array_list):
-    """
-    Groups and combines arrays based on repeated numbers in the number_list.
-    
+def combine_arrays_by_number(number_list, array_list) -> (np.ndarray, np.ndarray):
+    """Groups and combines arrays based on repeated numbers in the number_list.
+
     Args:
     - number_list (list): List of numbers (can contain duplicates).
     - array_list (list): List of NumPy arrays (same length as number_list).
-    
+
     Returns:
     - unique_numbers (list): Unique numbers from the number_list.
     - combined_arrays (list): Corresponding combined arrays.
@@ -72,14 +71,12 @@ def read_npz_NaN(npz: np.lib.npyio.NpzFile, field: str) -> np.ndarray:
 
 
 class labeledData:
-    """
-    A class to process datasets by relating input data to correct labels.
+    """A class to process datasets by relating input data to correct labels.
     Use this to get correctly labeled hydro fields and channel maps
     """
 
     def __init__(self, NPZ_FILEPATH: str, CSV_FILEPATH: str):
-        """
-        Initializes the dataset processor.
+        """Initializes the dataset processor.
 
         Parameters:
         - NPZ_FILEPATH (str): Path to the hydro field data file (NPZ).
@@ -90,105 +87,124 @@ class labeledData:
 
         # Get the hydro_fields
         self.get_study_and_key(self.NPZ_FILEPATH)
-        if self.study == 'cx': # cylex dataset
+        if self.study == "cx":  # cylex dataset
             self.hydro_field_names = [
-                    "xPosition", # 4 kinematic variable fields (To do: xPos and zPos will need to meshgridded)
-                    "zPosition",
-                    "Uvelocity",
-                    "Wvelocity",                
-                    "density_Air", # 39 thermodynamic variable fields:
-                    "energy_Air",
-                    "temp_Air",
-                    "density_Al",
-                    "energy_Al",
-                    "temp_Al",
-                    "density_Be",
-                    "energy_Be",
-                    "temp_Be",
-                    "density_Cu",
-                    "energy_Cu",
-                    "temp_Cu",
-                    "density_U.DU",
-                    "energy_U.DU",
-                    "temp_U.DU",
-                    "density_maincharge",
-                    "energy_maincharge",
-                    "temp_maincharge",
-                    "density_N",
-                    "energy_N",
-                    "temp_N",
-                    "density_Sn",
-                    "energy_Sn",
-                    "temp_Sn",
-                    "density_Steel.alloySS304L",
-                    "energy_Steel.alloySS304L",
-                    "temp_Steel.alloySS304L",
-                    "density_Polymer.Sylgard",
-                    "energy_Polymer.Sylgard",
-                    "temp_Polymer.Sylgard",
-                    "density_Ta",
-                    "energy_Ta",
-                    "temp_Ta",
-                    "density_Void",
-                    "energy_Void",
-                    "temp_Void",
-                    "density_Water",
-                    "energy_Water",
-                    "temp_Water",
+                "xPosition",  # 4 kinematic variable fields (To do: xPos and zPos will need to meshgridded)
+                "zPosition",
+                "Uvelocity",
+                "Wvelocity",
+                "density_Air",  # 39 thermodynamic variable fields:
+                "energy_Air",
+                "temp_Air",
+                "density_Al",
+                "energy_Al",
+                "temp_Al",
+                "density_Be",
+                "energy_Be",
+                "temp_Be",
+                "density_Cu",
+                "energy_Cu",
+                "temp_Cu",
+                "density_U.DU",
+                "energy_U.DU",
+                "temp_U.DU",
+                "density_maincharge",
+                "energy_maincharge",
+                "temp_maincharge",
+                "density_N",
+                "energy_N",
+                "temp_N",
+                "density_Sn",
+                "energy_Sn",
+                "temp_Sn",
+                "density_Steel.alloySS304L",
+                "energy_Steel.alloySS304L",
+                "temp_Steel.alloySS304L",
+                "density_Polymer.Sylgard",
+                "energy_Polymer.Sylgard",
+                "temp_Polymer.Sylgard",
+                "density_Ta",
+                "energy_Ta",
+                "temp_Ta",
+                "density_Void",
+                "energy_Void",
+                "temp_Void",
+                "density_Water",
+                "energy_Water",
+                "temp_Water",
             ]
 
             # # channel_map (later in_vars) integer labels for each field
-            self.channel_map = np.arange(0,len(self.hydro_field_names))
+            self.channel_map = np.arange(0, len(self.hydro_field_names))
 
             # get the material names that are present in this npz file
             self.cylex_data_loader()
 
-        else:     
-            print('\n ERROR: hydro_field information unavailable for specified dataset.') 
-            print(' -> See load_npz_dataset.py\n')
+        else:
+            print("\n ERROR: hydro_field information unavailable for specified dataset.")
+            print(" -> See load_npz_dataset.py\n")
 
     def get_active_hydro_indices(self):
+        """Returns the indices of self.active_hydro_field_names within self.hydro_field_names.
         """
-        Returns the indices of self.active_hydro_field_names within self.hydro_field_names.
-        """
-        return [self.hydro_field_names.index(field) for field in self.active_hydro_field_names if field in self.hydro_field_names]
+        return [
+            self.hydro_field_names.index(field)
+            for field in self.active_hydro_field_names
+            if field in self.hydro_field_names
+        ]
 
     def cylex_data_loader(self, kinematic_variables=None, thermodynamic_variables=None):
-        """ Pairs the data arrays in the .npz file with the corresponding elements of 
-            hydro_field_names by using the columns in the .csv design file.
+        """Pairs the data arrays in the .npz file with the corresponding elements of
+        hydro_field_names by using the columns in the .csv design file.
         """
-        design_df = pd.read_csv(self.CSV_DIR, sep=",", header=0, index_col=0, engine="python")
-        
+        design_df = pd.read_csv(
+            self.CSV_FILEPATH, sep=",", header=0, index_col=0, engine="python"
+        )
+
         # removed spaces from headers:
         for col in design_df.columns:
-            design_df.rename(columns={col: col.strip()}, inplace=True)    
+            design_df.rename(columns={col: col.strip()}, inplace=True)
 
         # get the names of the non-HE material(s) from the design file:
         non_HE_mats = design_df.loc[self.key, "wallMat":"backMat"].values
-        non_HE_mats = [m.strip() for m in non_HE_mats]  # Remove spaces before element names
+        non_HE_mats = [
+            m.strip() for m in non_HE_mats
+        ]  # Remove spaces before element names
 
         # get the hydro_field_names and the corresponding channel indices for the given npz data:
-        self.channel_map = [] 
+        self.channel_map = []
         self.active_npz_field_names = []
-        self.active_hydro_field_names = []        
+        self.active_hydro_field_names = []
         if kinematic_variables is None:
-            self.active_hydro_field_names = ['Uvelocity','Wvelocity'] 
-            self.active_npz_field_names   = self.active_hydro_field_names        
+            self.active_hydro_field_names = ["Uvelocity", "Wvelocity"]
+            self.active_npz_field_names = self.active_hydro_field_names
         if thermodynamic_variables is None:
-                # wall and background materials:   
-                # In the csv file the materials are called as `wall_mat' and `back_mat' but in the npz files, back_mat is the material name. 
-                self.active_npz_field_names = np.append(self.active_npz_field_names,['density_wall','density_' + non_HE_mats[1]])  
-                self.active_hydro_field_names = np.append(self.active_hydro_field_names,['density_' + non_HE_mats[0],'density_' + non_HE_mats[1]])
-                # HE material:
-                self.active_npz_field_names = np.append(self.active_npz_field_names,['density_maincharge'])    
-                self.active_hydro_field_names = np.append(self.active_hydro_field_names,['density_maincharge'])  
+            # wall and background materials:
+            # In the csv file the materials are called as `wall_mat' and `back_mat' but in the npz files, back_mat is the material name.
+            self.active_npz_field_names = np.append(
+                self.active_npz_field_names,
+                ["density_wall", "density_" + non_HE_mats[1]],
+            )
+            self.active_hydro_field_names = np.append(
+                self.active_hydro_field_names,
+                ["density_" + non_HE_mats[0], "density_" + non_HE_mats[1]],
+            )
+            # HE material:
+            self.active_npz_field_names = np.append(
+                self.active_npz_field_names, ["density_maincharge"]
+            )
+            self.active_hydro_field_names = np.append(
+                self.active_hydro_field_names, ["density_maincharge"]
+            )
         self.channel_map = self.get_active_hydro_indices()
 
     def extract_letters(self, s) -> str:
-        match = re.match(r"([a-zA-Z]+)\d", s)  # Match letters at the beginning until the first digit
+        match = re.match(
+            r"([a-zA-Z]+)\d", s
+        )  # Match letters at the beginning until the first digit
         return match.group(1) if match else None
 
-    def get_study_and_key(self, npz_file: str) -> str:
+    def get_study_and_key(self, npz_filepath: str) -> str:
         """Simulation key extraction.
 
         Function to extract simulation *key* from the name of an .npz file.
@@ -224,14 +240,13 @@ class labeledData:
 
 
 def process_channel_data(channel_map, img_list_combined, active_hydro_field_names):
-    """
-    Given a channel map, combined image lists, and active hydro field names,
-    returns a channel map with unique values and the corresponding combined 
+    """Given a channel map, combined image lists, and active hydro field names,
+    returns a channel map with unique values and the corresponding combined
     image list and active hydro field names.
 
     Args:
     - channel_map (list): list of indices of active channels (fields).
-    - img_list_combined (array): Numpy array combining multiple image lists 
+    - img_list_combined (array): Numpy array combining multiple image lists
                                  where each image list is a list of images
                                  for all hydro fields at a given epoch in a
                                  simulation.
@@ -247,9 +262,11 @@ def process_channel_data(channel_map, img_list_combined, active_hydro_field_name
     unique_channels = np.unique(channel_map)
     if len(unique_channels) < len(channel_map):
         for i in np.arange(img_list_combined.shape[0]):
-            channel_map, img_list_combined[i] = combine_arrays_by_number(channel_map, img_list_combined[i])
+            channel_map, img_list_combined[i] = combine_arrays_by_number(
+                channel_map, img_list_combined[i]
+            )
         if channel_map != unique_channels:
-            print('\n ERROR: combination of repeated materials fail')
+            print("\n ERROR: combination of repeated materials fail")
         active_hydro_field_names = (np.unique(active_hydro_field_names)).tolist()
     return channel_map, img_list_combined, active_hydro_field_names
 
@@ -291,7 +308,7 @@ class temporal_DataSet(Dataset):
         max_timeIDX_offset: int,
         max_file_checks: int,
         half_image: bool = True,
-    ) -> None:  
+    ) -> None:
         """Initialization of timestep dataset."""
         self.NPZ_DIR = NPZ_DIR
         self.CSV_FILEPATH = CSV_FILEPATH
@@ -376,9 +393,15 @@ class temporal_DataSet(Dataset):
             start_npz = np.load(self.NPZ_DIR + start_file)
 
             # These will change from simulation key to key:
-            self.active_npz_field_names = labeledData(self.NPZ_DIR + start_file,self.CSV_FILEPATH).get_active_npz_field_names() 
-            active_hydro_field_names = labeledData(self.NPZ_DIR + start_file,self.CSV_FILEPATH).get_active_hydro_field_names()
-            channel_map = labeledData(self.NPZ_DIR + start_file,self.CSV_FILEPATH).get_channel_map() 
+            self.active_npz_field_names = labeledData(
+                self.NPZ_DIR + start_file, self.CSV_FILEPATH
+            ).get_active_npz_field_names()
+            active_hydro_field_names = labeledData(
+                self.NPZ_DIR + start_file, self.CSV_FILEPATH
+            ).get_active_hydro_field_names()
+            channel_map = labeledData(
+                self.NPZ_DIR + start_file, self.CSV_FILEPATH
+            ).get_channel_map()
 
         except Exception as e:
             print(
@@ -388,11 +411,11 @@ class temporal_DataSet(Dataset):
             raise e
 
         try:
-            end_npz = np.load(self.NPZ_DIR + end_file) 
+            end_npz = np.load(self.NPZ_DIR + end_file)
 
-            # For now, we assume that the start and end files have the same materials, etc 
+            # For now, we assume that the start and end files have the same materials, etc
             # (it's hard to imagine a physical scenario in which Cu emerges from nothing,
-            #  but hey, we're not comparing with experiment so anything goes!) 
+            #  but hey, we're not comparing with experiment so anything goes!)
 
         except Exception as e:
             print(
@@ -405,8 +428,8 @@ class temporal_DataSet(Dataset):
         start_img_list = []
         end_img_list = []
 
-        for hfield in self.active_npz_field_names: 
-            tmp_img = read_npz_NaN(start_npz, hfield) 
+        for hfield in self.active_npz_field_names:
+            tmp_img = read_npz_NaN(start_npz, hfield)
             if not self.half_image:
                 tmp_img = np.concatenate((np.fliplr(tmp_img), tmp_img), axis=1)
             start_img_list.append(tmp_img)
@@ -417,12 +440,14 @@ class temporal_DataSet(Dataset):
             end_img_list.append(tmp_img)
 
         img_list_combined = np.array([start_img_list, end_img_list])
-        channel_map, img_list_combined, active_hydro_field_names = process_channel_data(channel_map, img_list_combined, self.active_hydro_field_names)
+        channel_map, img_list_combined, active_hydro_field_names = process_channel_data(
+            channel_map, img_list_combined, self.active_hydro_field_names
+        )
         start_img_list = img_list_combined[0]
         end_img_list = img_list_combined[1]
         self.channel_map = channel_map
         self.active_hydro_field_names = active_hydro_field_names
- 
+
         # Concatenate images channel first.
         start_img = torch.tensor(np.stack(start_img_list, axis=0)).to(torch.float32)
         end_img = torch.tensor(np.stack(end_img_list, axis=0)).to(torch.float32)
@@ -537,16 +562,20 @@ class sequential_DataSet(Dataset):
                 data_npz = np.load(file_path)
 
                 # Fields to extract from the simulation
-                self.active_npz_field_names = labeledData(file_path,self.CSV_FILEPATH).get_active_npz_field_names()
-                active_hydro_field_names = labeledData(file_path,self.CSV_FILEPATH).get_active_hydro_field_names()
-                channel_map = labeledData(file_path,self.CSV_FILEPATH).get_channel_map()
+                self.active_npz_field_names = labeledData(
+                    file_path, self.CSV_FILEPATH
+                ).get_active_npz_field_names()
+                active_hydro_field_names = labeledData(
+                    file_path, self.CSV_FILEPATH
+                ).get_active_hydro_field_names()
+                channel_map = labeledData(file_path, self.CSV_FILEPATH).get_channel_map()
 
             except Exception as e:
                 raise RuntimeError(f"Error loading file: {file_path}") from e
 
             field_imgs = []
             for hfield in self.active_npz_field_names:
-                tmp_img = read_npz_NaN(start_npz, hfield)             
+                tmp_img = read_npz_NaN(start_npz, hfield)
 
                 # Reflect image if not half_image
                 if not self.half_image:
@@ -557,7 +586,11 @@ class sequential_DataSet(Dataset):
             data_npz.close()
 
             img_list_combined = np.array([field_imgs])
-            channel_map, img_list_combined, active_hydro_field_names = process_channel_data(channel_map, img_list_combined, active_hydro_field_names)
+            channel_map, img_list_combined, active_hydro_field_names = (
+                process_channel_data(
+                    channel_map, img_list_combined, active_hydro_field_names
+                )
+            )
             field_imgs = img_list_combined[0]
 
             # Stack the fields for this frame
@@ -574,7 +607,6 @@ class sequential_DataSet(Dataset):
 
         # Fixed time offset
         Dt = torch.tensor(0.25, dtype=torch.float32)
-
 
         return img_seq, Dt, self.channel_map
 
