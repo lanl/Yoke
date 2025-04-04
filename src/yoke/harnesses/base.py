@@ -8,24 +8,38 @@ from yoke.helpers import strings, create_slurm_files
 
 
 class HarnessStudy:
-    def __init__(self, study_dir, template_dir=".", cp_file="cp_files.txt"):
-        """
-        Args:
-            study_dir (str or Path): Output directory for the study run
-            template_dir (str or Path): Directory containing .tmpl files
-            cp_file (str or Path): File listing training files to copy per study
+    """HarnessStudy class.
 
-        """
-        self.study_dir = Path(study_dir)
+    Defines class containing attributes for a Yoke Harness object. Methods of this
+    class are then used to submit entries of a Yoke study.
+
+    Args:
+        rundir (str or Path): Output directory for the study run
+        template_dir (str or Path): Directory containing .tmpl files
+        cp_file (str or Path): File listing training files to copy per study
+        dryrun (bool): Flag to turn off job submission.
+
+    """
+    def __init__(
+            self, 
+            rundir: str="./runs", 
+            template_dir: str=".", 
+            cp_file: str="cp_files.txt",
+            dryrun: bool=False
+            ):
+        """Initialization for HarnessStudy."""
+
+        self.rundir = Path(rundir)
         self.template_dir = Path(template_dir)
         self.cp_file = Path(cp_file)
+        self.DRYRUN = dryrun
 
         # Template and base files
         self.input_template = self.template_dir / "training_input.tmpl"
         self.slurm_template = self.template_dir / "training_slurm.tmpl"
         self.slurm_json = self.template_dir / "slurm_config.json"
 
-        self.study_dir.mkdir(parents=True, exist_ok=True)
+        self.rundir.mkdir(parents=True, exist_ok=True)
 
     def load_hyperparameters(self, csv_path):
         """Read hyperparameters from a CSV into a list of dicts."""
@@ -47,32 +61,52 @@ class HarnessStudy:
         return study_list
 
     def render_template(self, template_path, substitutions):
-        """Substitute placeholders in a template string."""
+        """Render template with conditional optional blocks."""
         with open(template_path, "r") as f:
-            content = f.read()
-        return strings.replace_keys(substitutions, content)
+            lines = f.readlines()
 
-    def copy_files(self):
+        rendered = []
+        skip_block = False
+        for line in lines:
+            if line.strip().startswith("# <<optional:"):
+                key = line.strip().split(":")[1].rstrip(">>")
+                skip_block = key not in substitutions
+                continue
+            if line.strip() == "# <<end>>":
+                skip_block = False
+                continue
+            if skip_block:
+                continue
+            rendered.append(strings.replace_keys(substitutions, line))
+
+        return "".join(rendered)
+
+    def copy_files(self, study_dir):
         """Copy the files listed in cp_file into the study directory."""
         with open(self.cp_file, "r") as f:
             for line in f:
                 file_path = line.strip()
                 if file_path:
-                    shutil.copy(file_path, self.study_dir)
-                    print(f"[COPY] {file_path} -> {self.study_dir}")
+                    shutil.copy(file_path, study_dir)
+                    print(f"[COPY] {file_path} -> {study_dir}")
 
-    def generate_initial_inputs(self, study):
+    def generate_initial_inputs(self, study_dir, study):
         """Generate the input and SLURM scripts for the first submission."""
         sid = study["studyIDX"]
-        study["epochIDX"] = 1
+        study["epochIDX"] = f"{sid:03d}"
+        study["INPUTFILE"] = f"study{sid:03d}_START.input"
+
+        # Ensure that the continuation and checkpoint arguments do not appear in the
+        # intialization inputs.
+        study.pop("CONTINUATION", None)
 
         # Render input and SLURM templates
         input_rendered = self.render_template(self.input_template, study)
         slurm_rendered = self._get_slurm_template(study)
 
         # Modify START files with substitutions
-        input_path = self.study_dir / f"study{sid:03d}_START.input"
-        slurm_path = self.study_dir / f"study{sid:03d}_START.slurm"
+        input_path = study_dir / f"study{sid:03d}_START.input"
+        slurm_path = study_dir / f"study{sid:03d}_START.slurm"
 
         with open(input_path, "w") as f:
             f.write(input_rendered)
@@ -81,33 +115,28 @@ class HarnessStudy:
 
         return slurm_path
 
-    def generate_continuation(self, checkpoint_path, studyIDX, last_epoch):
-        """Generate a continuation SLURM job from template."""
-        epochIDX = last_epoch + 1
+    def generate_tmpl_inputs(self, study_dir, study):
+        """Generate the input and SLURM templates for job continuation."""
+        sid = study["studyIDX"]
 
-        # Render input with checkpoint
-        with open(self.input_template) as f:
-            content = f.read()
-        content = content.replace("<CHECKPOINT>", checkpoint_path)
+        # For templates epochIDX and INPUTFILE should be left as variables.
+        study.pop("epochIDX", None)
+        study.pop("INPUTFILE", None)
+        study["CONTINUATION"] = True
 
-        input_name = f"study{studyIDX:03d}_restart_training_epoch{epochIDX:04d}.input"
-        input_path = self.study_dir / input_name
+        # Render input and SLURM templates
+        input_rendered = self.render_template(self.input_template, study)
+        slurm_rendered = self._get_slurm_template(study)
+
+        # Modify START files with substitutions
+        input_path = study_dir / "training_input.tmpl"
+        slurm_path = study_dir / "training_slurm.tmpl"
+
         with open(input_path, "w") as f:
-            f.write(content)
-
-        # Render SLURM with input file reference
-        with open(self.slurm_template) as f:
-            slurm_data = f.read()
-        slurm_data = slurm_data.replace("<INPUTFILE>", input_name)
-        slurm_data = slurm_data.replace("<epochIDX>", f"{epochIDX:04d}")
-
-        slurm_name = f"study{studyIDX:03d}_restart_training_epoch{epochIDX:04d}.slurm"
-        slurm_path = self.study_dir / slurm_name
+            f.write(input_rendered)
         with open(slurm_path, "w") as f:
-            f.write(slurm_data)
-
-        return slurm_path
-
+            f.write(slurm_rendered)
+    
     def _get_slurm_template(self, study):
         """Return rendered SLURM script, either from JSON or template."""
         if self.slurm_json.exists():
@@ -116,16 +145,31 @@ class HarnessStudy:
         else:
             with open(self.slurm_template, "r") as f:
                 tmpl = f.read()
+
         return strings.replace_keys(study, tmpl)
 
-    def submit_job(self, slurm_path):
+    def submit_job(self, study_dir: str, slurm_path: str) -> None:
         """Submit a SLURM job."""
-        submit_str = f"cd {self.study_dir} && sbatch {slurm_path.name}"
-        print(f"[SUBMIT] {submit_str}")
-        os.system(submit_str)
+        submit_str = (
+            f"cd {study_dir}; "
+            f"sbatch {slurm_path.name}; "
+            f"cd .."
+        )
+
+        if self.DRYRUN:
+            # Just print what would be executed
+            print(f"[DRY RUN] Would execute: {submit_str}.")
+        else:
+            # Submit Job
+            os.system(submit_str)
 
     def run_study(self, study):
         """Run a single study: generate inputs, copy files, and submit job."""
-        self.copy_files()
-        slurm_path = self.generate_initial_inputs(study)
-        self.submit_job(slurm_path)
+        # Make Study Directory
+        study_dir = self.rundir / "study_{:03d}".format(study["studyIDX"])
+        study_dir.mkdir(parents=True, exist_ok=True)
+
+        self.copy_files(study_dir)
+        self.generate_tmpl_inputs(study_dir, study)
+        slurm_path = self.generate_initial_inputs(study_dir, study)
+        self.submit_job(study_dir, slurm_path)
