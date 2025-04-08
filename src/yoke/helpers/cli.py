@@ -221,6 +221,13 @@ def add_training_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParse
         help="Length of predicted sequence.",
     )
     parser.add_argument(
+        "--timeIDX_offset",
+        action="store",
+        type=int,
+        default=1,
+        help="Time index offset between images in data sequence.",
+    )
+    parser.add_argument(
         "--total_epochs",
         action="store",
         type=int,
