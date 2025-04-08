@@ -81,4 +81,3 @@ for study_path in sorted(RUNS_DIR.glob("study_*")):
 
     print(f"\tCompleted processing {study_dir}\n")
     print("\t==========================================================")
-
