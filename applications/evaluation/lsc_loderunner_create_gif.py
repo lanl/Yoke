@@ -8,13 +8,20 @@ PNGs, and then converts them into a GIF using ImageMagick's convert tool.
 import re
 import subprocess
 from pathlib import Path
+import argparse
 
-# ================================ #
-# Users - Please modify as needed  #
-# ================================ #
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    "--skip",
+    type=str,
+    default="997,998,999",
+    #default="011,017,018,044,053",
+    help="Comma-separated list of study numbers to skip, e.g., '011,017'"
+)
+args = parser.parse_args()
 
 # Skip the following study_dir numbers.
-skip_study_list = {"011", "017", "018", "044", "053"}
+skip_study_list = set(args.skip.split(","))
 
 # Paths
 NPZ_FILES_DIR = "/lustre/scratch5/exempt/artimis/mpmm/lsc240420/"
