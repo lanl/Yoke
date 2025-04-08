@@ -17,7 +17,7 @@ from pathlib import Path
 skip_study_list = {"011", "017", "018", "044", "053"}
 
 # Paths
-NPZ_FILES_DIR = '/lustre/scratch5/exempt/artimis/mpmm/lsc240420/'
+NPZ_FILES_DIR = "/lustre/scratch5/exempt/artimis/mpmm/lsc240420/"
 
 # Relative path to the runs dir
 RUNS_DIR = Path("../harnesses/chicoma_lsc_loderunner-ch-subsampling/runs")
@@ -39,7 +39,7 @@ for study_path in sorted(RUNS_DIR.glob("study_*")):
     hdf5_file_max_epoch = None
 
     for file in hdf5_files:
-        match = re.search(r'_epoch(\d+)\.hdf5', str(file))
+        match = re.search(r"_epoch(\d+)\.hdf5", str(file))
         if match:
             epoch = int(match.group(1))
             if epoch > max_epoch:
@@ -57,24 +57,40 @@ for study_path in sorted(RUNS_DIR.glob("study_*")):
     outdir.mkdir(parents=True, exist_ok=True)
 
     # Create PNG files from the true image, predicted image and discrepancy
-    subprocess.run([
-        "python3", "lsc_loderunner_anime.py",
-        "--checkpoint", str(hdf5_file_max_epoch),
-        "--indir", NPZ_FILES_DIR,
-        "--outdir", str(outdir),
-        "--runID", "400",
-        "--embed_dim", "128",
-    ], check=True)
+    subprocess.run(
+        [
+            "python3",
+            "lsc_loderunner_anime.py",
+            "--checkpoint",
+            str(hdf5_file_max_epoch),
+            "--indir",
+            NPZ_FILES_DIR,
+            "--outdir",
+            str(outdir),
+            "--runID",
+            "400",
+            "--embed_dim",
+            "128",
+        ],
+        check=True,
+    )
 
     # Convert PNG images to GIF
     png_pattern = str(outdir / "*.png")
     gif_path = outdir / f"{study_dir}.gif"
 
-    subprocess.run([
-        "convert", "-delay", "20", "-loop", "0",
-        *list(map(str, sorted(outdir.glob("*.png")))),
-        str(gif_path)
-    ], check=True)
+    subprocess.run(
+        [
+            "convert",
+            "-delay",
+            "20",
+            "-loop",
+            "0",
+            *list(map(str, sorted(outdir.glob("*.png")))),
+            str(gif_path),
+        ],
+        check=True,
+    )
 
     # List the generated GIF
     subprocess.run(["ls", "-l", str(gif_path)])
