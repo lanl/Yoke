@@ -1,4 +1,3 @@
-import os
 import re
 import subprocess
 from pathlib import Path
@@ -74,5 +73,5 @@ for study_path in sorted(RUNS_DIR.glob("study_*")):
     subprocess.run(["ls", "-l", str(gif_path)])
 
     print(f"\tCompleted processing {study_dir}\n")
-    print(f"==========================================================")
+    print("\t==========================================================")
 
