@@ -10,24 +10,33 @@ import subprocess
 from pathlib import Path
 import argparse
 
+# Ex Usage: python3 lsc_loderunner_create_gif.py
+#  --skip 011,017,018
+#  --runs-dir ../harnesses/chicoma_lsc_loderunner-ch-subsampling/runs
 parser = argparse.ArgumentParser()
+
+parser.add_argument(
+    "--runs-dir",
+    type=str,
+    default="../harnesses/chicoma_lsc_loderunner/runs",
+    help="Path to the directory containing the study_* folders",
+)
+
 parser.add_argument(
     "--skip",
     type=str,
     default="997,998,999",
-    #default="011,017,018,044,053",
-    help="Comma-separated list of study numbers to skip, e.g., '011,017'"
+    # default="011,017,018,044,053",
+    help="Comma-separated list of study numbers to skip, e.g., '011,017'",
 )
 args = parser.parse_args()
+RUNS_DIR = Path(args.runs_dir)
 
 # Skip the following study_dir numbers.
 skip_study_list = set(args.skip.split(","))
 
 # Paths
 NPZ_FILES_DIR = "/lustre/scratch5/exempt/artimis/mpmm/lsc240420/"
-
-# Relative path to the runs dir
-RUNS_DIR = Path("../harnesses/chicoma_lsc_loderunner-ch-subsampling/runs")
 
 # Loop through all study_dir directories in RUNS_DIR
 for study_path in sorted(RUNS_DIR.glob("study_*")):
