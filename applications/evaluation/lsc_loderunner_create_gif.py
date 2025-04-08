@@ -12,7 +12,9 @@ import argparse
 
 # Ex Usage: python3 lsc_loderunner_create_gif.py
 #  --skip 011,017,018
-#  --runs-dir ../harnesses/chicoma_lsc_loderunner-ch-subsampling/runs
+#  --runs-dir <path to runs dir that has study dirs>
+#  --npz-dir <path to the dir that has npz files>
+
 parser = argparse.ArgumentParser()
 
 parser.add_argument(
@@ -23,23 +25,32 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    "--npz-dir",
+    type=str,
+    default="/lustre/scratch5/exempt/artimis/mpmm/lsc240420/",
+    help="Path to the directory containing NPZ input files",
+)
+
+parser.add_argument(
     "--skip",
     type=str,
     default="997,998,999",
     # default="011,017,018,044,053",
     help="Comma-separated list of study numbers to skip, e.g., '011,017'",
 )
+
 args = parser.parse_args()
-RUNS_DIR = Path(args.runs_dir)
+
+# Paths
+npz_dir = args.npz_dir
+runs_dir = Path(args.runs_dir)
 
 # Skip the following study_dir numbers.
 skip_study_list = set(args.skip.split(","))
 
-# Paths
-NPZ_FILES_DIR = "/lustre/scratch5/exempt/artimis/mpmm/lsc240420/"
 
-# Loop through all study_dir directories in RUNS_DIR
-for study_path in sorted(RUNS_DIR.glob("study_*")):
+# Loop through all study_dir directories in runs_dir
+for study_path in sorted(runs_dir.glob("study_*")):
     study_dir = study_path.name
     study_num = study_dir.split("_")[-1]
     print(f"\nNow processing {study_dir}")
@@ -69,7 +80,7 @@ for study_path in sorted(RUNS_DIR.glob("study_*")):
         print(f"\thdf5_file_max_epoch:\n\t{hdf5_file_max_epoch}")
 
     # Run the animation generation script
-    outdir = Path(f"{RUNS_DIR}/{study_dir}_gif")
+    outdir = Path(f"{runs_dir}/{study_dir}_gif")
     outdir.mkdir(parents=True, exist_ok=True)
 
     # Create PNG files from the true image, predicted image and discrepancy
@@ -80,7 +91,7 @@ for study_path in sorted(RUNS_DIR.glob("study_*")):
             "--checkpoint",
             str(hdf5_file_max_epoch),
             "--indir",
-            NPZ_FILES_DIR,
+            npz_dir,
             "--outdir",
             str(outdir),
             "--runID",
