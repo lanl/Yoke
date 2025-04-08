@@ -24,7 +24,7 @@ for study_path in sorted(RUNS_DIR.glob("study_*")):
 
     if study_num in skip_study_list:
         print(f"\t***** Skipping {study_dir}. It is in the skip dir list ****")
-        print(f"\t==========================================================")
+        print("\t==========================================================")
         continue
 
     # Find the HDF5 file with the highest epoch
@@ -74,5 +74,5 @@ for study_path in sorted(RUNS_DIR.glob("study_*")):
     subprocess.run(["ls", "-l", str(gif_path)])
 
     print(f"\tCompleted processing {study_dir}\n")
-    print(f"\t==========================================================")
+    print(f"==========================================================")
 
