@@ -101,7 +101,7 @@ parser.add_argument(
     "--embed_dim",
     action="store",
     type=int,
-    default=512,
+    default=128,
     help="Embed dim.",
 )
 
