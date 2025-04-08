@@ -1,3 +1,10 @@
+"""Script to generate GIF animations from model output checkpoints.
+
+This script finds the HDF5 checkpoint with the highest epoch for each
+study directory (unless skipped), runs a visualization script to generate
+PNGs, and then converts them into a GIF using ImageMagick's convert tool.
+"""
+
 import re
 import subprocess
 from pathlib import Path
