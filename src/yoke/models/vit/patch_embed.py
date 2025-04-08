@@ -154,26 +154,38 @@ class ParallelVarPatchEmbed(nn.Module):
 
 
 class SwinEmbedding(nn.Module):
-    """SWIN patch embedding.
+    r"""SWIN patch embedding.
 
-    This SWIN embedding layer takes a *channels-first* image, breaks it into
-    linear patch embeddings, then rearranges those embedded patches into sets
-    of tokens.
+    This SWIN embedding layer takes a *channels-first* image, applies linear
+    patch embeddings, and rearranges the resulting embedded patches into
+    sequences of tokens.
 
-    For an input tensor of size (B, C, H, W) the linear embedding, with
-    embedding dimension E and patch-size P=(ph, pw), returns a (B, E, H', W')
-    filtered image. Here, H' and W' are the resulting heights and widths of the
-    (H, W) after going through a convolutional kernel of size (ph, pw) and
-    stride (ph, pw). The embedded image is then rearranged to a batch of tokens
-    each of size E. Resulting in a (B, H'*W', E) tensor.
+    For an input tensor of shape :math:`(B, C, H, W)`, the embedding uses a
+    convolutional kernel with embedding dimension :math:`E` and patch size
+    :math:`P = (p_h, p_w)`. This operation produces an embedded tensor of shape
+    :math:`(B, E, H', W')`, where:
 
-    NOTE: The img_size entries should be divisible by the corresponding
-    patch_size entries.
+    .. math::
+
+        H' = \frac{H}{p_h}, \quad W' = \frac{W}{p_w}
+
+    The resulting tensor is then rearranged into a sequence of
+    :math:`H' \times W'` tokens, each of dimension :math:`E`, resulting in a
+    final tensor of shape:
+
+    .. math::
+
+        (B, H' \cdot W', E)
+
+    .. note::
+        The values of :math:`H` and :math:`W` (i.e., `img_size`) must be
+        divisible by their corresponding patch size dimensions :math:`p_h` and
+        :math:`p_w`.
 
     Args:
         max_vars (int): Maximum number of variables
-        img_size ((int, int)): Image size
-        patch_size ((int, int)): Patch size
+        img_size (Tuple[int, int]): Image size (height, width)
+        patch_size (Tuple[int, int]): Patch size (height, width)
         embed_dim (int): Embedding dimension
         norm_layer (nn.Module, optional): Normalization layer. Defaults to None.
 

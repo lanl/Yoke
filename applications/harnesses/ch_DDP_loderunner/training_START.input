@@ -1,7 +1,7 @@
 --studyIDX
 <studyIDX>
 --FILELIST_DIR
-/usr/projects/artimis/mpmm/hickmank/chicoma/ch_yoke/applications/filelists/
+/usr/projects/artimis/mpmm/hickmank/github_yoke/applications/filelists/
 --LSC_NPZ_DIR
 /lustre/scratch4/exempt/artimis/lsc240420/
 --train_filelist
@@ -40,12 +40,12 @@ lsc240420_prefixes_test_10pct.txt
 --Knodes
 <KNODES>
 --total_epochs
-120
+4
 --cycle_epochs
-40
+2
 --train_batches
 <NTRN_BATCH>
 --val_batches
 <NVAL_BATCH>
 --TRAIN_PER_VAL
-10
+2

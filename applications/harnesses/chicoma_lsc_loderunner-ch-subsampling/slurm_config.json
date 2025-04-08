@@ -1,0 +1,10 @@
+{
+    "system": "chicoma",
+    "generated-params": {
+        "run-config": "debug",
+        "email": []
+    },
+    "custom-params": {
+        "job-name": "lr_subsamp_std<studyIDX>_ep<epochIDX>"
+    }
+}

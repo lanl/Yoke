@@ -1,12 +1,11 @@
 YOKE: Yielding Optimal Knowledge Enhancement
 ============================================
 
+[![Coverage Status](https://coveralls.io/repos/github/lanl/Yoke/badge.svg?branch=main)](https://coveralls.io/github/lanl/Yoke?branch=main)
 [![pipeline status](https://github.com/lanl/Yoke/actions/workflows/yoke_install_test_lint.yml/badge.svg)](https://github.com/lanl/Yoke/actions) 
 [![Latest Release](https://img.shields.io/github/v/release/lanl/Yoke)](https://github.com/lanl/Yoke/releases)
-[![Coverage Status](https://coveralls.io/repos/github/lanl/Yoke/badge.svg?branch=main)](https://coveralls.io/github/lanl/Yoke?branch=main)
 
 ![Get YOKEd!](./YOKE_DALLE_512x512.png)
-
 
 About:
 ------
@@ -19,11 +18,14 @@ projects.
 The YOKE module is divided into submodules, installed in a python environment:
 
 - datasets/
+- helpers/
 - models/
 - metrics/
-- torch_training_utils.py
+- losses/
+- utils/
 - lr_schedulers.py
-- parallel_utils.py
+- parellel_utils.py
+- torch_training_utils.py
 
 Helper utilities and examples are under `applications`:
 
@@ -51,40 +53,8 @@ Setup your base environment and activate it (we use conda):
 ```
 >> conda create -n <yoke_env_name> python=3.9 flit
 >> conda activate <yoke_env_name>
-```
-
-> **WARNING!!**
->
-> For some environments `flit`, the install manager for YOKE will not
-> default to installing in the conda environment. To remedy this first
-> checkout your `USER_BASE` and `USER_SITE` variables using
->
-> ```
-> >> python -m site
-> ```
->
-> If `USER_BASE` and `USER_SITE` don't appear to be associated with
-> `<yoke_env_name>` then set the `PYTHONUSERBASE` environment variable
-> prior to installing YOKE:
->
-> ```
-> >> export PYTHONUSERBASE=$CONDA_PREFIX
-> ```
->
-> Rerun `python -m site` to ensure `USER_BASE` and `USER_SITE` have
-> changed.
-
-For **developers**, you can install a **development version** of
-`YOKE` checkout using...
-
-```
->> flit install --user --symlink --deps=all
-```
-
-For **non-developers**, you can install `YOKE` using...
-
-```
->> flit install --deps=all
+>> cd <yoke_repo_clone_directory>
+>> flit install
 ```
 
 > **WARNING**

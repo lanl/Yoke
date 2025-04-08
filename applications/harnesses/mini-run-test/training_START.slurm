@@ -18,9 +18,9 @@
 #SBATCH --partition=gpu_debug
 #SBATCH --reservation=gpu_debug
 #SBATCH --constraint=gpu40
-#SBATCH --time=02:00:00
-#SBATCH --output=study<studyIDX>_epoch<epochIDX>.out
-#SBATCH --error=study<studyIDX>_epoch<epochIDX>.err
+#SBATCH --time=00:20:00
+#SBATCH --output=study<studyIDX>_epoch0001.out
+#SBATCH --error=study<studyIDX>_epoch0001.err
 #SBATCH -vvv
 
 
@@ -31,7 +31,8 @@ srun /usr/bin/echo $CUDA_AVAILABLE_DEVICES
 # Load correct conda environment
 module load python/3.11-anaconda-2023.07
 source activate
-conda activate <YOKE_TORCH_ENV>
+#conda activate <YOKE_TORCH_ENV>
+conda activate /usr/projects/artimis/conda/envs/torch_ch_gpu_241112/
 
 # Currently need to set an environment variable for MKL
 # threading. Believed to be related to Numpy.
@@ -41,12 +42,11 @@ export MKL_SERVICE_FORCE_INTEL=TRUE
 export date00=`date`
 
 # # Start GPU monitoring
-# nvidia-smi --loop 5 --query-gpu=timestamp,gpu_bus_id,memory.used,memory.free,memory.total --format=csv > nvidia_smi_epoch<epochIDX>.out &
+# nvidia-smi --loop 5 --query-gpu=timestamp,gpu_bus_id,memory.used,memory.free,memory.total --format=csv > nvidia_smi_epoch0001.out &
 # nvpid=$!
 
-# Assumes running from inside harnesses directory
 # Start the Code
-python <train_script> @<INPUTFILE>
+python <train_script> @study<studyIDX>_START.input
 #pypid=$!
 
 # Kill GPU monitoring after python process finishes

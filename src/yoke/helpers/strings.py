@@ -4,15 +4,17 @@ import numpy as np
 
 
 def replace_keys(study_dict: dict, data: str) -> str:
-    """Function to replace "key" values in a string with dictionary values.
+    """Replace "key" values in a string with dictionary values.
 
     Args:
-        study_dict (dict): dictonary of keys and values to replace
-        data (str): data to replace keys in
+        study_dict (dict): Dictionary of keys and values to replace.
+        data (str): Data to replace keys in.
 
     Returns:
-        data (str): data with keys replaced
+        str: Data with keys replaced.
 
+    Raises:
+        ValueError: If an unrecognized datatype is encountered in the list.
     """
     for key, value in study_dict.items():
         if key == "studyIDX":

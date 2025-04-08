@@ -15,27 +15,39 @@ from einops import rearrange
 
 
 class PatchMerge(nn.Module):
-    """Merge patches and increase embedding dimension.
+    r"""Merge patches and increase embedding dimension.
 
-    This layer is passed a (B, L, C) tensor, batches of L tokens, each of
-    *emb_size* C. The *emb_size* must match the token embedding dimension from
-    the previous layer. It is assumed L=H*W with H divisible by s1 and W
-    divisible by s2.
+    This layer is passed a tensor of shape :math:`(B, L, C)`, i.e., batches of
+    :math:`L` tokens, each of embedding size :math:`C`. The embedding size must
+    match the token embedding dimension from the previous layer. It is assumed
+    :math:`L = H \times W` with :math:`H` divisible by :math:`s_1` and :math:`W`
+    divisible by :math:`s_2`.
 
-    The tokens are first separated into (H', s1, W', s2) groups with H'=H/s1
-    and W'=W/s2. The input is then remapped:
+    The tokens are reshaped into groups of shape:
 
-    *B (H' s1 W' s2) C -> B (H' W') (s1 s2 C)*
+    .. math::
 
-    The new token sets are then linear embedded to yield a new tensor of size
+        (H', s_1, W', s_2) \text{ with } H' = H / s_1 \text{ and } W' = W / s_2
 
-    (B, H'*W', emb_factor*C).
+    Then, the input is remapped:
+
+    .. math::
+
+        B \times (H' \cdot s_1 \cdot W' \cdot s_2) \times C
+        \rightarrow
+        B \times (H' \cdot W') \times (s_1 \cdot s_2 \cdot C)
+
+    Finally, a linear embedding is applied to produce a tensor of shape:
+
+    .. math::
+
+        (B, H' \cdot W', \text{embedding factor} \cdot C)
 
     Args:
         emb_size (int): Incoming embedding dimension
         emb_factor (int): Up-scaling factor for embedding dimension
-        patch_grid_size (int, int): Incoming patch-grid dimensions within
-                                    the token set
+        patch_grid_size (Tuple[int, int]): Incoming patch-grid dimensions within
+                                           the token set
         s1 (int): Height reduction factor for the patch grid
         s2 (int): Width reduction factor for the patch grid
 
@@ -120,29 +132,38 @@ class PatchMerge(nn.Module):
 
 
 class PatchExpand(nn.Module):
-    """Expand patches and decrease embedding dimension.
+    r"""Expand patches and decrease embedding dimension.
 
-    This layer is passed a (B, L, C) tensor, batches of L tokens, each of
-    *emb_size* C. The *emb_size* must match the token embedding dimension from
-    the previous layer. It is assumed L=H*W with (H, W) being defined by the
-    previous layer's patch grid.
+    This layer receives a tensor of shape :math:`(B, L, C)`, representing
+    batches of :math:`L` tokens, each with embedding dimension :math:`C`.
+    The embedding size :math:`C` must match the output of the previous layer.
 
-    Expansion follows:
+    It is assumed that :math:`L = H \times W`, where :math:`(H, W)` define
+    the patch grid from the previous layer.
 
-        (B, H*W, C) ->[linear] (B, H*W, n*C)
-            ->[rearrange] (B, H*s1*W*s2,  n*C/(s1*s2))
+    The expansion process proceeds as follows:
 
-    The embedding dimension is first increased through a linear embedding by a
-    factor `n`. The new embedding dimension is then divided by `s1*s2` and the
-    number of patches is increased accordingly through *rearrange.
+    .. math::
 
-    NOTE: `n*C` must be divisible by `s1*s2`
+        (B, H \cdot W, C)
+        \xrightarrow{\text{linear}}
+        (B, H \cdot W, n \cdot C)
+        \xrightarrow{\text{rearrange}}
+        (B, H \cdot s_1 \cdot W \cdot s_2, \frac{n \cdot C}{s_1 \cdot s_2})
+
+    First, the embedding dimension is expanded linearly by a factor of
+    :math:`n`. Then, the embedding is rearranged by distributing the added
+    capacity into more tokens, increasing the patch count while reducing the
+    per-token dimension accordingly.
+
+    .. note::
+        :math:`n \cdot C` must be divisible by :math:`s_1 \cdot s_2`
 
     Args:
         emb_size (int): Incoming embedding dimension
         emb_factor (int): Up-scaling factor for embedding dimension
-        patch_grid_size (int, int): Incoming patch-grid dimensions within
-                                    the token set
+        patch_grid_size (Tuple[int, int]): Incoming patch-grid dimensions within
+                                           the token set
         s1 (int): Height scaling factor for the patch grid
         s2 (int): Width scaling factor for the patch grid
 
@@ -226,11 +247,15 @@ class PatchExpand(nn.Module):
 
 
 class Unpatchify(nn.Module):
-    """Expansion from patches to variables and images.
+    r"""Expansion from patches to variables and images.
 
     This layer performs the remap:
 
-    (B, H*W,  V*p_h*p_w) ->[rearrange] (B, V, H*p_h, W*p_w)
+    .. math::
+
+        (B, H \cdot W, V \cdot p_h \cdot p_w)
+        \xrightarrow{\text{rearrange}}
+        (B, V, H \cdot p_h, W \cdot p_w)
 
     Args:
         total_num_vars (int): Total number of variables to be output.

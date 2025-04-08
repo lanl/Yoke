@@ -8,7 +8,7 @@ import shutil
 import argparse
 import pandas as pd
 
-from yoke.helpers import cli, strings
+from yoke.helpers import cli, strings, create_slurm_files
 
 
 ####################################
@@ -24,12 +24,18 @@ training_input_tmpl = "./training_input.tmpl"
 training_slurm_tmpl = "./training_slurm.tmpl"
 training_START_input = "./training_START.input"
 training_START_slurm = "./training_START.slurm"
+training_json = "./slurm_config.json"
+
+slurm_tmpl_data = None
+if os.path.exists(training_json):
+    slrm_obj = create_slurm_files.MkSlurm(config_path=training_json)
+    slurm_tmpl_data = slrm_obj.generateSlurm()
 
 # List of files to copy
-with open(args.cpFile, "r") as cp_text_file:
+with open(args.cpFile) as cp_text_file:
     cp_file_list = [line.strip() for line in cp_text_file]
 
-# Process Hyperparmaeters File
+# Process Hyperparameters File
 studyDF = pd.read_csv(
     args.csv, sep=",", header=0, index_col=0, comment="#", engine="python"
 )
@@ -69,8 +75,12 @@ for k, study in enumerate(studylist):
         f.write(training_input_data)
 
     # Make new training_slurm.tmpl file
-    with open(training_slurm_tmpl) as f:
-        training_slurm_data = f.read()
+    if slurm_tmpl_data is None:
+        with open(training_slurm_tmpl) as f:
+            training_slurm_data = f.read()
+
+    else:
+        training_slurm_data = slurm_tmpl_data
 
     training_slurm_data = strings.replace_keys(study, training_slurm_data)
     training_slurm_filepath = os.path.join(studydirname, "training_slurm.tmpl")
@@ -89,11 +99,19 @@ for k, study in enumerate(studylist):
     with open(START_input_filepath, "w") as f:
         f.write(START_input_data)
 
-    # Make a new training_START.slurm file
-    with open(training_START_slurm) as f:
-        START_slurm_data = f.read()
+    if slurm_tmpl_data is None:
+        # Make a new training_START.slurm file
+        with open(training_START_slurm) as f:
+            START_slurm_data = f.read()
 
-    START_slurm_data = strings.replace_keys(study, START_slurm_data)
+    if slurm_tmpl_data is not None:
+        START_slurm_data = strings.replace_keys(study, slurm_tmpl_data).replace(
+            "<epochIDX>", "0001"
+        )
+
+    else:
+        START_slurm_data = strings.replace_keys(study, START_slurm_data)
+
     START_slurm_name = "study{:03d}_START.slurm".format(study["studyIDX"])
     START_slurm_filepath = os.path.join(studydirname, START_slurm_name)
 
@@ -106,8 +124,5 @@ for k, study in enumerate(studylist):
 
     # Submit Job
     os.system(
-        (
-            f"cd {studydirname}; sbatch {START_slurm_name}; "
-            f"cd {os.path.dirname(__file__)}"
-        )
+        f"cd {studydirname}; sbatch {START_slurm_name}; cd {os.path.dirname(__file__)}"
     )
