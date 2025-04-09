@@ -42,10 +42,7 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "--run-id",
-    type=str,
-    default="400",
-    help="Run ID used when generating animations"
+    "--run-id", type=str, default="400", help="Run ID used when generating animations"
 )
 
 parser.add_argument(
