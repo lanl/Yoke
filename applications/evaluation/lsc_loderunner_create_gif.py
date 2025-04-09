@@ -11,9 +11,11 @@ from pathlib import Path
 import argparse
 
 # Ex Usage: python3 lsc_loderunner_create_gif.py
-#  --skip 011,017,018
-#  --runs-dir <path to runs dir that has study dirs>
-#  --npz-dir <path to the dir that has npz files>
+#                   --runs-dir <path to runs dir that has study dirs>
+#                   --npz-dir <path to the dir that has npz files>
+#                   --skip-list 011,017,018
+#                   --run-id <run id num>
+#                   --embed-dim <embed dim value>
 
 parser = argparse.ArgumentParser()
 
@@ -32,22 +34,29 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "--skip",
+    "--skip-list",
     type=str,
     default="997,998,999",
     # default="011,017,018,044,053",
     help="Comma-separated list of study numbers to skip, e.g., '011,017'",
 )
 
+parser.add_argument(
+    "--run-id",
+    type=str,
+    default="400",
+    help="Run ID used when generating animations"
+)
+
+parser.add_argument(
+    "--embed-dim",
+    type=str,
+    default="128",
+    help="Embedding dimension used in the animation script",
+)
+
 args = parser.parse_args()
-
-# Paths
-npz_dir = args.npz_dir
 runs_dir = Path(args.runs_dir)
-
-# Skip the following study_dir numbers.
-skip_study_list = set(args.skip.split(","))
-
 
 # Loop through all study_dir directories in runs_dir
 for study_path in sorted(runs_dir.glob("study_*")):
@@ -55,7 +64,7 @@ for study_path in sorted(runs_dir.glob("study_*")):
     study_num = study_dir.split("_")[-1]
     print(f"\nNow processing {study_dir}")
 
-    if study_num in skip_study_list:
+    if study_num in set(args.skip_list.split(",")):
         print(f"\t***** Skipping {study_dir}. It is in the skip dir list ****")
         print("\t==========================================================")
         continue
@@ -91,13 +100,13 @@ for study_path in sorted(runs_dir.glob("study_*")):
             "--checkpoint",
             str(hdf5_file_max_epoch),
             "--indir",
-            npz_dir,
+            args.npz_dir,
             "--outdir",
             str(outdir),
             "--runID",
-            "400",
+            args.run_id,
             "--embed_dim",
-            "128",
+            args.embed_dim,
         ],
         check=True,
     )
