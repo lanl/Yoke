@@ -157,7 +157,8 @@ class labeledData:
         ]
 
     def cylex_data_loader(
-        self, kinematic_variables: list = None, thermodynamic_variables: list = None
+        self, kinematic_variables: list[str] = None,
+        thermodynamic_variables: list[str] = None
         ) -> None:
         """Data loader for the cylex dataset.
 
@@ -621,3 +622,4 @@ class sequential_DataSet(Dataset):
         Dt = torch.tensor(0.25, dtype=torch.float32)
 
         return img_seq, Dt, self.channel_map
+
