@@ -10,14 +10,17 @@ import subprocess
 from pathlib import Path
 import argparse
 
-# Ex Usage: python3 lsc_loderunner_create_gif.py
+# Ex Usage 1: python3 lsc_loderunner_create_gif.py
 #                   --runs-dir <path to runs dir that has study dirs>
 #                   --npz-dir <path to the dir that has npz files>
 #                   --skip-list 011,017,018
 #                   --run-id <run id num>
 #                   --embed-dim <embed dim value>
+# OR
+# Ex Usage 2: python3 lsc_loderunner_create_gif.py @lsc_loderunner_create_gif.input
 
-parser = argparse.ArgumentParser()
+parser = argparse.ArgumentParser(fromfile_prefix_chars="@")
+
 
 parser.add_argument(
     "--runs-dir",
