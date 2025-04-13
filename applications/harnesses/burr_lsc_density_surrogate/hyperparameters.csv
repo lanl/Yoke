@@ -1,15 +1,15 @@
 studyIDX,YOKE_TORCH_ENV,LINEAR_F,F0,F1,F2,F3,F4,BATCH_SIZE,NTRN_BATCH,NVAL_BATCH,LEARN_RATE,LR_EPOCH_PER_STEP,LR_DECAY_RATE,train_script
-#1,torch_gpu_241017,256,256,128,64,32,16,8,10000,1200,1.00E-03,10,0.5,train_lsc_surrogate_LRsched.py
-#2,torch_gpu_241017,256,256,128,64,32,16,8,10000,1200,1.00E-03,10,0.25,train_lsc_surrogate_LRsched.py
-#3,torch_gpu_241017,256,256,128,64,32,16,8,10000,1200,1.00E-03,5,0.5,train_lsc_surrogate_LRsched.py
-#4,torch_gpu_241017,256,256,128,64,32,16,8,10000,1200,1.00E-03,5,0.25,train_lsc_surrogate_LRsched.py
-#5,torch_gpu_241017,512,512,512,256,128,64,8,10000,1200,1.00E-03,10,0.5,train_lsc_surrogate_LRsched.py
-#6,torch_gpu_241017,512,512,512,256,128,64,8,10000,1200,1.00E-03,15,0.5,train_lsc_surrogate_LRsched.py
-#7,torch_gpu_241017,512,512,512,256,128,64,8,10000,1200,1.00E-03,20,0.5,train_lsc_surrogate_LRsched.py
-#8,torch_gpu_241017,512,512,512,256,128,64,8,10000,1200,5.00E-03,10,0.5,train_lsc_surrogate_LRsched.py
-9,torch_gpu_241017,512,512,512,256,128,64,8,10000,1200,5.00E-03,15,0.5,train_lsc_surrogate_LRsched.py
-10,torch_gpu_241017,512,512,512,256,128,64,8,10000,1200,5.00E-03,20,0.5,train_lsc_surrogate_LRsched.py
-11,torch_gpu_241017,768,768,512,256,128,64,8,10000,1200,5.00E-03,20,0.5,train_lsc_surrogate_LRsched.py
+1,torch_gpu_241017,256,256,128,64,32,16,8,10000,1200,1.00E-03,10,0.5,train_lsc_surrogate_LRsched.py
+2,torch_gpu_241017,256,256,128,64,32,16,8,10000,1200,1.00E-03,10,0.25,train_lsc_surrogate_LRsched.py
+# 3,torch_gpu_241017,256,256,128,64,32,16,8,10000,1200,1.00E-03,5,0.5,train_lsc_surrogate_LRsched.py
+# 4,torch_gpu_241017,256,256,128,64,32,16,8,10000,1200,1.00E-03,5,0.25,train_lsc_surrogate_LRsched.py
+# 5,torch_gpu_241017,512,512,512,256,128,64,8,10000,1200,1.00E-03,10,0.5,train_lsc_surrogate_LRsched.py
+# 6,torch_gpu_241017,512,512,512,256,128,64,8,10000,1200,1.00E-03,15,0.5,train_lsc_surrogate_LRsched.py
+# 7,torch_gpu_241017,512,512,512,256,128,64,8,10000,1200,1.00E-03,20,0.5,train_lsc_surrogate_LRsched.py
+# 8,torch_gpu_241017,512,512,512,256,128,64,8,10000,1200,5.00E-03,10,0.5,train_lsc_surrogate_LRsched.py
+# 9,torch_gpu_241017,512,512,512,256,128,64,8,10000,1200,5.00E-03,15,0.5,train_lsc_surrogate_LRsched.py
+# 10,torch_gpu_241017,512,512,512,256,128,64,8,10000,1200,5.00E-03,20,0.5,train_lsc_surrogate_LRsched.py
+# 11,torch_gpu_241017,768,768,512,256,128,64,8,10000,1200,5.00E-03,20,0.5,train_lsc_surrogate_LRsched.py
 
 
 
