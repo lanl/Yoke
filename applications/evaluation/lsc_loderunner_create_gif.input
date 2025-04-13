@@ -1,0 +1,10 @@
+--runs-dir
+../harnesses/chicoma_lsc_loderunner-ch-subsampling/runs
+--npz-dir
+/lustre/scratch5/exempt/artimis/mpmm/lsc240420/
+--run-id
+400
+--embed-dim
+128
+--skip-list
+011,017,018,044,053
