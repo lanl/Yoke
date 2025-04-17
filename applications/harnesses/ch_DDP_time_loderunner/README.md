@@ -10,12 +10,12 @@ and production-ready configurations.
 
 ### CSV File: `ddp_study_time.csv`
 
-- **Purpose:**  
+- **Purpose:**
   Contains a collection of hyperparameter settings.
-- **Key Update:**  
-  Includes **six different settings** for `max_timeIDX_offset` along
+- **Key Update:**
+  Includes **50 different settings** for `max_timeIDX_offset` along
   with optimized settings for other hyperparameters.
-- **Usage:**  
+- **Usage:**
   The orchestrator (`START_study.py`) reads this CSV, converting each
   row into a dictionary of settings to be merged with configuration templates.
 
@@ -62,57 +62,115 @@ and production-ready configurations.
 
 ### Updated `cp_files.txt` for consistency with the new name of the training script.
 
-### Added `ddp_study_time_test.csv` with parameter settings to minimize runtime.
+### Added abbreviated CSV file `ddp_study_time_test.csv`: 
+Parameter settings chosen to minimize runtime.
 
 ### Files Left Unchanged
 
-- **`START_study.py`:**  
+- **`START_study.py`:**
   The overall study orchestration (including CSV parsing and template merging)
   remains the same.
-- **`training_slurm.tmpl` & `training_START.slurm`:**  
+- **`training_slurm.tmpl` & `training_START.slurm`:**
   These files (used for job submission via Slurm) have not been modified because
   they do not directly handle training-specific parameter values.
 
 ## How to Use the Updated Harness
 
-1. **Prepare the CSV File:**  
+1. **Prepare the CSV File:**
    Ensure that `ddp_study_time.csv` contains the desired settings
    for `max_timeIDX_offset` and the other hyperparameter values.
 
-2. **Confirm Template Placeholders:**  
+2. **Confirm Template Placeholders:**
    Verify that both `training_input.tmpl` and `training_START.input` contain
    the `<MAX_TIMEIDX_OFFSET>` placeholder, matching the CSV header
    (or appropriately mapped by the orchestrator).
 
-3. **Run the Orchestrator:**  
+3. **Run the Orchestrator:**
    Use the existing workflow (via `START_study.py`), which will:
 
    - Read the CSV file,
    - Replace placeholders in the template files with the corresponding CSV values
      (including `max_timeIDX_offset`), and
    - Generate study-specific configuration files for job submission.
-   - Example command: `python START_study.py --csv ddp_study_time.csv.$USER`
+   - Example command: `python START_study.py --csv ddp_study_time_test.csv`
 
-4. **Execution of Jobs:**  
-   Jobs will be submitted as usual with the unchanged `training_slurm.tmpl`
+4. **Execution of Jobs:**
+   Jobs will be submitted as usual with the `training_slurm.tmpl`
    and `training_START.slurm` files. The training script
    (`train_LodeRunner_ddp_time.py`) will now receive the dynamic value
    for `max_timeIDX_offset`.
 
 ## Summary
 
-- **Dynamic Parameter Control:**  
+- **Dynamic Parameter Control:**
   `max_timeIDX_offset` is now controlled by `ddp_study_time.csv` instead of being
   fixed at a hard-coded value.
-- **Template Updates:**  
+- **Template Updates:**
   Both `training_input.tmpl` and `training_START.input` have been updated with
   appropriate placeholders.
-- **Training Script Adjustments:**  
+- **Training Script Adjustments:**
   `train_LodeRunner_ddp_time.py` now retrieves `max_timeIDX_offset` from command-line
   arguments, enabling flexible data loading based on CSV settings.
-- **Unchanged Components:**  
+- **Unchanged Components:**
   The orchestrator (`START_study.py`) and job submission scripts
   (`training_slurm.tmpl`, `training_START.slurm`) remain unmodified.
 
 These updates allow for expanded hyperparameter studies that include consideration
 of the `max_timeIDX_offset` parameter.
+
+ ## 📂 Helper Utilities  
+To streamline work and facilitate collaborative
+production runs, several utility scripts are included in the harness directory. Each
+serves a specific role, as explained below.  
+
+### ✅ `archive_runs.sh`  
+
+**Purpose:**   Archives the current `runs/` directory
+by renaming it to `runs_backup_<timestamp>` to prevent overwriting existing study
+results.  
+
+**Usage:** ```bash ./archive_runs.sh ```  
+
+**Behavior:** - If `runs/` exists, it
+is renamed (e.g., `runs_backup_20250420_1425`) - If no `runs/` directory is found, it
+prints a message and exits  
+
+### ✅ `split_csv.py`  
+
+**Purpose:**   Splits a full
+hyperparameter CSV file into per-user subsets for parallel job execution by team members.
+
+**Usage:** ```bash python split_csv.py ```  
+
+**Behavior:** - Expects a source CSV (e.g.,
+`ddp_study_time.csv`) - Creates individual files named `hyperparameters.<username>.csv`
+for each user   in the `usernames` list inside the script - Each team member runs jobs
+using their assigned CSV  
+
+### ✅ `run_yoke_study.sh`  
+
+**Purpose:**   The main script used
+by each team member to launch their jobs. It activates the environment, ensures correct
+group ownership, and initiates the study.  
+
+**Usage:** ```bash ./run_yoke_study.sh ```
+
+**Behavior:** - Ensures the user is in a `bash` shell - Requires active group to be
+`artimis` (`newgrp artimis`) - Sets file permissions (`umask 007`) for group read/write
+access - Loads the correct Python environment - Submits jobs using `START_study.py` with
+`hyperparameters.$USER.csv` - Waits briefly, then runs `check_progress.py` to monitor job
+state  
+
+### ✅ `check_progress.py`  
+
+**Purpose:**   Summarizes job status across studies
+(completed epochs, checkpoints, CPU/wall time, etc.).  
+
+**Usage:** ```bash python
+check_progress.py ```  
+
+**Behavior:** - Aggregates and reports job progress for all
+studies in `runs/` - Outputs a clear, column-aligned dashboard - Uses Slurm’s `squeue`
+and `sacct` to report job status and timing - Pulls `TOTAL_EPOCHS` from
+`training_input.tmpl` - Supports multiple users:   ```bash   python check_progress.py
+alice bob   ```

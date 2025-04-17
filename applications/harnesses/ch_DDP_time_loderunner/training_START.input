@@ -42,9 +42,9 @@ lsc240420_prefixes_test_10pct.txt
 --Knodes
 <KNODES>
 --total_epochs
-4
+2000
 --cycle_epochs
-2
+400
 --train_batches
 <NTRN_BATCH>
 --val_batches
