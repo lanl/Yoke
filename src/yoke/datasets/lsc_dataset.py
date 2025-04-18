@@ -347,41 +347,45 @@ def neg_mse_loss(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
 
 
 class LSC_hfield_reward_DataSet(Dataset):
-    """Hydro-field discrepancy reward dataset."""
+    """Hydro-field discrepancy reward dataset.
+
+    The definition of a dataset object for the *Layered Shaped Charge* data
+    which produces tuples `(y', H', H*, -MSE(H', H*))`. `y'` is the vector
+    of B-spline contour-nodes. `H'` is the tensor of hydro-fields at final
+    time corresponding to `y'`. `H*` is a *target* tensor of hydro-fields
+    at final time, chosen randomly from the available training data.
+
+    A *value* network will be pre-trained from this dataset to use in a
+    *proximal policy optimization* (PPO) reinforcement learning algorithm.
+
+    Args:
+        LSC_NPZ_DIR (str): Location of LSC NPZ files. A YOKE env variable.
+        filelist (str): Text file listing file names to read
+        design_file (str): Full-path to .csv file with master design study parameters
+        half_image (bool): If True then returned images are NOT reflected about axis
+                           of symmetry and half-images are returned instead.
+        field_list (list[str]): List of hydro-dynamic fields to include as channels
+                                in image.
+        reward_fn (Callable): Function taking two torch.tensor and returning a
+                              scalar reward.
+
+    """
 
     def __init__(
         self,
         LSC_NPZ_DIR: str,
         filelist: str,
         design_file: str,
+        half_image: bool = True,
         field_list: list[str] = ["density_throw"],
         reward_fn: Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = neg_mse_loss,
     ) -> None:
-        """Initialization of class.
-
-        The definition of a dataset object for the *Layered Shaped Charge* data
-        which produces tuples `(y', H', H*, -MSE(H', H*))`. `y'` is the vector
-        of B-spline contour-nodes. `H'` is the tensor of hydro-fields at final
-        time corresponding to `y'`. `H*` is a *target* tensor of hydro-fields
-        at final time, chosen randomly from the available training data.
-
-        A *value* network will be pre-trained from this dataset to use in a
-        *proximal policy optimization* (PPO) reinforcement learning algorithm.
-
-        Args:
-            LSC_NPZ_DIR (str): Location of LSC NPZ files. A YOKE env variable.
-            filelist (str): Text file listing file names to read
-            design_file (str): Full-path to .csv file with master design study parameters
-            field_list (list[str]): List of hydro-dynamic fields to include as channels
-                                    in image.
-            reward_fn (Callable): Function taking two torch.tensor and returning a
-                                  scalar reward.
-
-        """
+        """Initialization of class."""
         # Model Arguments
         self.LSC_NPZ_DIR = LSC_NPZ_DIR
         self.filelist = filelist
         self.design_file = design_file
+        self.half_image = half_image
         self.hydro_fields = field_list
         self.reward = reward_fn
 
@@ -399,7 +403,7 @@ class LSC_hfield_reward_DataSet(Dataset):
 
     def __len__(self) -> int:
         """Return number of samples in dataset."""
-        return self.Nsamples
+        return int(1e6)
 
     def __getitem__(
         self, index: int
@@ -417,9 +421,13 @@ class LSC_hfield_reward_DataSet(Dataset):
         target_hfield_list = []
         for hfield in self.hydro_fields:
             tmp_img = LSCread_npz_NaN(state_npz, hfield)
+            if not self.half_image:
+                tmp_img = np.concatenate((np.fliplr(tmp_img), tmp_img), axis=1)
             state_hfield_list.append(tmp_img)
 
             tmp_img = LSCread_npz_NaN(target_npz, hfield)
+            if not self.half_image:
+                tmp_img = np.concatenate((np.fliplr(tmp_img), tmp_img), axis=1)
             target_hfield_list.append(tmp_img)
 
         # Concatenate images channel first.
@@ -451,39 +459,43 @@ class LSC_hfield_reward_DataSet(Dataset):
 
 
 class LSC_hfield_policy_DataSet(Dataset):
-    """Hydro-field policy dataset."""
+    """Hydro-field policy dataset.
+
+    The definition of a dataset object for the *Layered Shaped Charge* data
+    which produces tuples `(y', H', H*, x=y*-y')`. `y'` is the vector of
+    B-spline contour-nodes. `H'` is the tensor of hydro-fields at final
+    time corresponding to `y'`. `H*` is a *target* tensor of hydro-fields
+    at final time, chosen randomly from the available training data. The
+    optimal *policy*, `x=y* - y'` is the prediction goal for this dataset.
+
+    A *policy* network will be pre-trained from this dataset to use in a
+    *proximal policy optimization* (PPO) reinforcement learning algorithm.
+
+    Args:
+        LSC_NPZ_DIR (str): Location of LSC NPZ files. A YOKE env variable.
+        filelist (str): Text file listing file names to read
+        design_file (str): Full-path to .csv file with master design study parameters
+        half_image (bool): If True then returned images are NOT reflected about axis
+                           of symmetry and half-images are returned instead.
+        field_list (list[str]): List of hydro-dynamic fields to include as channels
+                                in image.
+
+    """
 
     def __init__(
         self,
         LSC_NPZ_DIR: str,
         filelist: str,
         design_file: str,
+        half_image: bool = True,
         field_list: list[str] = ["density_throw"],
     ) -> None:
-        """Initialization of class.
-
-        The definition of a dataset object for the *Layered Shaped Charge* data
-        which produces tuples `(y', H', H*, x=y*-y')`. `y'` is the vector of
-        B-spline contour-nodes. `H'` is the tensor of hydro-fields at final
-        time corresponding to `y'`. `H*` is a *target* tensor of hydro-fields
-        at final time, chosen randomly from the available training data. The
-        optimal *policy*, `x=y* - y'` is the prediction goal for this dataset.
-
-        A *policy* network will be pre-trained from this dataset to use in a
-        *proximal policy optimization* (PPO) reinforcement learning algorithm.
-
-        Args:
-            LSC_NPZ_DIR (str): Location of LSC NPZ files. A YOKE env variable.
-            filelist (str): Text file listing file names to read
-            design_file (str): Full-path to .csv file with master design study parameters
-            field_list (list[str]): List of hydro-dynamic fields to include as channels
-                                    in image.
-
-        """
+        """Initialization of class."""
         # Model Arguments
         self.LSC_NPZ_DIR = LSC_NPZ_DIR
         self.filelist = filelist
         self.design_file = design_file
+        self.half_image = half_image
         self.hydro_fields = field_list
 
         # Create filelist
@@ -500,7 +512,7 @@ class LSC_hfield_policy_DataSet(Dataset):
 
     def __len__(self) -> int:
         """Return number of samples in dataset."""
-        return self.Nsamples
+        return int(1e6)
 
     def __getitem__(
         self, index: int
@@ -518,9 +530,14 @@ class LSC_hfield_policy_DataSet(Dataset):
         target_hfield_list = []
         for hfield in self.hydro_fields:
             tmp_img = LSCread_npz_NaN(state_npz, hfield)
+            if not self.half_image:
+                tmp_img = np.concatenate((np.fliplr(tmp_img), tmp_img), axis=1)
             state_hfield_list.append(tmp_img)
 
             tmp_img = LSCread_npz_NaN(target_npz, hfield)
+            if not self.half_image:
+                tmp_img = np.concatenate((np.fliplr(tmp_img), tmp_img), axis=1)
+
             target_hfield_list.append(tmp_img)
 
         # Concatenate images channel first.
@@ -633,7 +650,7 @@ class LSC_rho2rho_temporal_DataSet(Dataset):
 
     def __len__(self) -> int:
         """Return effectively infinite number of samples in dataset."""
-        return int(8e5)
+        return int(1e6)
 
     def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Return a tuple of a batch's input and output data."""

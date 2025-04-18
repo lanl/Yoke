@@ -309,7 +309,7 @@ def add_training_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParse
         "--prefetch_factor",
         action="store",
         type=int,
-        default=2,
+        default=1,
         help=(
             "Number of batches each worker preloads ahead of time. "
             "NOTE: If set too big preload will swamp memory!!"

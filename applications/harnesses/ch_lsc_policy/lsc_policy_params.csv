@@ -1,0 +1,8 @@
+studyIDX,YOKE_TORCH_ENV,KNODES,NGPUS,NUM_WORKERS,BATCH_SIZE,NTRN_BATCH,NVAL_BATCH,train_script
+# batch_size=16 causes CUDA OOM error
+# batch_size=8 with 100 batches per epoch yields ~4min epochs
+#
+# batch_size=8 with 1500 batches per epoch, ~60min epochs.
+# 500 batches per validation, ~20min val-epoch.
+1,torch_ch_gpu_241112,1,4,2,8,1500,500,train_lsc_policy.py
+
