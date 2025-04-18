@@ -95,6 +95,16 @@ parser.add_argument(
     help="Run identifier index.",
 )
 
+# run index
+# Example: lsc240420_id00201_pvi_idx00100.npz
+parser.add_argument(
+    "--embed_dim",
+    action="store",
+    type=int,
+    default=128,
+    help="Embed dim.",
+)
+
 parser.add_argument(
     "--verbose", "-V", action="store_true", help="Flag to turn on debugging output."
 )
@@ -144,6 +154,7 @@ if __name__ == "__main__":
     indir = args_ns.indir
     outdir = args_ns.outdir
     runID = args_ns.runID
+    embed_dim = args_ns.embed_dim
     VERBOSE = args_ns.verbose
 
     if not os.path.exists(outdir):
@@ -168,7 +179,6 @@ if __name__ == "__main__":
         "Uvelocity",
         "Wvelocity",
     ]
-    embed_dim = 512
     block_structure = (
         1,
         1,
