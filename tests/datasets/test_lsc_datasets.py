@@ -92,7 +92,7 @@ def test_r2r_temporal_dataset_init(
 
 def test_r2r_temporal_len(r2r_temporal_dataset: LSC_rho2rho_temporal_DataSet) -> None:
     """Test that the dataset length is correctly returned."""
-    assert len(r2r_temporal_dataset) == int(8e5)
+    assert len(r2r_temporal_dataset) == int(1e6)
 
 
 @patch("yoke.datasets.lsc_dataset.LSCread_npz_NaN", side_effect=mock_LSCread_npz_NaN)
@@ -277,7 +277,8 @@ def mock_reward_dataset(
     LSC_NPZ_DIR = "/mock/path/"
     filelist = "mock_filelist.txt"
     design_file = "mock_design.csv"
-    field_list = ["density_throw"]
+    half_image = True
+    field_list = ("density_throw",)
 
     reward_fn = MagicMock(return_value=torch.tensor(1.0))
 
@@ -288,7 +289,7 @@ def mock_reward_dataset(
     with patch("builtins.open", mock_open(read_data=mock_file_list)):
         with patch("random.shuffle") as mock_shuffle:
             ds = LSC_hfield_reward_DataSet(
-                LSC_NPZ_DIR, filelist, design_file, field_list, reward_fn
+                LSC_NPZ_DIR, filelist, design_file, half_image, field_list, reward_fn
             )
             mock_shuffle.assert_called_once()
 
@@ -301,13 +302,13 @@ def test_reward_init(mock_reward_dataset: LSC_hfield_reward_DataSet) -> None:
     assert mock_reward_dataset.filelist == ["mock_file_1", "mock_file_2", "mock_file_3"]
     # Cartesian product of two files
     assert len(mock_reward_dataset.state_target_list) == 9
-    assert mock_reward_dataset.hydro_fields == ["density_throw"]
+    assert mock_reward_dataset.hydro_fields == ("density_throw",)
     assert callable(mock_reward_dataset.reward)
 
 
 def test_reward_len(mock_reward_dataset: LSC_hfield_reward_DataSet) -> None:
     """Test the __len__ method."""
-    assert len(mock_reward_dataset) == 9
+    assert len(mock_reward_dataset) == int(1e6)
 
 
 @patch("yoke.datasets.lsc_dataset.LSCread_npz_NaN", side_effect=mock_LSCread_npz_NaN)
@@ -374,7 +375,8 @@ def mock_policy_dataset(
     LSC_NPZ_DIR = "/mock/path/"
     filelist = "mock_filelist.txt"
     design_file = "mock_design.csv"
-    field_list = ["density_throw"]
+    half_image = True
+    field_list = ("density_throw",)
 
     # Mock numpy.load to return a mock dictionary
     mock_np_load.return_value = MockNpzFile({"density_throw": np.array([1.0, 2.0, 3.0])})
@@ -383,7 +385,7 @@ def mock_policy_dataset(
     with patch("builtins.open", mock_open(read_data=mock_file_list)):
         with patch("random.shuffle") as mock_shuffle:
             ds = LSC_hfield_policy_DataSet(
-                LSC_NPZ_DIR, filelist, design_file, field_list
+                LSC_NPZ_DIR, filelist, design_file, half_image, field_list
             )
             mock_shuffle.assert_called_once()
 
@@ -396,12 +398,12 @@ def test_policy_init(mock_policy_dataset: LSC_hfield_policy_DataSet) -> None:
     assert mock_policy_dataset.filelist == ["mock_file_1", "mock_file_2", "mock_file_3"]
     # Cartesian product of two files
     assert len(mock_policy_dataset.state_target_list) == 9
-    assert mock_policy_dataset.hydro_fields == ["density_throw"]
+    assert mock_policy_dataset.hydro_fields == ("density_throw",)
 
 
 def test_policy_len(mock_policy_dataset: LSC_hfield_policy_DataSet) -> None:
     """Test the __len__ method."""
-    assert len(mock_policy_dataset) == 9
+    assert len(mock_policy_dataset) == int(1e6)
 
 
 @patch("yoke.datasets.lsc_dataset.LSCread_npz_NaN", side_effect=mock_LSCread_npz_NaN)

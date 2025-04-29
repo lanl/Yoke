@@ -26,8 +26,8 @@ class generalMLP(nn.Module):
     Args:
         input_dim (int): Dimension of input
         output_dim (int): Dimension of output
-        hidden_feature_list (list[int]): List of number of features in each layer. Length
-                                         determines number of layers.
+        hidden_feature_list (tuple[int, ...]): List of number of features in each layer.
+                                               Length determines number of layers.
         act_layer (nn.modules.activation): torch neural network layer class to
                                            use as activation
         norm_layer (nn.Module): Normalization layer.
@@ -38,7 +38,7 @@ class generalMLP(nn.Module):
         self,
         input_dim: int = 64,
         output_dim: int = 16,
-        hidden_feature_list: list[int] = [16, 32, 32, 16],
+        hidden_feature_list: tuple[int, ...] = (16, 32, 32, 16),
         act_layer: nn.Module = nn.GELU,
         norm_layer: nn.Module = nn.LayerNorm,
     ) -> None:
@@ -51,9 +51,8 @@ class generalMLP(nn.Module):
         self.act_layer = act_layer
         self.norm_layer = norm_layer
 
-        self.feature_list = hidden_feature_list
-        self.feature_list.insert(0, input_dim)
-        self.feature_list.append(self.output_dim)
+        # Create full feature list without mutating input
+        self.feature_list = (input_dim,) + hidden_feature_list + (output_dim,)
 
         # Module list to hold linear, normalization, and activation layers.
         self.LayerList = nn.ModuleList()
@@ -111,10 +110,10 @@ class hybrid2vectorCNN(nn.Module):
         kernel (int): Size of symmetric convolutional kernels
         img_embed_dim (int): Number of features in MLP output from image embeddings.
         vector_embed_dim (int): Number of features in MLP output from image embeddings.
-        vector_feature_list (list[int]): Number of features in each hidden layer of
-                                         vector-MLP.
-        output_feature_list (list[int]): Number of features in each hidden layer of
-                                         final/output-MLP.
+        vector_feature_list (tuple[int, ...]): Number of features in each hidden layer
+                                               of vector-MLP.
+        output_feature_list (tuple[int, ...]): Number of features in each hidden layer
+                                               of final/output-MLP.
         act_layer(nn.Module): torch neural network layer class to use as activation
         norm_layer(nn.Module): torch neural network layer class to use as normalization
                                between MLP layers.
@@ -132,8 +131,8 @@ class hybrid2vectorCNN(nn.Module):
         img_embed_dim: int = 32,
         vector_embed_dim: int = 32,
         size_reduce_threshold: tuple[int, int] = (8, 8),
-        vector_feature_list: list[int] = [32, 32, 64, 64],
-        output_feature_list: list[int] = [64, 128, 128, 64],
+        vector_feature_list: tuple[int, ...] = (32, 32, 64, 64),
+        output_feature_list: tuple[int, ...] = (64, 128, 128, 64),
         act_layer: nn.Module = nn.GELU,
         norm_layer: nn.Module = nn.LayerNorm,
     ) -> None:
@@ -184,7 +183,7 @@ class hybrid2vectorCNN(nn.Module):
         self.lin_embed_h1 = generalMLP(
             input_dim=self.finalH_h1 * self.finalW_h1 * self.features,
             output_dim=self.img_embed_dim,
-            hidden_feature_list=[2 * self.img_embed_dim],
+            hidden_feature_list=(2 * self.img_embed_dim,),
             act_layer=self.act_layer,
             norm_layer=self.norm_layer,
         )
@@ -221,7 +220,7 @@ class hybrid2vectorCNN(nn.Module):
         self.lin_embed_h2 = generalMLP(
             input_dim=self.finalH_h2 * self.finalW_h2 * self.features,
             output_dim=self.img_embed_dim,
-            hidden_feature_list=[2 * self.img_embed_dim],
+            hidden_feature_list=(2 * self.img_embed_dim,),
             act_layer=self.act_layer,
             norm_layer=self.norm_layer,
         )
@@ -306,7 +305,7 @@ if __name__ == "__main__":
         features=12,
         img_embed_dim=32,
         vector_embed_dim=32,
-        vector_feature_list=[32, 32, 64, 64],
+        vector_feature_list=(32, 32, 64, 64),
         depth=12,
         kernel=3,
         size_reduce_threshold=(8, 8),
