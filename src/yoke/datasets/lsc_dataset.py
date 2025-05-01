@@ -271,6 +271,41 @@ class LSCnorm_cntr2rho_DataSet(Dataset):
         return norm_sim_params, unbias_true_image
 
 
+def volfrac_density(tmp_img: np.ndarray, npz_filename: str, hfield: str) -> np.ndarray:
+    """Reweight densities by volume fraction.
+
+    If `hfield` has the prefix 'density_', multiply `tmp_img` by the corresponding
+    volume fraction field from the .npz file.
+
+    Args:
+        tmp_img (np.ndarray): The field to be reweighted.
+        npz_filename (str): The filename of the .npz file.
+        hfield (str): The field name to check for volume fraction.
+
+    Returns:
+        np.ndarray: The reweighted image.
+
+    """
+    prefix = "density_"
+
+    # Check if the field name starts with the prefix 'density_'
+    if hfield.startswith(prefix):
+        # Extract the suffix after 'density_'
+        suffix = hfield[len(prefix) :]
+    else:
+        # If the prefix is not found, return the original image
+        return tmp_img
+
+    if not suffix:
+        print(f"[load_npz_dataset.py] Could not extract suffix from hfield: {hfield}")
+        return tmp_img
+
+    vofm_hfield = "vofm_" + suffix
+    vofm = LSCread_npz_NaN(npz_filename, vofm_hfield)
+
+    return tmp_img * vofm
+
+
 class LSC_cntr2hfield_DataSet(Dataset):
     """Contour to set of fields dataset."""
 
@@ -279,6 +314,7 @@ class LSC_cntr2hfield_DataSet(Dataset):
         LSC_NPZ_DIR: str,
         filelist: str,
         design_file: str,
+        half_image: bool = True,
         field_list: list[str] = ["density_throw"],
     ) -> None:
         """Initialization of class.
@@ -291,6 +327,7 @@ class LSC_cntr2hfield_DataSet(Dataset):
             LSC_NPZ_DIR (str): Location of LSC NPZ files. A YOKE env variable.
             filelist (str): Text file listing file names to read
             design_file (str): Full-path to .csv file with master design study parameters
+            half_image (bool): If True then returned images are NOT reflected about axis
             field_list (List[str]): List of hydro-dynamic fields to include as channels
                                     in image.
 
@@ -299,6 +336,7 @@ class LSC_cntr2hfield_DataSet(Dataset):
         self.LSC_NPZ_DIR = LSC_NPZ_DIR
         self.filelist = filelist
         self.design_file = design_file
+        self.half_image = half_image
         self.hydro_fields = field_list
 
         # Create filelist
@@ -326,6 +364,14 @@ class LSC_cntr2hfield_DataSet(Dataset):
         hfield_list = []
         for hfield in self.hydro_fields:
             tmp_img = LSCread_npz_NaN(npz, hfield)
+            # Reweight densities by volume fraction
+            tmp_img = volfrac_density(tmp_img, npz, hfield)
+
+            # Reflect image if not half_image
+            if not self.half_image:
+                tmp_img = np.concatenate((np.fliplr(tmp_img), tmp_img), axis=1)
+
+            # Concatenate images channel first.
             hfield_list.append(tmp_img)
 
         # Concatenate images channel first.
@@ -347,41 +393,45 @@ def neg_mse_loss(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
 
 
 class LSC_hfield_reward_DataSet(Dataset):
-    """Hydro-field discrepancy reward dataset."""
+    """Hydro-field discrepancy reward dataset.
+
+    The definition of a dataset object for the *Layered Shaped Charge* data
+    which produces tuples `(y', H', H*, -MSE(H', H*))`. `y'` is the vector
+    of B-spline contour-nodes. `H'` is the tensor of hydro-fields at final
+    time corresponding to `y'`. `H*` is a *target* tensor of hydro-fields
+    at final time, chosen randomly from the available training data.
+
+    A *value* network will be pre-trained from this dataset to use in a
+    *proximal policy optimization* (PPO) reinforcement learning algorithm.
+
+    Args:
+        LSC_NPZ_DIR (str): Location of LSC NPZ files. A YOKE env variable.
+        filelist (str): Text file listing file names to read
+        design_file (str): Full-path to .csv file with master design study parameters
+        half_image (bool): If True then returned images are NOT reflected about axis
+                           of symmetry and half-images are returned instead.
+        field_list (tuple[str, ...]): List of hydro-dynamic fields to include as channels
+                                      in image.
+        reward_fn (Callable): Function taking two torch.tensor and returning a
+                              scalar reward.
+
+    """
 
     def __init__(
         self,
         LSC_NPZ_DIR: str,
         filelist: str,
         design_file: str,
-        field_list: list[str] = ["density_throw"],
+        half_image: bool = True,
+        field_list: tuple[str, ...] = ("density_throw",),
         reward_fn: Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = neg_mse_loss,
     ) -> None:
-        """Initialization of class.
-
-        The definition of a dataset object for the *Layered Shaped Charge* data
-        which produces tuples `(y', H', H*, -MSE(H', H*))`. `y'` is the vector
-        of B-spline contour-nodes. `H'` is the tensor of hydro-fields at final
-        time corresponding to `y'`. `H*` is a *target* tensor of hydro-fields
-        at final time, chosen randomly from the available training data.
-
-        A *value* network will be pre-trained from this dataset to use in a
-        *proximal policy optimization* (PPO) reinforcement learning algorithm.
-
-        Args:
-            LSC_NPZ_DIR (str): Location of LSC NPZ files. A YOKE env variable.
-            filelist (str): Text file listing file names to read
-            design_file (str): Full-path to .csv file with master design study parameters
-            field_list (list[str]): List of hydro-dynamic fields to include as channels
-                                    in image.
-            reward_fn (Callable): Function taking two torch.tensor and returning a
-                                  scalar reward.
-
-        """
+        """Initialization of class."""
         # Model Arguments
         self.LSC_NPZ_DIR = LSC_NPZ_DIR
         self.filelist = filelist
         self.design_file = design_file
+        self.half_image = half_image
         self.hydro_fields = field_list
         self.reward = reward_fn
 
@@ -399,7 +449,7 @@ class LSC_hfield_reward_DataSet(Dataset):
 
     def __len__(self) -> int:
         """Return number of samples in dataset."""
-        return self.Nsamples
+        return int(1e6)
 
     def __getitem__(
         self, index: int
@@ -417,9 +467,25 @@ class LSC_hfield_reward_DataSet(Dataset):
         target_hfield_list = []
         for hfield in self.hydro_fields:
             tmp_img = LSCread_npz_NaN(state_npz, hfield)
+            # Reweight densities by volume fraction
+            tmp_img = volfrac_density(tmp_img, state_npz, hfield)
+
+            # Reflect image if not half_image
+            if not self.half_image:
+                tmp_img = np.concatenate((np.fliplr(tmp_img), tmp_img), axis=1)
+
+            # Concatenate images channel first.
             state_hfield_list.append(tmp_img)
 
             tmp_img = LSCread_npz_NaN(target_npz, hfield)
+            # Reweight densities by volume fraction
+            tmp_img = volfrac_density(tmp_img, target_npz, hfield)
+
+            # Reflect image if not half_image
+            if not self.half_image:
+                tmp_img = np.concatenate((np.fliplr(tmp_img), tmp_img), axis=1)
+
+            # Concatenate images channel first.
             target_hfield_list.append(tmp_img)
 
         # Concatenate images channel first.
@@ -451,39 +517,43 @@ class LSC_hfield_reward_DataSet(Dataset):
 
 
 class LSC_hfield_policy_DataSet(Dataset):
-    """Hydro-field policy dataset."""
+    """Hydro-field policy dataset.
+
+    The definition of a dataset object for the *Layered Shaped Charge* data
+    which produces tuples `(y', H', H*, x=y*-y')`. `y'` is the vector of
+    B-spline contour-nodes. `H'` is the tensor of hydro-fields at final
+    time corresponding to `y'`. `H*` is a *target* tensor of hydro-fields
+    at final time, chosen randomly from the available training data. The
+    optimal *policy*, `x=y* - y'` is the prediction goal for this dataset.
+
+    A *policy* network will be pre-trained from this dataset to use in a
+    *proximal policy optimization* (PPO) reinforcement learning algorithm.
+
+    Args:
+        LSC_NPZ_DIR (str): Location of LSC NPZ files. A YOKE env variable.
+        filelist (str): Text file listing file names to read
+        design_file (str): Full-path to .csv file with master design study parameters
+        half_image (bool): If True then returned images are NOT reflected about axis
+                           of symmetry and half-images are returned instead.
+        field_list (tuple[str, ...]): List of hydro-dynamic fields to include as channels
+                                      in image.
+
+    """
 
     def __init__(
         self,
         LSC_NPZ_DIR: str,
         filelist: str,
         design_file: str,
-        field_list: list[str] = ["density_throw"],
+        half_image: bool = True,
+        field_list: tuple[str, ...] = ("density_throw",),
     ) -> None:
-        """Initialization of class.
-
-        The definition of a dataset object for the *Layered Shaped Charge* data
-        which produces tuples `(y', H', H*, x=y*-y')`. `y'` is the vector of
-        B-spline contour-nodes. `H'` is the tensor of hydro-fields at final
-        time corresponding to `y'`. `H*` is a *target* tensor of hydro-fields
-        at final time, chosen randomly from the available training data. The
-        optimal *policy*, `x=y* - y'` is the prediction goal for this dataset.
-
-        A *policy* network will be pre-trained from this dataset to use in a
-        *proximal policy optimization* (PPO) reinforcement learning algorithm.
-
-        Args:
-            LSC_NPZ_DIR (str): Location of LSC NPZ files. A YOKE env variable.
-            filelist (str): Text file listing file names to read
-            design_file (str): Full-path to .csv file with master design study parameters
-            field_list (list[str]): List of hydro-dynamic fields to include as channels
-                                    in image.
-
-        """
+        """Initialization of class."""
         # Model Arguments
         self.LSC_NPZ_DIR = LSC_NPZ_DIR
         self.filelist = filelist
         self.design_file = design_file
+        self.half_image = half_image
         self.hydro_fields = field_list
 
         # Create filelist
@@ -500,7 +570,7 @@ class LSC_hfield_policy_DataSet(Dataset):
 
     def __len__(self) -> int:
         """Return number of samples in dataset."""
-        return self.Nsamples
+        return int(1e6)
 
     def __getitem__(
         self, index: int
@@ -518,9 +588,25 @@ class LSC_hfield_policy_DataSet(Dataset):
         target_hfield_list = []
         for hfield in self.hydro_fields:
             tmp_img = LSCread_npz_NaN(state_npz, hfield)
+            # Reweight densities by volume fraction
+            tmp_img = volfrac_density(tmp_img, state_npz, hfield)
+
+            # Reflect image if not half_image
+            if not self.half_image:
+                tmp_img = np.concatenate((np.fliplr(tmp_img), tmp_img), axis=1)
+
+            # Concatenate images channel first.
             state_hfield_list.append(tmp_img)
 
             tmp_img = LSCread_npz_NaN(target_npz, hfield)
+            # Reweight densities by volume fraction
+            tmp_img = volfrac_density(tmp_img, target_npz, hfield)
+
+            # Reflect image if not half_image
+            if not self.half_image:
+                tmp_img = np.concatenate((np.fliplr(tmp_img), tmp_img), axis=1)
+
+            # Concatenate images channel first.
             target_hfield_list.append(tmp_img)
 
         # Concatenate images channel first.
@@ -633,7 +719,7 @@ class LSC_rho2rho_temporal_DataSet(Dataset):
 
     def __len__(self) -> int:
         """Return effectively infinite number of samples in dataset."""
-        return int(8e5)
+        return int(1e6)
 
     def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Return a tuple of a batch's input and output data."""
@@ -716,13 +802,25 @@ class LSC_rho2rho_temporal_DataSet(Dataset):
         end_img_list = []
         for hfield in self.hydro_fields:
             tmp_img = LSCread_npz_NaN(start_npz, hfield)
+            # Reweight densities by volume fraction
+            tmp_img = volfrac_density(tmp_img, start_npz, hfield)
+
+            # Reflect image if not half_image
             if not self.half_image:
                 tmp_img = np.concatenate((np.fliplr(tmp_img), tmp_img), axis=1)
+
+            # Concatenate images channel first.
             start_img_list.append(tmp_img)
 
             tmp_img = LSCread_npz_NaN(end_npz, hfield)
+            # Reweight densities by volume fraction
+            tmp_img = volfrac_density(tmp_img, end_npz, hfield)
+
+            # Reflect image if not half_image
             if not self.half_image:
                 tmp_img = np.concatenate((np.fliplr(tmp_img), tmp_img), axis=1)
+
+            # Concatenate images channel first.
             end_img_list.append(tmp_img)
 
         # Concatenate images channel first.
@@ -858,11 +956,14 @@ class LSC_rho2rho_sequential_DataSet(Dataset):
             field_imgs = []
             for hfield in self.hydro_fields:
                 tmp_img = LSCread_npz_NaN(data_npz, hfield)
+                # Reweight densities by volume fraction
+                tmp_img = volfrac_density(tmp_img, data_npz, hfield)
 
                 # Reflect image if not half_image
                 if not self.half_image:
                     tmp_img = np.concatenate((np.fliplr(tmp_img), tmp_img), axis=1)
 
+                # Concatenate images channel first.
                 field_imgs.append(tmp_img)
 
             data_npz.close()

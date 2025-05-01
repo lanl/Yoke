@@ -41,12 +41,12 @@ def test_general_mlp_forward_pass(default_general_mlp: generalMLP) -> None:
 @pytest.mark.parametrize(
     "input_dim,output_dim,hidden_features",
     [
-        (64, 16, [16, 32, 32, 16]),
-        (128, 32, [64, 128, 64]),
+        (64, 16, (16, 32, 32, 16)),
+        (128, 32, (64, 128, 64)),
     ],
 )
 def test_general_mlp_custom_initialization(
-    input_dim: int, output_dim: int, hidden_features: list[int]
+    input_dim: int, output_dim: int, hidden_features: tuple[int, ...]
 ) -> None:
     """Test generalMLP initialization with custom parameters."""
     model = generalMLP(
