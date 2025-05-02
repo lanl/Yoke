@@ -69,7 +69,7 @@ parser.add_argument(
     "-R",
     action="store",
     type=str,
-    default="lsc240420_id_00101_pvi",
+    default="lsc240420_id00101_pvi",
     help="Run identifier.",
 )
 
@@ -165,7 +165,12 @@ if __name__ == "__main__":
         Hfield = np.concatenate((np.fliplr(Hfield), Hfield), axis=1)
         print("Shape of Hfield: ", Hfield.shape)
 
-        print(Hfield.shape)
+        # If studying volumetric weighting
+        VOLWGT = False
+        if VOLWGT:
+            vol_frac = singlePVIarray(npzfile=npzfile, FIELD="vofm_throw")
+            vol_frac = np.concatenate((np.fliplr(vol_frac), vol_frac), axis=1)
+            Hfield = vol_frac * Hfield
 
         # Plot normalized radiograph and density field for diagnostics.
         fig1, ax1 = plt.subplots(1, 1, figsize=(12, 12))
@@ -182,12 +187,23 @@ if __name__ == "__main__":
 
         divider1 = make_axes_locatable(ax1)
         cax1 = divider1.append_axes("right", size="10%", pad=0.1)
-        fig1.colorbar(img1, cax=cax1).set_label(f"{FIELD}", fontsize=14)
+        if VOLWGT:
+            fig1.colorbar(img1, cax=cax1).set_label(
+                f"Volume weighted {FIELD}", fontsize=14
+            )
+        else:
+            fig1.colorbar(img1, cax=cax1).set_label(f"{FIELD}", fontsize=14)
 
         if SAVEFIG:
-            fig1.savefig(
-                os.path.join(outdir, f"{runID}_idx{pviIDX:05d}_{FIELD}.png"),
-                bbox_inches="tight",
-            )
+            if VOLWGT:
+                fig1.savefig(
+                    os.path.join(outdir, f"{runID}_idx{pviIDX:05d}_volwgt_{FIELD}.png"),
+                    bbox_inches="tight",
+                )
+            else:
+                fig1.savefig(
+                    os.path.join(outdir, f"{runID}_idx{pviIDX:05d}_{FIELD}.png"),
+                    bbox_inches="tight",
+                )
         else:
             plt.show()

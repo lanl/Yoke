@@ -1,8 +1,0 @@
-studyIDX,YOKE_TORCH_ENV,NGPUS,KNODES,EMBED_DIM,B0,B1,B2,B3,NUM_WORKERS,PREFETCH_FACTOR,BATCH_SIZE,NTRN_BATCH,NVAL_BATCH,ANCHOR_LR,NUM_CYCLES,MIN_FRACTION,TERMINAL_STEPS,WARMUP_STEPS,train_script
-1,torch_ve_gpu_241107,4,2,512,1,1,11,2,8,2,16,10,10,1.0e-4,0.5,0.5,1000,500,train_LodeRunner_lightning.py
-# with just fabric
-#2,torch_ve_gpu_241107,4,2,512,1,1,11,2,4,2,8,10,10,1.0e-4,0.5,0.5,1000,500,train_LodeRunner_fabric.py
-# with torchrun
-#3,torch_ve_gpu_241107,4,2,512,1,1,11,2,8,2,16,10,10,1.0e-4,0.5,0.5,1000,500,train_LodeRunner_fabric.py
-# with srun
-#4,torch_ve_gpu_241107,4,2,512,1,1,11,2,8,2,16,10,10,1.0e-4,0.5,0.5,1000,500,train_LodeRunner_fabric.py

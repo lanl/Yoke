@@ -1,2 +1,0 @@
-train_LodeRunner_stepLRsched.py
-train_LodeRunner_halfimage.py

@@ -1,9 +1,8 @@
 --indir
-/lustre/vescratch1/exempt/artimis/mpmm/lsc240420/
+/data2/lsc240420/
 --outdir
 ./
+--runID
+lsc240420_id00101_pvi
 --pviIDX
 100
---field
-av_density
---save

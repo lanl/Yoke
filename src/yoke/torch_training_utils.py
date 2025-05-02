@@ -360,13 +360,15 @@ def make_distributed_dataloader(
         shuffle=shuffle,
         )
 
+    pin_memory = True if torch.cuda.is_available() else False
+
     return torch.utils.data.DataLoader(
         dataset,
         batch_size=batch_size,
         sampler=sampler,
         drop_last=True,  # Ensures uniform batch size
         num_workers=num_workers,
-        pin_memory=True,
+        pin_memory=pin_memory,
         prefetch_factor=2
     )
 
@@ -378,7 +380,8 @@ def make_dataloader(
     num_workers: int = 4,
     prefetch_factor: int = 2,
 ):
-    """Function to create a pytorch dataloader from a pytorch dataset
+    """Function to create a pytorch dataloader from a pytorch dataset.
+
     **https://pytorch.org/docs/stable/data.html#torch.utils.data.DataLoader**
     Each dataloader has batch_size*num_batches samples randomly selected
     from the dataset
@@ -397,6 +400,7 @@ def make_dataloader(
     # Use randomsampler instead of just shuffle=True so we can specify the
     # number of batchs during an epoch.
     randomsampler = RandomSampler(dataset, num_samples=batch_size * num_batches)
+    pin_memory = True if torch.cuda.is_available() else False
     dataloader = DataLoader(
         dataset,
         batch_size=batch_size,
@@ -404,7 +408,7 @@ def make_dataloader(
         num_workers=num_workers,
         persistent_workers=True,
         prefetch_factor=prefetch_factor,
-        pin_memory=True,
+        pin_memory=pin_memory,
     )
 
     return dataloader

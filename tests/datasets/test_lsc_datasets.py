@@ -194,6 +194,7 @@ def test_cntr2field_dataset_length(
         LSC_NPZ_DIR=files["npz_dir"],
         filelist=files["filelist"],
         design_file=files["design_file"],
+        half_image=True,
     )
 
     assert len(dataset) == 1
@@ -220,6 +221,7 @@ def test_cntr2field_dataset_getitem(
         LSC_NPZ_DIR=files["npz_dir"],
         filelist=files["filelist"],
         design_file=files["design_file"],
+        half_image=True,
     )
 
     geom_params, hfield = dataset[0]

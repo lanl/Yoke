@@ -1,7 +1,0 @@
-studyIDX,YOKE_TORCH_ENV,NGPUS,KNODES,EMBED_DIM,B0,B1,B2,B3,NUM_WORKERS,BATCH_SIZE,NTRN_BATCH,NVAL_BATCH,ANCHOR_LR,NUM_CYCLES,MIN_FRACTION,TERMINAL_STEPS,WARMUP_STEPS,train_script
-#1,torch_ve_gpu_241107,4,2,512,1,1,11,2,2,2,100,100,1.0e-4,0.5,0.5,1000,500,train_LodeRunner_fabric.py
-#2,torch_ve_gpu_241107,4,2,512,1,1,11,2,2,3,100,100,1.0e-4,0.5,0.5,1000,500,train_LodeRunner_fabric.py
-#3,torch_ve_gpu_241107,4,2,512,1,1,11,2,2,4,100,100,1.0e-4,0.5,0.5,1000,500,train_LodeRunner_fabric.py
-4,torch_ve_gpu_241107,4,3,512,1,1,11,2,2,4,100,100,1.0e-4,0.5,0.5,1000,500,train_LodeRunner_fabric.py
-5,torch_ve_gpu_241107,4,4,512,1,1,11,2,2,4,100,100,1.0e-4,0.5,0.5,1000,500,train_LodeRunner_fabric.py
-6,torch_ve_gpu_241107,4,5,512,1,1,11,2,2,4,100,100,1.0e-4,0.5,0.5,1000,500,train_LodeRunner_fabric.py
