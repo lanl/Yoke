@@ -28,13 +28,13 @@ def add_default_args(parser: argparse.ArgumentParser = None) -> argparse.Argumen
         default="./hyperparameters.csv",
         help="CSV file containing study hyperparameters",
     )
-    parser.add_argument(
-        "--studyIDX",
-        action="store",
-        type=int,
-        default=1,
-        help="Study ID number to match hyperparameters",
-    )
+    # parser.add_argument(
+    #     "--studyIDX",
+    #     action="store",
+    #     type=int,
+    #     default=1,
+    #     help="Study ID number to match hyperparameters",
+    # )
     parser.add_argument(
         "--rundir",
         action="store",
@@ -54,6 +54,11 @@ def add_default_args(parser: argparse.ArgumentParser = None) -> argparse.Argumen
             "Name of text file containing local files that should be copied to the "
             "study directory."
         ),
+    )
+    parser.add_argument(
+        "--dryrun",
+        action="store_true",
+        help="Run through all setup steps without submitting jobs.",
     )
 
     return parser
