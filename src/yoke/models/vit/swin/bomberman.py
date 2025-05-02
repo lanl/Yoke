@@ -402,7 +402,7 @@ if __name__ == "__main__":
         lode_runner,
         in_vars=x_vars,
         out_vars=out_vars,
-        lrscheduler=CosineWithWarmupScheduler,
+        lr_scheduler=CosineWithWarmupScheduler,
         scheduler_params={
             "warmup_steps": 500,
             "anchor_lr": 1e-3,
