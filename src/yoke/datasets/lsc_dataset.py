@@ -896,11 +896,10 @@ class LSC_rho2rho_sequential_DataSet(Dataset):
             self.file_prefix_list = [line.rstrip() for line in f]
 
         # Random number generator
-        rng = np.random.default_rng()
-        self.rng = rng
+        self.rng = np.random.default_rng()
 
         # Shuffle the prefixes for randomness
-        rng.shuffle(self.file_prefix_list)
+        self.rng.shuffle(self.file_prefix_list)
         self.Nsamples = len(self.file_prefix_list)
 
         # Fields to extract from the simulation
