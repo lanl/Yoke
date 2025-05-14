@@ -23,7 +23,7 @@ from yoke.models.surrogateCNNmodules import tCNNsurrogate
 from yoke.datasets.lsc_dataset import LSC_cntr2hfield_DataSet  # SH
 import yoke.torch_training_utils as tr
 from yoke.helpers import cli
-# from yoke.lr_schedulers import CosineWithWarmupScheduler
+from yoke.lr_schedulers import CosineWithWarmupScheduler
 
 
 #  Smyther
@@ -66,7 +66,7 @@ parser = cli.add_computing_args(parser=parser)
 parser = cli.add_model_args(parser=parser)
 parser = cli.add_training_args(parser=parser)
 parser = cli.add_step_lr_scheduler_args(parser=parser)  # SH - kept this for init_learnrate
-# parser = cli.add_cosine_lr_scheduler_args(parser=parser)
+parser = cli.add_cosine_lr_scheduler_args(parser=parser)
 
 # Change some default filepaths.
 parser.set_defaults(design_file="design_lsc240420_MASTER.csv")
@@ -97,7 +97,12 @@ if __name__ == "__main__":
     # Training Parameters
     initial_learningrate = args.init_learnrate
     batch_size = args.batch_size
-
+    
+    terminal_steps = args.terminal_steps
+    warmup_steps   = args.warmup_steps
+    num_cycles     = args.num_cycles
+    min_fraction   = args.min_fraction
+    anchor_lr      = args.anchor_lr
 
     # Leave one CPU out of the worker queue. Not sure if this is necessary.
     num_workers = int(os.environ["SLURM_JOB_CPUS_PER_NODE"])  # - 1
@@ -215,7 +220,26 @@ if __name__ == "__main__":
         # modes that may
         # provide better
         # performance
+    
+    #############################################
+    # Learning Rate Scheduler
+    #############################################
+    if starting_epoch == 0:
+        last_epoch = -1
+    else:
+        last_epoch = train_batches * (starting_epoch - 1)
+    
+    LRsched = CosineWithWarmupScheduler(
+        optimizer,
+        anchor_lr=anchor_lr,
+        terminal_steps=terminal_steps,
+        warmup_steps=warmup_steps,
+        num_cycles=num_cycles,
+        min_fraction=min_fraction,
+        last_epoch=last_epoch,
+    )
 
+    
     #############################################
     # Initialize Data
     #############################################
@@ -254,19 +278,21 @@ if __name__ == "__main__":
         startTime = time.time()
 
         # Train an Epoch
-        tr.train_array_csv_epoch(
+        tr.train_array_csv_batch(
             training_data=train_dataloader,
             validation_data=val_dataloader,
             model=compiled_model,
             optimizer=optimizer,
             loss_fn=loss_fn,
+            LRsched=LRsched,
             epochIDX=epochIDX,
             train_per_val=train_per_val,
             train_rcrd_filename=trn_rcrd_filename,
             val_rcrd_filename=val_rcrd_filename,
             device=device,
         )
-
+        
+        LRsched.step()
 
         endTime = time.time()
         epoch_time = (endTime - startTime) / 60
