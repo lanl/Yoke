@@ -1,0 +1,3 @@
+studyIDX,train_script,conv1,conv2,conv3,conv4,epochs,batch-size,lr
+1,applications/harnesses/mnist_surrogate/mnist_harness.py,16,28,64,128,3,64,1.0
+2,applications/harnesses/mnist_surrogate/mnist_harness.py,28,28,28,28,3,64,1.0
