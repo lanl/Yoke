@@ -8,12 +8,15 @@ data, *lsc240420*.
 ####################################
 # Packages
 ####################################
+import glob
 import itertools
+import os
 from pathlib import Path
 import random
+import re
 import sys
 import typing
-from typing import Callable
+from typing import Callable, Union
 
 import lightning.pytorch as L
 import numpy as np
@@ -989,7 +992,170 @@ class LSC_rho2rho_sequential_DataSet(Dataset):
         Dt = torch.tensor(0.25 * self.timeIDX_offset, dtype=torch.float32)
 
         return img_seq, Dt
+class LSC_sequential_all2all(Dataset):
+    """Returns all timestep combinations of a given sequnece length.
 
+    Args:
+        LSC_NPZ_DIR (str): Location of LSC NPZ files.
+        file_prefix_list (str): Text file listing unique prefixes corresponding
+            to unique simulations.
+        seq_len (int): Number of consecutive frames to return. This includes the
+            starting frame.
+        half_image (bool): If True, returns half-images, otherwise full images.
+        hydro_fields (np.array): Array of hydro field names to be included.
+        timeIDX_offset (list[int], tuple[int]): File indices (corresponding to time)
+            between frames in the returned sequence.  Setting to None will
+            return all possible time offsets (including negative offsets).
+        transform (Callable): Transform applied to loaded data sequence before returning.
+    """
+
+    def __init__(
+        self,
+        LSC_NPZ_DIR: str,
+        file_prefix_list: str,
+        seq_len: int = 2,
+        half_image: bool = True,
+        hydro_fields: np.array = np.array(
+            [
+                "density_case",
+                "density_cushion",
+                "density_maincharge",
+                "density_outside_air",
+                "density_striker",
+                "density_throw",
+                "Uvelocity",
+                "Wvelocity",
+            ]
+        ),
+        timeIDX_offset: Union[int, list[int], tuple[int]] = None,
+        transform: Callable = None,
+        *args,
+        **kwargs,
+    ) -> None:
+        """Initialization for LSC sequential dataset."""
+        dir_path = Path(LSC_NPZ_DIR)
+        # Ensure the directory exists and is indeed a directory
+        if not dir_path.is_dir():
+            raise FileNotFoundError(f"Directory not found: {LSC_NPZ_DIR}")
+
+        self.LSC_NPZ_DIR = LSC_NPZ_DIR
+        self.seq_len = seq_len
+        self.half_image = half_image
+        self.transform = transform
+
+        # Load the list of file prefixes
+        with open(file_prefix_list) as f:
+            self.file_prefix_list = [line.rstrip() for line in f]
+
+        # Random number generator
+        self.rng = np.random.default_rng()
+
+        # Shuffle the prefixes for randomness
+        self.rng.shuffle(self.file_prefix_list)
+
+        # Find all files.
+        all_files = []
+        for prefix in self.file_prefix_list:
+            for f in glob.glob(os.path.join(LSC_NPZ_DIR, f"{prefix}*.npz")):
+                all_files.append((prefix, f))
+
+        # Extract time indices from file names.
+        time_inds = [
+            int(re.search(file[0] + r"_pvi_idx(?P<idx>\d*).npz", file[1])["idx"])
+            for file in all_files
+        ]
+
+        # Set default time offsets.
+        if timeIDX_offset is None:
+            max_dt = max(time_inds) - min(time_inds)
+            timeIDX_offset = list(range(-max_dt, max_dt + 1))
+        self.timeIDX_offset = (
+            [timeIDX_offset] if isinstance(timeIDX_offset, int) else timeIDX_offset
+        )
+
+        # Find valid file sequences at each time offset.
+        valid_seq = []  # [(file sequence, time offset)]
+        for dt in self.timeIDX_offset:
+            for n, file in enumerate(all_files):
+                # Determine starting index from file name.
+                startIDX = int(
+                    re.search(file[0] + r"_pvi_idx(?P<idx>\d*).npz", file[1])["idx"]
+                )
+
+                # Search for subsequent indices.
+                curr_seq = [file[1]]
+                for t in range(1, seq_len):
+                    next_file = os.path.join(
+                        self.LSC_NPZ_DIR,
+                        f"{file[0]}_pvi_idx{startIDX+t*dt:05d}.npz",
+                    )
+                    if os.path.exists(next_file):
+                        curr_seq.append(next_file)
+                    else:
+                        break
+
+                # If the full sequence was available, append to valid_seq.
+                if len(curr_seq) == seq_len:
+                    valid_seq.append((curr_seq, dt))
+
+        self.valid_seq = valid_seq
+        self.Nsamples = len(valid_seq)
+
+        # Fields to extract from the simulation
+        self.hydro_fields = hydro_fields
+
+    def __len__(self) -> int:
+        """Return the number of samples in the dataset."""
+        return self.Nsamples
+
+    def __getitem__(
+        self, index: int
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Return a sequence of consecutive frames."""
+        # Rotate index if necessary
+        index = index % self.Nsamples
+
+        # Load and process the sequence of frames
+        frames = []
+        for file_path in self.valid_seq[index][0]:
+            try:
+                data_npz = np.load(file_path)
+            except Exception as e:
+                raise RuntimeError(f"Error loading file: {file_path}") from e
+
+            field_imgs = []
+            for hfield in self.hydro_fields:
+                tmp_img = LSCread_npz_NaN(data_npz, hfield)
+
+                # Reweight densities by volume fraction
+                tmp_img = volfrac_density(tmp_img, data_npz, hfield)
+
+                # Reflect image if not half_image
+                if not self.half_image:
+                    tmp_img = np.concatenate((np.fliplr(tmp_img), tmp_img), axis=1)
+
+                # Concatenate images channel first.
+                field_imgs.append(tmp_img)
+
+            data_npz.close()
+
+            # Stack the fields for this frame
+            field_tensor = torch.tensor(
+                np.stack(field_imgs, axis=0), dtype=torch.float32
+            )
+            frames.append(field_tensor)
+
+        # Combine frames into a single tensor of shape [seq_len, num_fields, H, W]
+        img_seq = torch.stack(frames, dim=0)
+
+        # Apply transforms if requested.
+        if self.transform is not None:
+            img_seq = self.transform(img_seq)
+
+        # Fixed time offset
+        Dt = torch.tensor(0.25 * self.valid_seq[index][1], dtype=torch.float32)
+
+        return img_seq, Dt
 
 class LSCDataModule(L.LightningDataModule):
     """Lightning data module for generic LSC datasets.
