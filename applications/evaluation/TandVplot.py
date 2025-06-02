@@ -145,6 +145,9 @@ for Vcsv in val_csv_list:
 # trn_idxlist = trn_DF.index.values
 # val_idxlist = val_DF.index.values
 
+trn_csv_list = ["train.csv"]
+val_csv_list = ["valcsv"]
+
 # Plot loss for training over all steps and epochs
 fig1 = plt.figure(num=1, figsize=(6, 6))
 ax = plt.gca()
