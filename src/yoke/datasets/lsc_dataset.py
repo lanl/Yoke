@@ -1007,6 +1007,8 @@ class LSC_sequential_all2all(Dataset):
             between frames in the returned sequence.  Setting to None will
             return all possible time offsets (including negative offsets).
         transform (Callable): Transform applied to loaded data sequence before returning.
+        path_to_cache (str): Path to a .npz cache file defining valid sequences.  If
+            the file doesn't exist, the generated sequence list will be stored here.
     """
 
     def __init__(
@@ -1029,6 +1031,7 @@ class LSC_sequential_all2all(Dataset):
         ),
         timeIDX_offset: Union[int, list[int], tuple[int]] = None,
         transform: Callable = None,
+        path_to_cache: str = None,
         *args,
         **kwargs,
     ) -> None:
@@ -1042,61 +1045,72 @@ class LSC_sequential_all2all(Dataset):
         self.seq_len = seq_len
         self.half_image = half_image
         self.transform = transform
-
-        # Load the list of file prefixes
-        with open(file_prefix_list) as f:
-            self.file_prefix_list = [line.rstrip() for line in f]
-
-        # Random number generator
         self.rng = np.random.default_rng()
 
-        # Shuffle the prefixes for randomness
-        self.rng.shuffle(self.file_prefix_list)
+        # Load cache if available.
+        if (path_to_cache is not None) and os.path.exists(path_to_cache):
+            cache_data = np.load(path_to_cache)
+            valid_seq = [(s, t) for s, t in zip(cache_data["valid_seq"], cache_data["dt"])]
+        else:
+            # Load the list of file prefixes
+            with open(file_prefix_list) as f:
+                self.file_prefix_list = [line.rstrip() for line in f]
 
-        # Find all files.
-        all_files = []
-        for prefix in self.file_prefix_list:
-            for f in glob.glob(os.path.join(LSC_NPZ_DIR, f"{prefix}*.npz")):
-                all_files.append((prefix, f))
+            # Shuffle the prefixes for randomness
+            self.rng.shuffle(self.file_prefix_list)
 
-        # Extract time indices from file names.
-        time_inds = [
-            int(re.search(file[0] + r"_pvi_idx(?P<idx>\d*).npz", file[1])["idx"])
-            for file in all_files
-        ]
+            # Find all files.
+            all_files = []
+            for prefix in self.file_prefix_list:
+                for f in glob.glob(os.path.join(LSC_NPZ_DIR, f"{prefix}*.npz")):
+                    all_files.append((prefix, f))
 
-        # Set default time offsets.
-        if timeIDX_offset is None:
-            max_dt = max(time_inds) - min(time_inds)
-            timeIDX_offset = list(range(-max_dt, max_dt + 1))
-        self.timeIDX_offset = (
-            [timeIDX_offset] if isinstance(timeIDX_offset, int) else timeIDX_offset
-        )
+            # Extract time indices from file names.
+            time_inds = [
+                int(re.search(file[0] + r"_pvi_idx(?P<idx>\d*).npz", file[1])["idx"])
+                for file in all_files
+            ]
 
-        # Find valid file sequences at each time offset.
-        valid_seq = []  # [(file sequence, time offset)]
-        for dt in self.timeIDX_offset:
-            for n, file in enumerate(all_files):
-                # Determine starting index from file name.
-                startIDX = int(
-                    re.search(file[0] + r"_pvi_idx(?P<idx>\d*).npz", file[1])["idx"]
-                )
+            # Set default time offsets.
+            if timeIDX_offset is None:
+                max_dt = max(time_inds) - min(time_inds)
+                timeIDX_offset = list(range(-max_dt, max_dt + 1))
+            timeIDX_offset = (
+                [timeIDX_offset] if isinstance(timeIDX_offset, int) else timeIDX_offset
+            )
 
-                # Search for subsequent indices.
-                curr_seq = [file[1]]
-                for t in range(1, seq_len):
-                    next_file = os.path.join(
-                        self.LSC_NPZ_DIR,
-                        f"{file[0]}_pvi_idx{startIDX+t*dt:05d}.npz",
+            # Find valid file sequences at each time offset.
+            valid_seq = []  # [(file sequence, time offset)]
+            for dt in timeIDX_offset:
+                for file in all_files:
+                    # Determine starting index from file name.
+                    startIDX = int(
+                        re.search(file[0] + r"_pvi_idx(?P<idx>\d*).npz", file[1])["idx"]
                     )
-                    if os.path.exists(next_file):
-                        curr_seq.append(next_file)
-                    else:
-                        break
 
-                # If the full sequence was available, append to valid_seq.
-                if len(curr_seq) == seq_len:
-                    valid_seq.append((curr_seq, dt))
+                    # Search for subsequent indices.
+                    curr_seq = [file[1]]
+                    for t in range(1, seq_len):
+                        next_file = os.path.join(
+                            self.LSC_NPZ_DIR,
+                            f"{file[0]}_pvi_idx{startIDX+t*dt:05d}.npz",
+                        )
+                        if os.path.exists(next_file):
+                            curr_seq.append(next_file)
+                        else:
+                            break
+
+                    # If the full sequence was available, append to valid_seq.
+                    if len(curr_seq) == seq_len:
+                        valid_seq.append((curr_seq, dt))
+
+            # Save cache.
+            if path_to_cache is not None:
+                np.savez(
+                    path_to_cache,
+                    valid_seq=np.array([f[0] for f in valid_seq]),
+                    dt=np.array([f[1] for f in valid_seq]),
+                )
 
         self.valid_seq = valid_seq
         self.Nsamples = len(valid_seq)
