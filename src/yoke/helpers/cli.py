@@ -55,6 +55,15 @@ def add_default_args(parser: argparse.ArgumentParser = None) -> argparse.Argumen
             "study directory."
         ),
     )
+    parser.add_argument(
+        "--submissionType",
+        choices=["slurm", "shell", "batch"],
+        default="slurm",
+        help=(
+            "Which job‐submission wrapper to use (defaults to slurm, "
+            "choices: slurm, shell, batch).",
+        ),
+    )
 
     return parser
 
