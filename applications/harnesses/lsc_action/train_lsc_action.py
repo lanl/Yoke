@@ -315,8 +315,9 @@ if __name__ == "__main__":
     # Save model and optimizer state in hdf5
     h5_name_str = "study{0:03d}_modelState_epoch{1:04d}.hdf5"
     new_h5_path = os.path.join("./", h5_name_str.format(studyIDX, epochIDX))
+    is_compiled = not args.multigpu
     tr.save_model_and_optimizer_hdf5(
-        compiled_model, optimizer, epochIDX, new_h5_path, compiled=True
+        compiled_model, optimizer, epochIDX, new_h5_path, compiled=is_compiled
     )
 
     #############################################

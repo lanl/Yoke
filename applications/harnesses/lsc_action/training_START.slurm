@@ -16,7 +16,7 @@
 #SBATCH --gres-flags=enforce-binding
 #SBATCH --mem-bind=local
 #SBATCH --mem=120G
-#SBATCH --time=0:30:00
+#SBATCH --time=1:00:00
 #SBATCH --output=study<studyIDX>_epoch0001.out
 #SBATCH --error=study<studyIDX>_epoch0001.err
 #SBATCH -vvv

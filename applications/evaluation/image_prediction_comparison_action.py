@@ -240,7 +240,7 @@ if pred_image.ndim == 2 and pred_image.shape[1] == 2 * true_image.shape[1]:
 
 # Plot Truth/Prediction/Discrepancy panel.
 fig1, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(16, 6))
-fig1.suptitle(f"Time={sim_params[-1]:.3f}us", fontsize=18)
+fig1.suptitle(f"Time={25:.3f}us", fontsize=18)
 img1 = ax1.imshow(
     true_image,
     aspect="equal",
