@@ -125,11 +125,11 @@ def test_getitem_valid_sequence(
     monkeypatch.setattr(
         "yoke.datasets.lsc_dataset.LSCread_npz_NaN", mock_lscread_npz_nan
     )
-    
+
     # Overwrite valid sequence list so we can verify getitem loads fake data.
     dataset.Nsamples = 1
     dataset.valid_seq = [(["", "", ""], 1.0)]
-    
+
     img_seq, dt = dataset[0]
     # seq_len=3, hydro_fields=8 => shape = [3, 8, 2, 2]
     assert img_seq.shape == (3, 8, 2, 2)
