@@ -885,9 +885,7 @@ class LSC_rho2rho_sequential_DataSet(Dataset):
             ]
         ),
         transform: Callable = None,
-        path_to_cache: str = None,
-        *args,
-        **kwargs,
+        path_to_cache: str = None
     ) -> None:
         """Initialization for LSC sequential dataset."""
         dir_path = Path(LSC_NPZ_DIR)
