@@ -70,7 +70,6 @@ def dataset(prefix_list_file: Path, tmp_path: Path) -> LSC_rho2rho_sequential_Da
     return LSC_rho2rho_sequential_DataSet(
         LSC_NPZ_DIR=str(real_lsc_dir),
         file_prefix_list=str(prefix_list_file),
-        max_file_checks=2,
         seq_len=3,
         half_image=True,
     )
@@ -83,7 +82,6 @@ def test_init(prefix_list_file: Path, tmp_path: Path) -> None:
         _ = LSC_rho2rho_sequential_DataSet(
             LSC_NPZ_DIR="non_existent_path",
             file_prefix_list=str(prefix_list_file),
-            max_file_checks=2,
             seq_len=3,
             half_image=True,
         )
@@ -96,7 +94,6 @@ def test_init(prefix_list_file: Path, tmp_path: Path) -> None:
     dataset_obj = LSC_rho2rho_sequential_DataSet(
         LSC_NPZ_DIR=str(real_lsc_dir),
         file_prefix_list=str(prefix_list_file),
-        max_file_checks=2,
         seq_len=3,
         half_image=False,
     )
@@ -157,23 +154,6 @@ def test_getitem_index_wrap(
     assert seq.shape == (3, 8, 2, 2)
 
 
-def test_getitem_no_valid_sequence(
-    dataset: LSC_rho2rho_sequential_DataSet, monkeypatch: MonkeyPatch
-) -> None:
-    """Test that __getitem__ raises a RuntimeError.
-
-    When no valid sequence is found after max_file_checks attempts a
-    RuntimeError is raised.
-
-    """
-    # Force is_file to always return False => invalid sequences
-    monkeypatch.setattr(Path, "is_file", lambda self: False)
-
-    with pytest.raises(RuntimeError) as excinfo:
-        _ = dataset[0]
-    assert "Failed to find valid sequence" in str(excinfo.value)
-
-
 def test_getitem_np_load_error(
     dataset: LSC_rho2rho_sequential_DataSet, monkeypatch: MonkeyPatch
 ) -> None:
@@ -204,7 +184,6 @@ def test_getitem_half_image_false(
     ds = LSC_rho2rho_sequential_DataSet(
         LSC_NPZ_DIR=str(real_lsc_dir),
         file_prefix_list=str(prefix_list_file),
-        max_file_checks=2,
         seq_len=2,
         half_image=False,
     )

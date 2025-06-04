@@ -853,167 +853,13 @@ class LSC_rho2rho_sequential_DataSet(Dataset):
         LSC_NPZ_DIR (str): Location of LSC NPZ files.
         file_prefix_list (str): Text file listing unique prefixes corresponding
             to unique simulations.
-        max_file_checks (int): Maximum number of attempts to find valid file sequences.
         seq_len (int): Number of consecutive frames to return. This includes the
             starting frame.
-        timeIDX_offset (int): File index (corresponds to time) between frames in
-            the returned sequence.
-        half_image (bool): If True, returns half-images, otherwise full images.
-        hydro_fields (np.array): Array of hydro field names to be included.
-        transform (Callable): Transform applied to loaded data sequence before returning.
-    """
-
-    def __init__(
-        self,
-        LSC_NPZ_DIR: str,
-        file_prefix_list: str,
-        max_file_checks: int = 10,
-        seq_len: int = 2,
-        timeIDX_offset: int = 1,
-        half_image: bool = True,
-        hydro_fields: np.array = np.array(
-            [
-                "density_case",
-                "density_cushion",
-                "density_maincharge",
-                "density_outside_air",
-                "density_striker",
-                "density_throw",
-                "Uvelocity",
-                "Wvelocity",
-            ]
-        ),
-        transform: Callable = None,
-    ) -> None:
-        """Initialization for LSC sequential dataset."""
-        dir_path = Path(LSC_NPZ_DIR)
-        # Ensure the directory exists and is indeed a directory
-        if not dir_path.is_dir():
-            raise FileNotFoundError(f"Directory not found: {LSC_NPZ_DIR}")
-
-        self.LSC_NPZ_DIR = LSC_NPZ_DIR
-        self.max_file_checks = max_file_checks
-        self.seq_len = seq_len
-        self.timeIDX_offset = timeIDX_offset
-        self.half_image = half_image
-        self.transform = transform
-
-        # Load the list of file prefixes
-        with open(file_prefix_list) as f:
-            self.file_prefix_list = [line.rstrip() for line in f]
-
-        # Random number generator
-        self.rng = np.random.default_rng()
-
-        # Shuffle the prefixes for randomness
-        self.rng.shuffle(self.file_prefix_list)
-        self.Nsamples = len(self.file_prefix_list)
-
-        # Fields to extract from the simulation
-        self.hydro_fields = hydro_fields
-
-    def __len__(self) -> int:
-        """Return the number of samples in the dataset."""
-        return self.Nsamples
-
-    def __getitem__(
-        self, index: int
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Return a sequence of consecutive frames."""
-        # Rotate index if necessary
-        index = index % self.Nsamples
-        file_prefix = self.file_prefix_list[index]
-
-        # Try multiple attempts to find valid files
-        prefix_attempt = 0
-        while prefix_attempt < self.max_file_checks:
-            # Pick a random start index so that the sequence fits within the range
-            startIDX = self.rng.integers(0, 100 - self.seq_len)
-
-            # Construct the sequence of file paths
-            valid_sequence = True
-            file_paths = []
-            for n in range(self.seq_len):
-                idx = startIDX + self.timeIDX_offset * n
-                file_name = f"{file_prefix}_pvi_idx{idx:05d}.npz"
-                file_path = Path(self.LSC_NPZ_DIR, file_name)
-
-                if not file_path.is_file():
-                    valid_sequence = False
-                    break
-
-                file_paths.append(file_path)
-
-            if valid_sequence:
-                break
-
-            # If no valid sequence found, try the next prefix
-            prefix_attempt += 1
-            index = (index + 1) % self.Nsamples  # Rotate index to try another prefix
-
-        if prefix_attempt == self.max_file_checks:
-            err_msg = (
-                f"Failed to find valid sequence for prefix: {file_prefix} "
-                f"after {self.max_file_checks} attempts."
-            )
-            raise RuntimeError(err_msg)
-
-        # Load and process the sequence of frames
-        frames = []
-        for file_path in file_paths:
-            try:
-                data_npz = np.load(file_path)
-            except Exception as e:
-                raise RuntimeError(f"Error loading file: {file_path}") from e
-
-            field_imgs = []
-            for hfield in self.hydro_fields:
-                tmp_img = LSCread_npz_NaN(data_npz, hfield)
-                # Reweight densities by volume fraction
-                tmp_img = volfrac_density(tmp_img, data_npz, hfield)
-
-                # Reflect image if not half_image
-                if not self.half_image:
-                    tmp_img = np.concatenate((np.fliplr(tmp_img), tmp_img), axis=1)
-
-                # Concatenate images channel first.
-                field_imgs.append(tmp_img)
-
-            data_npz.close()
-
-            # Stack the fields for this frame
-            field_tensor = torch.tensor(
-                np.stack(field_imgs, axis=0), dtype=torch.float32
-            )
-            frames.append(field_tensor)
-
-        # Combine frames into a single tensor of shape [seq_len, num_fields, H, W]
-        img_seq = torch.stack(frames, dim=0)
-
-        # Apply transforms if requested.
-        if self.transform is not None:
-            img_seq = self.transform(img_seq)
-
-        # Fixed time offset
-        Dt = torch.tensor(0.25 * self.timeIDX_offset, dtype=torch.float32)
-
-        return img_seq, Dt
-
-
-class LSC_sequential_all2all(Dataset):
-    """Returns all timestep combinations of a given sequnece length.
-
-    Args:
-        LSC_NPZ_DIR (str): Location of LSC NPZ files.
-        file_prefix_list (str): Text file listing unique prefixes corresponding
-            to unique simulations.
-        seq_len (int): Number of consecutive frames to return. This includes the
-            starting frame.
-        half_image (bool): If True, returns half-images, otherwise full images.
-        hydro_fields (np.array): Array of hydro field names to be included.
-        timeIDX_offset (list[int], tuple[int]): File indices (corresponding to time)
+        timeIDX_offset (int, list[int], tuple[int]): File indices (corresponding to time)
             between frames in the returned sequence.  Setting to None will
-            return all possible time offsets (including negative offsets).
+            return all possible time offsets (including 0 and negative offsets).
+        half_image (bool): If True, returns half-images, otherwise full images.
+        hydro_fields (np.array): Array of hydro field names to be included.
         transform (Callable): Transform applied to loaded data sequence before returning.
         path_to_cache (str): Path to a .npz cache file defining valid sequences.  If
             the file doesn't exist, the generated sequence list will be stored here.
@@ -1024,6 +870,7 @@ class LSC_sequential_all2all(Dataset):
         LSC_NPZ_DIR: str,
         file_prefix_list: str,
         seq_len: int = 2,
+        timeIDX_offset: Union[int, list[int], tuple[int]] = 1,
         half_image: bool = True,
         hydro_fields: np.array = np.array(
             [
@@ -1037,7 +884,6 @@ class LSC_sequential_all2all(Dataset):
                 "Wvelocity",
             ]
         ),
-        timeIDX_offset: Union[int, list[int], tuple[int]] = None,
         transform: Callable = None,
         path_to_cache: str = None,
         *args,
@@ -1103,7 +949,7 @@ class LSC_sequential_all2all(Dataset):
                     for t in range(1, seq_len):
                         next_file = os.path.join(
                             self.LSC_NPZ_DIR,
-                            f"{file[0]}_pvi_idx{startIDX+t*dt:05d}.npz",
+                            f"{file[0]}_pvi_idx{startIDX + t * dt:05d}.npz",
                         )
                         if os.path.exists(next_file):
                             curr_seq.append(next_file)
