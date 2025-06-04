@@ -128,7 +128,6 @@ if __name__ == "__main__":
     )
     ds_params = {
         "LSC_NPZ_DIR": args.LSC_NPZ_DIR,
-        "max_file_checks": 10,
         "seq_len": args.seq_len,
         "timeIDX_offset": args.timeIDX_offset,
         "half_image": True,
@@ -246,7 +245,7 @@ if __name__ == "__main__":
         strategy="ddp",
         enable_progress_bar=True,
         logger=logger,
-        log_every_n_steps=min(args.train_batches, args.val_batches),
+        log_every_n_steps=min(1024, args.train_batches, args.val_batches),  # arbitrary choice of 1024 minimum
         callbacks=[checkpoint_callback, lr_monitor],
     )
 
