@@ -1,5 +1,6 @@
 # python applications/harnesses/moving_mnist/train.py
 # python applications/evaluation/TandVplot.py -S --basedir . -I 0 -Y 2 -Nt 2 -Nv 250
+import os
 import torch
 import logging
 import numpy as np
@@ -53,9 +54,6 @@ class mmnist_dataSet(Dataset):
         Dt = torch.tensor(0.25, dtype=torch.float32)  # arbitrary value
         return start_img, end_img, Dt
 
-
-# breakpoint()
-# (a, b, c) = next(iter(mmnist_dataSet()))
 
 if __name__ == "__main__":
     yl.configure_logger("yoke_logger", level=logging.INFO)
@@ -114,9 +112,10 @@ if __name__ == "__main__":
         prefetch_factor=2,
     )
 
-    num_epochs = 100
+    num_epochs = 1
+    # num_epochs = 100
     channel_map = [0]
-    for epochIDX in tqdm(range(num_epochs)):
+    for epoch_idx in tqdm(range(num_epochs)):
         tr.train_simple_loderunner_epoch(
             channel_map=channel_map,
             training_data=train_dataloader,
@@ -124,7 +123,7 @@ if __name__ == "__main__":
             model=model,
             optimizer=optimizer,
             loss_fn=loss_fn,
-            epochIDX=epochIDX,
+            epochIDX=epoch_idx,
             train_per_val=10,
             train_rcrd_filename="train.csv",
             val_rcrd_filename="val.csv",
@@ -133,14 +132,35 @@ if __name__ == "__main__":
         )
         torch.cuda.empty_cache()
 
-    (start_img, true_img, Dt) = next(iter(train_dataloader))
-    channel_map = [0]
-    pred_img = model(
-        start_img.to(device),
-        torch.tensor(channel_map).to(device, non_blocking=True),
-        torch.tensor(channel_map).to(device, non_blocking=True),
-        Dt.to(device),
-    )
+        breakpoint()
+        if epoch_idx % 10 == 0:
+            # train_loss = 
+            # pred_loss = 
+            (start_img, true_img, Dt) = next(iter(train_dataloader))
+            channel_map = [0]
+            pred_img = model(
+                start_img.to(device),
+                torch.tensor(channel_map).to(device, non_blocking=True),
+                torch.tensor(channel_map).to(device, non_blocking=True),
+                Dt.to(device),
+            )
+            plt.imshow(pred_img[1, 0, ...].detach().cpu())
+            plt.savefig(
+                "pred-img_epoch-{}_train-loss-{}_val-loss-{}.pdf".format(
+                    str(epoch_idx), str(train_loss), str(val_loss)
+                )
+            )
 
-    plt.imshow(pred_img[1,0,...].detach().cpu())
-    plt.savefig("test.pdf")
+    model.to("cpu")
+    # Move optimizer state back to CPU
+    for state in optimizer.state.values():
+        for k, v in state.items():
+            if isinstance(v, torch.Tensor):
+                state[k] = v.to("cpu")
+
+    # Save model and optimizer state in hdf5
+    h5_name_str = "study{0:03d}_modelState_epoch{1:04d}.hdf5"
+    new_h5_path = os.path.join("./", h5_name_str.format(studyIDX, epochIDX))
+    tr.save_model_and_optimizer_hdf5(
+        model, optimizer, epochIDX, new_h5_path, compiled=False
+    )
