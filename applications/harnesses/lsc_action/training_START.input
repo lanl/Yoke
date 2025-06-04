@@ -1,7 +1,7 @@
 --studyIDX
 <studyIDX>
 --FILELIST_DIR
-/usr/projects/eada/users/smyther/yoke_Smy_RL/applications/filelists/
+/usr/projects/artimis/mpmm/smyther/Yoke_RL/applications/filelists/
 --LSC_DESIGN_DIR
 /lustre/scratch5/exempt/artimis/mpmm/
 --LSC_NPZ_DIR
@@ -40,3 +40,4 @@ lsc240420_idx00100_test_10pct.txt
 <NVAL_BATCH>
 --TRAIN_PER_VAL
 10
+--multigpu
