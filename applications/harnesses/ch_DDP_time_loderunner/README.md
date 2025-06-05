@@ -62,9 +62,6 @@ and production-ready configurations.
 
 ### Updated `cp_files.txt` for consistency with the new name of the training script.
 
-### Added abbreviated CSV file `ddp_study_time_test.csv`: 
-Parameter settings chosen to minimize runtime.
-
 ### Files Left Unchanged
 
 - **`START_study.py`:**
@@ -140,11 +137,17 @@ prints a message and exits
 **Purpose:**   Splits a full
 hyperparameter CSV file into per-user subsets for parallel job execution by team members.
 
-**Usage:** ```bash python split_csv.py ```  
+**Usage:**
+
+```bash
+python split_csv.py \
+  ddp_study_time.csv \
+  "['wish','hickmank','dschodt','spandit','galgal']"
+  ```
 
 **Behavior:** - Expects a source CSV (e.g.,
 `ddp_study_time.csv`) - Creates individual files named `hyperparameters.<username>.csv`
-for each user   in the `usernames` list inside the script - Each team member runs jobs
+for each user in the `usernames` - Each team member runs jobs
 using their assigned CSV  
 
 ### ✅ `run_yoke_study.sh`  
@@ -153,13 +156,12 @@ using their assigned CSV
 by each team member to launch their jobs. It activates the environment, ensures correct
 group ownership, and initiates the study.  
 
-**Usage:** ```bash ./run_yoke_study.sh ```
+**Usage:** ```bash ./run_yoke_study.sh /usr/projects/artimis/path/to/harness```
 
 **Behavior:** - Ensures the user is in a `bash` shell - Requires active group to be
 `artimis` (`newgrp artimis`) - Sets file permissions (`umask 007`) for group read/write
 access - Loads the correct Python environment - Submits jobs using `START_study.py` with
-`hyperparameters.$USER.csv` - Waits briefly, then runs `check_progress.py` to monitor job
-state  
+`hyperparameters.$USER.csv`
 
 ### ✅ `check_progress.py`  
 
@@ -167,10 +169,11 @@ state
 (completed epochs, checkpoints, CPU/wall time, etc.).  
 
 **Usage:** ```bash python
-check_progress.py ```  
+check_progress.py [path/to/harness_directory] ```  
 
-**Behavior:** - Aggregates and reports job progress for all
+**Behavior:** - Accepts an optional path to a harness diretory - If path is not specified, 
+the script assumes that the current directory is the harness directory -
+Aggregates and reports job progress for all
 studies in `runs/` - Outputs a clear, column-aligned dashboard - Uses Slurm’s `squeue`
 and `sacct` to report job status and timing - Pulls `TOTAL_EPOCHS` from
-`training_input.tmpl` - Supports multiple users:   ```bash   python check_progress.py
-alice bob   ```
+`training_input.tmpl` 

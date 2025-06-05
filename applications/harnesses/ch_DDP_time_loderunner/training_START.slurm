@@ -13,11 +13,11 @@
 #SBATCH --job-name=ddp_s<studyIDX>_e0001
 #SBATCH --account=w25_artimis_g
 #SBATCH --partition=gpu
-#SBATCH --time=16:00:00
-#DEBUG #SBATCH --time=0:30:00
-#DEBUG #SBATCH --qos=debug
-#DEBUG #SBATCH --reservation=gpu_debug
-#DEBUG #SBATCH --partition=gpu_debug
+#SBATCH --time=2:00:00
+#DEBUG  #SBATCH --time=0:30:00
+#DEBUG  #SBATCH --qos=debug
+#DEBUG  #SBATCH --reservation=gpu_debug
+#DEBUG  #SBATCH --partition=gpu_debug
 #SBATCH --nodes=<KNODES>
 #SBATCH --ntasks-per-node=<NGPUS>
 #SBATCH --gpus-per-node=<NGPUS>

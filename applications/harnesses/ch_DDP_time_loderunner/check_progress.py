@@ -12,8 +12,10 @@ Features:
 - Outputs to terminal and CSV
 
 Usage:
-    python check_progress.py               # Monitor current user's jobs
-    python check_progress.py alice bob     # Monitor jobs for multiple users
+    python check_progress.py                         # Monitor current user's jobs (assumes CWD is Yoke harness dir)
+    python check_progress.py /path/to/harness        # Monitor current user's jobs in specified harness
+    python check_progress.py alice bob               # Monitor jobs for multiple users in CWD harness
+    python check_progress.py /path/to/harness alice  # Monitor jobs for user 'alice' in specified harness
 """
 
 import os
@@ -43,6 +45,22 @@ def extract_epoch_times(log_file):
                 times.append(float(match.group(1)))
     return times
 
+def get_job_usage(jobid):
+    """Query sacct for wall-clock and CPU time for a Slurm job."""
+    try:
+        output = subprocess.check_output(
+            ["sacct", "-j", jobid, "--format=JobID,Elapsed,TotalCPU,State", "--parsable2"],
+            text=True
+        )
+        lines = output.strip().split("\n")[1:]
+        for line in lines:
+            fields = line.strip().split("|")
+            if jobid in fields[0]:
+                return (fields[1], fields[2])  # Elapsed, TotalCPU
+        return ("N/A", "N/A")
+    except subprocess.CalledProcessError:
+        return ("N/A", "N/A")
+
 def get_active_jobs(user_list):
     """Return a dict mapping study_id → job info (JobID, Status, JobName)."""
     active_jobs = {}
@@ -63,46 +81,38 @@ def get_active_jobs(user_list):
                         "status": status,
                         "jobname": name
                     }
-        except Exception as e:
-            print(f"⚠️ Warning: could not read squeue for user '{user}': {e}")
+        except subprocess.CalledProcessError:
+            continue
     return active_jobs
-
-def get_job_usage(jobid):
-    """Query sacct for wall-clock and CPU time for a Slurm job."""
-    try:
-        output = subprocess.check_output(
-            ["sacct", "-j", jobid, "--format=JobID,Elapsed,TotalCPU,State", "--parsable2"],
-            text=True
-        )
-        lines = output.strip().split("\n")[1:]
-        for line in lines:
-            fields = line.strip().split("|")
-            if jobid in fields[0]:
-                return (fields[1], fields[2])  # Elapsed, TotalCPU
-        return ("N/A", "N/A")
-    except subprocess.CalledProcessError:
-        return ("N/A", "N/A")
 
 def summarize_study(study_dir, job_lookup, total_epochs):
     study_id = os.path.basename(study_dir)
-    study_index = int(study_id.split("_")[1])
+    try:
+        study_index = int(study_id.split("_")[1])
+    except Exception:
+        study_index = -1
 
-    training_csvs = sorted(glob(os.path.join(study_dir, "training_*.csv")))
-    latest_epoch = len(training_csvs)
+    # Find latest checkpoint
+    ckpt_files = sorted(glob(os.path.join(study_dir, "checkpoints", "*.ckpt")))
+    latest_ckpt = os.path.basename(ckpt_files[-1]) if ckpt_files else "N/A"
 
-    checkpoints = sorted(glob(os.path.join(study_dir, "*.pth")))
-    latest_ckpt = os.path.basename(checkpoints[-1]) if checkpoints else "None"
+    # Determine latest epoch from training log
+    log_file = os.path.join(study_dir, "training.log")
+    if os.path.isfile(log_file):
+        epoch_times = extract_epoch_times(log_file)
+        latest_epoch = len(epoch_times)
+        total_minutes = sum(epoch_times)
+    else:
+        latest_epoch = 0
+        total_minutes = 0.0
 
-    log_files = sorted(glob(os.path.join(study_dir, "*_epoch*.out")))
-    epoch_times = []
-    for log in log_files:
-        epoch_times.extend(extract_epoch_times(log))
-    total_minutes = sum(epoch_times)
-
+    # Fetch job info if active
     job_info = job_lookup.get(study_id, {})
-    job_status = job_info.get("status", "DONE")
     jobid = job_info.get("jobid", "N/A")
     jobname = job_info.get("jobname", "N/A")
+    job_status = job_info.get("status", "DONE")
+
+    # Get wall-clock and CPU time
     elapsed, cpu_time = get_job_usage(jobid) if jobid != "N/A" else ("N/A", "N/A")
     done_flag = "✅" if latest_epoch >= total_epochs else ""
 
@@ -121,8 +131,22 @@ def summarize_study(study_dir, job_lookup, total_epochs):
     }
 
 def main():
-    # CLI: multiple users or default to $USER
-    users = sys.argv[1:] if len(sys.argv) > 1 else [os.getenv("USER")]
+    # Accept an optional harness path. If provided and valid, use it as the Yoke harness directory.
+    args = sys.argv[1:]
+    if args and os.path.isdir(args[0]) and os.path.isdir(os.path.join(args[0], "runs")):
+        harness_dir = args[0]
+        users = args[1:] if len(args) > 1 else [os.getenv("USER")]
+    else:
+        harness_dir = os.getcwd()
+        users = args if args else [os.getenv("USER")]
+
+    # Switch to the harness directory so that relative paths (runs/, training_input.tmpl) work correctly
+    try:
+        os.chdir(harness_dir)
+    except Exception as e:
+        print(f"⚠️ Could not change directory to {harness_dir}: {e}")
+        sys.exit(1)
+
     total_epochs = read_total_epochs()
 
     runs_dir = "runs"
@@ -148,9 +172,7 @@ def main():
         )
 
     # Sort results by study index and export to CSV
-    df = pd.DataFrame(results)
-    df.sort_values(by="index", inplace=True)
-    df.drop(columns=["index"], inplace=True)
+    df = pd.DataFrame(sorted(results, key=lambda x: x["index"]))
     df.to_csv("study_status_summary.csv", index=False)
 
     # Footer legend
