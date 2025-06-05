@@ -7,6 +7,8 @@ import os
 import shutil
 import argparse
 import pandas as pd
+import subprocess
+from pathlib import Path
 
 from yoke.helpers import cli, strings, create_slurm_files
 
@@ -122,7 +124,35 @@ for k, study in enumerate(studylist):
     for f in cp_file_list:
         shutil.copy(f, studydirname)
 
-    # Submit Job
-    os.system(
-        f"cd {studydirname}; sbatch {START_slurm_name}; cd {os.path.dirname(__file__)}"
-    )
+    # Submit a job with the appropriate submission type
+    if args.submissionType.lower() == "slurm":
+        slurm_cmd = (
+            f"cd {studydirname}; sbatch {START_slurm_name}; "
+            f"cd {os.path.dirname(__file__)}"
+        )
+        os.system(slurm_cmd)
+
+    elif args.submissionType.lower() == "shell":
+        wrapper = Path(__file__).parent / "run_study.sh"
+        subprocess.run(
+            [str(wrapper), study["train_script"], START_input_name],
+            cwd=studydirname,
+            check=True,
+        )
+
+    elif args.submissionType.lower() == "batch":
+        harness_dir = Path(args.csv).parent.resolve()
+        wrapper = harness_dir / "run_study.bat"
+        if not wrapper.exists():
+            raise FileNotFoundError(f"Cannot find batch wrapper at {wrapper!r}")
+
+        abs_wrapper = str(wrapper)
+
+        subprocess.run(
+            ["cmd.exe", "/c", str(wrapper), study["train_script"], START_input_name],
+            cwd=studydirname,
+            check=True,
+        )
+
+    else:
+        raise ValueError(f"Unknown submission type: {args.submissionType!r}")

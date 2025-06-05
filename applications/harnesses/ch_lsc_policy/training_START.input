@@ -21,12 +21,12 @@ design_lsc240420_MASTER.csv
 --num_workers
 <NUM_WORKERS>
 --total_epochs
-120
+100
 --cycle_epochs
-12
+1
 --train_batches
 <NTRN_BATCH>
 --val_batches
 <NVAL_BATCH>
 --TRAIN_PER_VAL
-4
+5

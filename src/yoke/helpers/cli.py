@@ -55,6 +55,15 @@ def add_default_args(parser: argparse.ArgumentParser = None) -> argparse.Argumen
             "study directory."
         ),
     )
+    parser.add_argument(
+        "--submissionType",
+        choices=["slurm", "shell", "batch"],
+        default="slurm",
+        help=(
+            "Which job‐submission wrapper to use (defaults to slurm, "
+            "choices: slurm, shell, batch).",
+        ),
+    )
 
     return parser
 
@@ -219,6 +228,13 @@ def add_training_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParse
         type=int,
         default=3,
         help="Length of predicted sequence.",
+    )
+    parser.add_argument(
+        "--timeIDX_offset",
+        action="store",
+        type=int,
+        default=1,
+        help="Time index offset between images in data sequence.",
     )
     parser.add_argument(
         "--total_epochs",

@@ -130,6 +130,7 @@ if __name__ == "__main__":
         "LSC_NPZ_DIR": args.LSC_NPZ_DIR,
         "max_file_checks": 10,
         "seq_len": args.seq_len,
+        "timeIDX_offset": args.timeIDX_offset,
         "half_image": True,
         "transform": transform,
     }
