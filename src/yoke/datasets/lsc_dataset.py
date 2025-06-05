@@ -845,12 +845,14 @@ class LSC_rho2rho_sequential_DataSet(Dataset):
     Args:
         LSC_NPZ_DIR (str): Location of LSC NPZ files.
         file_prefix_list (str): Text file listing unique prefixes corresponding
-                                to unique simulations.
+            to unique simulations.
         max_file_checks (int): Maximum number of attempts to find valid file sequences.
         seq_len (int): Number of consecutive frames to return. This includes the
-                       starting frame.
+            starting frame.
+        timeIDX_offset (int): File index (corresponds to time) between frames in
+            the returned sequence.
         half_image (bool): If True, returns half-images, otherwise full images.
-        hydro_fields (np.array, optional): Array of hydro field names to be included.
+        hydro_fields (np.array): Array of hydro field names to be included.
         transform (Callable): Transform applied to loaded data sequence before returning.
     """
 
@@ -858,8 +860,9 @@ class LSC_rho2rho_sequential_DataSet(Dataset):
         self,
         LSC_NPZ_DIR: str,
         file_prefix_list: str,
-        max_file_checks: int,
-        seq_len: int,
+        max_file_checks: int = 10,
+        seq_len: int = 2,
+        timeIDX_offset: int = 1,
         half_image: bool = True,
         hydro_fields: np.array = np.array(
             [
@@ -884,6 +887,7 @@ class LSC_rho2rho_sequential_DataSet(Dataset):
         self.LSC_NPZ_DIR = LSC_NPZ_DIR
         self.max_file_checks = max_file_checks
         self.seq_len = seq_len
+        self.timeIDX_offset = timeIDX_offset
         self.half_image = half_image
         self.transform = transform
 
@@ -891,15 +895,15 @@ class LSC_rho2rho_sequential_DataSet(Dataset):
         with open(file_prefix_list) as f:
             self.file_prefix_list = [line.rstrip() for line in f]
 
+        # Random number generator
+        self.rng = np.random.default_rng()
+
         # Shuffle the prefixes for randomness
-        random.shuffle(self.file_prefix_list)
+        self.rng.shuffle(self.file_prefix_list)
         self.Nsamples = len(self.file_prefix_list)
 
         # Fields to extract from the simulation
         self.hydro_fields = hydro_fields
-
-        # Random number generator
-        self.rng = np.random.default_rng()
 
     def __len__(self) -> int:
         """Return the number of samples in the dataset."""
@@ -920,8 +924,8 @@ class LSC_rho2rho_sequential_DataSet(Dataset):
             # Construct the sequence of file paths
             valid_sequence = True
             file_paths = []
-            for offset in range(self.seq_len):
-                idx = startIDX + offset
+            for n in range(self.seq_len):
+                idx = startIDX + self.timeIDX_offset * n
                 file_name = f"{file_prefix}_pvi_idx{idx:05d}.npz"
                 file_path = Path(self.LSC_NPZ_DIR, file_name)
 
@@ -982,7 +986,7 @@ class LSC_rho2rho_sequential_DataSet(Dataset):
             img_seq = self.transform(img_seq)
 
         # Fixed time offset
-        Dt = torch.tensor(0.25, dtype=torch.float32)
+        Dt = torch.tensor(0.25 * self.timeIDX_offset, dtype=torch.float32)
 
         return img_seq, Dt
 
