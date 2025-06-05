@@ -31,7 +31,7 @@ Typical Usage
 .. code-block:: bash
 
     cd applications/harnesses/chicoma_lsc_loderunner_scheduled
-    python START_study.py
+    python ../START_study.py
 
 This will:
 

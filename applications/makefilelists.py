@@ -2,6 +2,8 @@
 
 If run, will make file lists to that specification
 
+Created for use with the Nested Cylinder dataset.
+
 """
 
 ####################################
@@ -162,7 +164,7 @@ parser.add_argument(
     "--input_dir",
     action="store",
     type=str,
-    default=os.path.join(os.path.dirname(__file__), "../data_examples/nc231213/"),
+    default="./",
     help="Where the data files are located",
 )
 
