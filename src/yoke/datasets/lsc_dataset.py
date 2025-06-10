@@ -843,7 +843,12 @@ class LSC_rho2rho_temporal_DataSet(Dataset):
 class LSC_rho2rho_sequential_DataSet(Dataset):
     """Returns a sequence of consecutive frames from the LSC simulation.
 
-    For example, if seq_len=4, you'll get frames t, t+1, t+2, t+3.
+    This dataset returns sequences of frames of LSC simulation data at specified
+    time offsets and sequence lengths.  For a given sequence length, multiple
+    time offsets are allowed.  For example, if seq_len=2 and timeIDX_offset=[1, 2],
+    this dataset will contain all LSC simulation sequences of length 2 with frames
+    offset by 1 and 2 time indices (i.e., the set of sequences
+    (t, t+1), (t, t+2), (t+1, t+2), (t+1, t+3), ...).
 
     Args:
         LSC_NPZ_DIR (str): Location of LSC NPZ files.
@@ -973,7 +978,16 @@ class LSC_rho2rho_sequential_DataSet(Dataset):
         return self.Nsamples
 
     def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
-        """Return a sequence of consecutive frames."""
+        """Return a sequence of frames from the dataset.
+
+        Args:
+            index (int): Index of self.valid_seq valid sequences that will be returned.
+
+        Returns:
+            img_seq (torch.Tensor): Sequence of LSC frames organized as a
+                [self.seq_len, len(self.hydro_fields), H, W] tensor.
+            Dt (torch.Tensor): Time offset between frames in `img_seq`.
+        """
         # Rotate index if necessary
         index = index % self.Nsamples
 
