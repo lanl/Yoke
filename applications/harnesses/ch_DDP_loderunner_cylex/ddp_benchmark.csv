@@ -1,0 +1,24 @@
+studyIDX,YOKE_TORCH_ENV,KNODES,NGPUS,EMBED_DIM,B0,B1,B2,B3,NUM_WORKERS,BATCH_SIZE,NTRN_BATCH,NVAL_BATCH,ANCHOR_LR,NUM_CYCLES,MIN_FRACTION,TERMINAL_STEPS,WARMUP_STEPS,train_script
+# Giant size
+# 1,torch_ch_gpu_241112,1,4,512,1,1,11,2,2,1,100,100,1.0e-4,0.5,0.7,1000,500,train_LodeRunner_ddp.py
+# Single node, big size
+# 2,torch_ch_gpu_241112,1,4,128,1,1,9,1,2,2,100,100,1.0e-4,0.5,0.7,1000,500,train_LodeRunner_ddp.py
+# 3,torch_ch_gpu_241112,1,4,128,1,1,9,1,2,3,100,100,1.0e-4,0.5,0.7,1000,500,train_LodeRunner_ddp.py
+# 4,torch_ch_gpu_241112,1,4,128,1,1,9,1,2,4,100,100,1.0e-4,0.5,0.7,1000,500,train_LodeRunner_ddp.py
+# 5,torch_ch_gpu_241112,1,4,128,1,1,9,1,2,5,100,100,1.0e-4,0.5,0.7,1000,500,train_LodeRunner_ddp.py
+# 6,torch_ch_gpu_241112,1,4,128,1,1,9,1,2,6,100,100,1.0e-4,0.5,0.7,1000,500,train_LodeRunner_ddp.py
+# # Multi-node, big size
+# 7,torch_ch_gpu_241112,1,4,128,1,1,9,1,2,3,100,100,1.0e-4,0.5,0.7,1000,500,train_LodeRunner_ddp.py
+# 8,torch_ch_gpu_241112,2,4,128,1,1,9,1,2,3,100,100,1.0e-4,0.5,0.7,1000,500,train_LodeRunner_ddp.py
+# 9,torch_ch_gpu_241112,3,4,128,1,1,9,1,2,3,100,100,1.0e-4,0.5,0.7,1000,500,train_LodeRunner_ddp.py
+# 10,torch_ch_gpu_241112,4,4,128,1,1,9,1,2,3,100,100,1.0e-4,0.5,0.7,1000,500,train_LodeRunner_ddp.py
+# For debug que, QOSMaxNodeUserLimit
+# 11,torch_ch_gpu_241112,5,4,128,1,1,9,1,2,3,100,100,1.0e-4,0.5,0.7,1000,500,train_LodeRunner_ddp.py
+# 12,torch_ch_gpu_241112,6,4,128,1,1,9,1,2,3,100,100,1.0e-4,0.5,0.7,1000,500,train_LodeRunner_ddp.py
+# 13,torch_ch_gpu_241112,7,4,128,1,1,9,1,2,3,100,100,1.0e-4,0.5,0.7,1000,500,train_LodeRunner_ddp.py
+# Single node, big size
+# 14,torch_ch_gpu_241112,1,4,128,1,1,9,1,2,7,100,100,1.0e-4,0.5,0.7,1000,500,train_LodeRunner_ddp.py
+# 15,torch_ch_gpu_241112,1,4,128,1,1,9,1,2,8,100,100,1.0e-4,0.5,0.7,1000,500,train_LodeRunner_ddp.py
+# 16,torch_ch_gpu_241112,1,4,128,1,1,9,1,2,9,100,100,1.0e-4,0.5,0.7,1000,500,train_LodeRunner_ddp.py
+17,torch_ch_gpu_241112,1,4,128,1,1,9,1,2,10,100,100,1.0e-4,0.5,0.7,1000,500,train_LodeRunner_ddp.py
+# Production timing run: ___ mins per epoch here.

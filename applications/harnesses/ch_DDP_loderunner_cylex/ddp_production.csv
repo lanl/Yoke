@@ -1,0 +1,4 @@
+studyIDX,YOKE_TORCH_ENV,KNODES,NGPUS,EMBED_DIM,B0,B1,B2,B3,NUM_WORKERS,BATCH_SIZE,NTRN_BATCH,NVAL_BATCH,ANCHOR_LR,NUM_CYCLES,MIN_FRACTION,TERMINAL_STEPS,WARMUP_STEPS,train_script
+# This is a longer epoch production run after tuning.
+# Single epoch with validation should be ~30 mins
+1,torch_ch_gpu_241112,4,4,128,1,1,9,1,2,10,1000,500,2.0e-3,0.5,0.5,1000,500,train_LodeRunner_ddp.py
