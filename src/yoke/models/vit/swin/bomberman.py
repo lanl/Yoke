@@ -165,6 +165,7 @@ class LodeRunner(nn.Module):
         in_vars: torch.Tensor,
         out_vars: torch.Tensor,
         lead_times: torch.Tensor,
+        use_pred: bool = True
     ) -> torch.Tensor:
         """Forward method for LodeRunner."""
         # WARNING!: Most likely the `in_vars` and `out_vars` need to be tensors
@@ -187,7 +188,8 @@ class LodeRunner(nn.Module):
         x = self.temporal_encoding(x, lead_times)
 
         # Pass through SWIN-V2 U-Net encoder
-        x = self.unet(x)
+        if use_pred:
+            x = self.unet(x)
 
         # Use linear map to remap to correct variable and patchsize dimension
         x = self.linear4unpatch(x)
