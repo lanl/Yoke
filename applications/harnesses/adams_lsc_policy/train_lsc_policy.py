@@ -34,9 +34,10 @@ def setup_distributed() -> tuple[int, int, int, torch.device]:
     """Sets up distributed training using PyTorch DDP."""
     # ----- 1) Basic setup & environment variables -----
     # Rely on Slurm variables: SLURM_PROCID, SLURM_NTASKS, SLURM_LOCALID, etc.
-    rank = int(os.environ["SLURM_PROCID"])  # global rank
-    world_size = int(os.environ["SLURM_NTASKS"])  # total number of processes
-    local_rank = int(os.environ["SLURM_LOCALID"])  # local rank (GPU index on this node)
+    rank = int(os.environ["FLUX_TASK_RANK"])  # global rank
+    world_size = int(os.environ["FLUX_JOB_SIZE"])  # total number of processes
+    # local rank (GPU index on this node)
+    local_rank = int(os.environ["FLUX_TASK_LOCAL_ID"])
 
     master_addr = os.environ["MASTER_ADDR"]
     master_port = os.environ["MASTER_PORT"]
@@ -50,10 +51,12 @@ def setup_distributed() -> tuple[int, int, int, torch.device]:
     print("============================", flush=True)
 
     # ----- 2) Set the current GPU device for this process -----
+    # PyTorch on ROCm still uses the "cuda" device API
     torch.cuda.set_device(local_rank)
     device = torch.device(f"cuda:{local_rank}")
 
     # ----- 3) Initialize the process group -----
+    # ROCm's NCCL-compatible backend is used.
     dist.init_process_group(
         backend="nccl",
         init_method=f"tcp://{master_addr}:{master_port}",
@@ -89,17 +92,17 @@ def main(
     train_filelist = args.FILELIST_DIR + args.train_filelist
     validation_filelist = args.FILELIST_DIR + args.validation_filelist
 
+    # Number of workers controls how batches of data are prefetched and,
+    # possibly, pre-loaded onto GPUs. If the number of workers is large they
+    # will swamp memory and jobs will fail.
+    num_workers = args.num_workers
+
     # LR-schedule Parameters
     anchor_lr = args.anchor_lr
     num_cycles = args.num_cycles
     min_fraction = args.min_fraction
     terminal_steps = args.terminal_steps
     warmup_steps = args.warmup_steps
-
-    # Number of workers controls how batches of data are prefetched and,
-    # possibly, pre-loaded onto GPUs. If the number of workers is large they
-    # will swamp memory and jobs will fail.
-    num_workers = args.num_workers
 
     # Epoch Parameters
     batch_size = args.batch_size
@@ -325,10 +328,13 @@ def main(
         #############################################
         FINISHED_TRAINING = epochIDX + 1 > total_epochs
         if not FINISHED_TRAINING:
-            new_slurm_file = tr.continuation_setup(
-                new_chkpt_path, studyIDX, last_epoch=epochIDX
+            new_flux_file = tr.continuation_setup(
+                new_chkpt_path,
+                studyIDX,
+                last_epoch=epochIDX,
+                submissionType='flux',
             )
-            os.system(f"sbatch {new_slurm_file}")
+            os.system(f"flux --parent batch {new_flux_file}")
 
 
 if __name__ == "__main__":

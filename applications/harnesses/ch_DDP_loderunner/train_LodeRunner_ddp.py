@@ -209,7 +209,7 @@ def main(args, rank, world_size, local_rank, device):
     #
     # For single node
     # ddp_anchor_lr = anchor_lr
-    
+
     LRsched = CosineWithWarmupScheduler(
         optimizer,
         anchor_lr=ddp_anchor_lr,
