@@ -467,25 +467,33 @@ def append_to_dict(dictt: dict, batch_ID: int, truth, pred, loss):
 
 
 ####################################
-# Continue Slurm Study
+# Continue Study with restart
 ####################################
-def continuation_setup(checkpointpath, studyIDX, last_epoch):
-    """Function to generate the training.input and training.slurm files for
+def continuation_setup(
+        checkpointpath: str,
+        studyIDX: int,
+        last_epoch: int,
+        submissionType: str = 'slurm') -> str:
+    """Modify template submission files for training restart.
+
+    Function to generate the training.input and training.slurm files for
     continuation of model training
 
     Args:
          checkpointpath (str): path to model checkpoint to load in model from
          studyIDX (int): study ID to include in file name
          last_epoch (int): numer of epochs completed at this checkpoint
+         submissionType (str): Type of job-submission system to prepare files for.
+                               Default 'slurm', either 'slurm', 'flux', 'shell',
+                               or 'batch'
 
     Returns:
-         new_training_slurm_filepath (str): Name of slurm file to submit job for
-                                            continued training
+         new_training_filepath (str): Name of job-submission file defining job for
+                                      continued training
 
     """
-    # Identify Template Files
+    # Input template is independent of submission sytem
     training_input_tmpl = "./training_input.tmpl"
-    training_slurm_tmpl = "./training_slurm.tmpl"
 
     # Make new training.input file
     with open(training_input_tmpl) as f:
@@ -499,32 +507,82 @@ def continuation_setup(checkpointpath, studyIDX, last_epoch):
     with open(os.path.join("./", new_training_input_filepath), "w") as f:
         f.write(new_training_input_data)
 
-    with open(training_slurm_tmpl) as f:
-        training_slurm_data = f.read()
+    # Choose job-scheduling system
+    if submissionType.lower() == 'slurm':
+        training_slurm_tmpl = "./training_slurm.tmpl"
 
-    slurm_str = "study{0:03d}_restart_training_epoch{1:04d}.slurm"
-    new_training_slurm_filepath = slurm_str.format(studyIDX, last_epoch + 1)
+        with open(training_slurm_tmpl) as f:
+            training_slurm_data = f.read()
 
-    new_training_slurm_data = training_slurm_data.replace(
-        "<INPUTFILE>", new_training_input_filepath
-    )
+        slurm_str = "study{0:03d}_restart_training_epoch{1:04d}.slurm"
+        new_training_filepath = slurm_str.format(studyIDX, last_epoch + 1)
 
-    new_training_slurm_data = new_training_slurm_data.replace(
-        "<epochIDX>", f"{last_epoch + 1:04d}"
-    )
+        new_training_slurm_data = training_slurm_data.replace(
+            "<INPUTFILE>", new_training_input_filepath
+        )
 
-    with open(os.path.join("./", new_training_slurm_filepath), "w") as f:
-        f.write(new_training_slurm_data)
+        new_training_slurm_data = new_training_slurm_data.replace(
+            "<epochIDX>", f"{last_epoch + 1:04d}"
+        )
 
-    return new_training_slurm_filepath
+        with open(os.path.join("./", new_training_filepath), "w") as f:
+            f.write(new_training_slurm_data)
+
+    if submissionType.lower() == 'flux':
+        training_flux_tmpl = "./training_flux.tmpl"
+
+        with open(training_flux_tmpl) as f:
+            training_flux_data = f.read()
+
+        flux_str = "study{0:03d}_restart_training_epoch{1:04d}.flux"
+        new_training_filepath = flux_str.format(studyIDX, last_epoch + 1)
+
+        new_training_flux_data = training_flux_data.replace(
+            "<INPUTFILE>", new_training_input_filepath
+        )
+
+        new_training_flux_data = new_training_flux_data.replace(
+            "<epochIDX>", f"{last_epoch + 1:04d}"
+        )
+
+        with open(os.path.join("./", new_training_filepath), "w") as f:
+            f.write(new_training_flux_data)
+
+    elif submissionType.lower() == 'shell':
+        training_shell_tmpl = "./training_shell.tmpl"
+
+        with open(training_shell_tmpl) as f:
+            training_shell_data = f.read()
+
+        shell_str = "study{0:03d}_restart_training_epoch{1:04d}.sh"
+        new_training_filepath = shell_str.format(studyIDX, last_epoch + 1)
+
+        new_training_shell_data = training_shell_data.replace(
+            "<INPUTFILE>", new_training_input_filepath
+        )
+
+        new_training_shell_data = new_training_shell_data.replace(
+            "<epochIDX>", f"{last_epoch + 1:04d}"
+        )
+
+        with open(os.path.join("./", new_training_filepath), "w") as f:
+            f.write(new_training_shell_data)
+
+    return new_training_filepath
 
 
 ####################################
 # Training on a Datastep
 ####################################
-def train_scalar_datastep(data: tuple, model, optimizer, loss_fn, device: torch.device):
-    """Function to complete a training step on a single sample in which the
-    network's output is a scalar.
+def train_scalar_datastep(
+        data: tuple,
+        model: torch.nn.Module,
+        optimizer: torch.optim.Optimizer,
+        loss_fn: torch.nn.Module,
+        device: torch.device) -> tuple:
+    """Function to complete a training step on a single sample.
+
+    For this training step the network's output is a scalar.
 
     Args:
         data (tuple): tuple of model input and corresponding ground truth
@@ -1836,7 +1894,9 @@ def train_DDP_loderunner_epoch(
     rank: int,
     world_size: int,
 ):
-    """Function to complete a training epoch on the LodeRunner architecture with
+    """Distributed data-parallel LodeRunner Epoch.
+
+    Function to complete a training epoch on the LodeRunner architecture with
     fixed channels in the input and output. Training and validation information
     is saved to successive CSV files.
 
@@ -2137,6 +2197,7 @@ def train_lsc_policy_epoch(
     model,
     optimizer,
     loss_fn,
+    LRsched,
     epochIDX,
     train_per_val,
     train_rcrd_filename: str,
@@ -2145,7 +2206,9 @@ def train_lsc_policy_epoch(
     rank: int,
     world_size: int,
 ):
-    """Function to complete a training epoch on the Gaussian-policy network for the
+    """Epoch training of Gaussian-policy.
+
+    Function to complete a training epoch on the Gaussian-policy network for the
     layered shaped charge design problem. Training and validation information
     is saved to successive CSV files.
 
@@ -2157,6 +2220,8 @@ def train_lsc_policy_epoch(
         model (loaded pytorch model): model to train
         optimizer (torch.optim): optimizer for training set
         loss_fn (torch.nn Loss Function): loss function for training set
+        LRsched (torch.optim.lr_scheduler): Learning-rate scheduler that will be called
+                                            every training step.
         epochIDX (int): Index of current training epoch
         train_per_val (int): Number of Training epochs between each validation
         train_rcrd_filename (str): Name of CSV file to save training sample stats to
@@ -2183,6 +2248,9 @@ def train_lsc_policy_epoch(
             x_true, pred_mean, train_losses = train_lsc_policy_datastep(
                 traindata, model, optimizer, loss_fn, device, rank, world_size
             )
+
+            # Increment the learning-rate scheduler
+            LRsched.step()
 
             # Save training record (rank 0 only)
             if rank == 0:
