@@ -29,6 +29,39 @@ parser = cli.add_filepath_args(parser=parser)
 parser = cli.add_training_args(parser=parser)
 parser = cli.add_cosine_lr_scheduler_args(parser=parser)
 
+parser.add_argument(
+    "--img_embed_dim",
+    action="store",
+    type=int,
+    default=32,
+    help="Image embedding dimension (default: 32).",
+)
+
+parser.add_argument(
+    "--vector_embed_dim",
+    action="store",
+    type=int,
+    default=32,
+    help="Vector embedding dimension (default: 32).",
+)
+
+parser.add_argument(
+    "--vector_feature_list",
+    action="store",
+    type=int,
+    nargs="+",
+    default=[16, 64, 64, 16],
+    help="List of features for the vector branch (default: [16, 64, 64, 16]).",
+)
+
+parser.add_argument(
+    "--output_feature_list",
+    action="store",
+    type=int,
+    nargs="+",
+    default=[16, 64, 64, 16],
+    help="List of features for the output branch (default: [16, 64, 64, 16]).",
+)
 
 def setup_distributed() -> tuple[int, int, int, torch.device]:
     """Sets up distributed training using PyTorch DDP."""
