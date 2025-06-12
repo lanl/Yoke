@@ -132,11 +132,11 @@ def main(
         "features": 12,
         "depth": 15,
         "kernel": 3,
-        "img_embed_dim": 32,
-        "vector_embed_dim": 32,
+        "img_embed_dim": 32,  # Make variable
+        "vector_embed_dim": 32,  # Make variable
         "size_reduce_threshold": (16, 16),
-        "vector_feature_list": (16, 64, 64, 16),
-        "output_feature_list": (16, 64, 64, 16)
+        "vector_feature_list": (16, 64, 64, 16),  # Make variable
+        "output_feature_list": (16, 64, 64, 16)  # Make variable
     }
 
     model = gaussian_policyCNN(**model_args)
