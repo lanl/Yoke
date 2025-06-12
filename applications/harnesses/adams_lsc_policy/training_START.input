@@ -1,15 +1,15 @@
 --studyIDX
 <studyIDX>
 --FILELIST_DIR
-/usr/projects/artimis/mpmm/hickmank/github_yoke/applications/filelists/
+/usr/workspace/hickmann/Yoke/applications/filelists/
 --LSC_NPZ_DIR
-/lustre/scratch4/exempt/artimis/lsc240420/
+/p/vast1/mpmm/data/lsc240420/
 --train_filelist
 lsc240420_idx00100_train_80pct.txt
 --validation_filelist
 lsc240420_idx00100_val_10pct.txt
 --LSC_DESIGN_DIR
-/lustre/scratch4/exempt/artimis/
+/p/vast1/mpmm/data/
 --design_file
 design_lsc240420_MASTER.csv
 --trn_rcrd_filename
@@ -31,7 +31,7 @@ design_lsc240420_MASTER.csv
 --num_workers
 <NUM_WORKERS>
 --total_epochs
-100
+5
 --cycle_epochs
 1
 --train_batches

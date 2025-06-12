@@ -8,12 +8,15 @@ data, *lsc240420*.
 ####################################
 # Packages
 ####################################
+import glob
 import itertools
+import os
 from pathlib import Path
 import random
+import re
 import sys
 import typing
-from typing import Callable
+from typing import Callable, Union
 
 import lightning.pytorch as L
 import numpy as np
@@ -840,29 +843,35 @@ class LSC_rho2rho_temporal_DataSet(Dataset):
 class LSC_rho2rho_sequential_DataSet(Dataset):
     """Returns a sequence of consecutive frames from the LSC simulation.
 
-    For example, if seq_len=4, you'll get frames t, t+1, t+2, t+3.
+    This dataset returns sequences of frames of LSC simulation data at specified
+    time offsets and sequence lengths.  For a given sequence length, multiple
+    time offsets are allowed.  For example, if seq_len=2 and timeIDX_offset=[1, 2],
+    this dataset will contain all LSC simulation sequences of length 2 with frames
+    offset by 1 and 2 time indices (i.e., the set of sequences
+    (t, t+1), (t, t+2), (t+1, t+2), (t+1, t+3), ...).
 
     Args:
         LSC_NPZ_DIR (str): Location of LSC NPZ files.
         file_prefix_list (str): Text file listing unique prefixes corresponding
             to unique simulations.
-        max_file_checks (int): Maximum number of attempts to find valid file sequences.
         seq_len (int): Number of consecutive frames to return. This includes the
             starting frame.
-        timeIDX_offset (int): File index (corresponds to time) between frames in
-            the returned sequence.
+        timeIDX_offset (int, list[int], tuple[int]): File indices (corresponding to time)
+            between frames in the returned sequence.  Setting to None will
+            return all possible time offsets (including 0 and negative offsets).
         half_image (bool): If True, returns half-images, otherwise full images.
         hydro_fields (np.array): Array of hydro field names to be included.
         transform (Callable): Transform applied to loaded data sequence before returning.
+        path_to_cache (str): Path to a .npz cache file defining valid sequences.  If
+            the file doesn't exist, the generated sequence list will be stored here.
     """
 
     def __init__(
         self,
         LSC_NPZ_DIR: str,
         file_prefix_list: str,
-        max_file_checks: int = 10,
         seq_len: int = 2,
-        timeIDX_offset: int = 1,
+        timeIDX_offset: Union[int, list[int], tuple[int]] = 1,
         half_image: bool = True,
         hydro_fields: np.array = np.array(
             [
@@ -877,6 +886,7 @@ class LSC_rho2rho_sequential_DataSet(Dataset):
             ]
         ),
         transform: Callable = None,
+        path_to_cache: str = None,
     ) -> None:
         """Initialization for LSC sequential dataset."""
         dir_path = Path(LSC_NPZ_DIR)
@@ -885,22 +895,80 @@ class LSC_rho2rho_sequential_DataSet(Dataset):
             raise FileNotFoundError(f"Directory not found: {LSC_NPZ_DIR}")
 
         self.LSC_NPZ_DIR = LSC_NPZ_DIR
-        self.max_file_checks = max_file_checks
         self.seq_len = seq_len
-        self.timeIDX_offset = timeIDX_offset
         self.half_image = half_image
         self.transform = transform
-
-        # Load the list of file prefixes
-        with open(file_prefix_list) as f:
-            self.file_prefix_list = [line.rstrip() for line in f]
-
-        # Random number generator
         self.rng = np.random.default_rng()
 
-        # Shuffle the prefixes for randomness
-        self.rng.shuffle(self.file_prefix_list)
-        self.Nsamples = len(self.file_prefix_list)
+        # Load cache if available.
+        if (path_to_cache is not None) and os.path.exists(path_to_cache):
+            cache_data = np.load(path_to_cache)
+            valid_seq = [
+                (s, t) for s, t in zip(cache_data["valid_seq"], cache_data["dt"])
+            ]
+        else:
+            # Load the list of file prefixes
+            with open(file_prefix_list) as f:
+                self.file_prefix_list = [line.rstrip() for line in f]
+
+            # Shuffle the prefixes for randomness
+            self.rng.shuffle(self.file_prefix_list)
+
+            # Find all files.
+            all_files = []
+            for prefix in self.file_prefix_list:
+                for f in glob.glob(os.path.join(LSC_NPZ_DIR, f"{prefix}*.npz")):
+                    all_files.append((prefix, f))
+
+            # Extract time indices from file names.
+            time_inds = [
+                int(re.search(file[0] + r"_pvi_idx(?P<idx>\d*).npz", file[1])["idx"])
+                for file in all_files
+            ]
+
+            # Set default time offsets.
+            if timeIDX_offset is None:
+                max_dt = max(time_inds) - min(time_inds)
+                timeIDX_offset = list(range(-max_dt, max_dt + 1))
+            timeIDX_offset = (
+                [timeIDX_offset] if isinstance(timeIDX_offset, int) else timeIDX_offset
+            )
+
+            # Find valid file sequences at each time offset.
+            valid_seq = []  # [(file sequence, time offset)]
+            for dt in timeIDX_offset:
+                for file in all_files:
+                    # Determine starting index from file name.
+                    startIDX = int(
+                        re.search(file[0] + r"_pvi_idx(?P<idx>\d*).npz", file[1])["idx"]
+                    )
+
+                    # Search for subsequent indices.
+                    curr_seq = [file[1]]
+                    for t in range(1, seq_len):
+                        next_file = os.path.join(
+                            self.LSC_NPZ_DIR,
+                            f"{file[0]}_pvi_idx{startIDX + t * dt:05d}.npz",
+                        )
+                        if os.path.exists(next_file):
+                            curr_seq.append(next_file)
+                        else:
+                            break
+
+                    # If the full sequence was available, append to valid_seq.
+                    if len(curr_seq) == seq_len:
+                        valid_seq.append((curr_seq, dt))
+
+            # Save cache.
+            if path_to_cache is not None:
+                np.savez(
+                    path_to_cache,
+                    valid_seq=np.array([f[0] for f in valid_seq]),
+                    dt=np.array([f[1] for f in valid_seq]),
+                )
+
+        self.valid_seq = valid_seq
+        self.Nsamples = len(valid_seq)
 
         # Fields to extract from the simulation
         self.hydro_fields = hydro_fields
@@ -909,49 +977,23 @@ class LSC_rho2rho_sequential_DataSet(Dataset):
         """Return the number of samples in the dataset."""
         return self.Nsamples
 
-    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Return a sequence of consecutive frames."""
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return a sequence of frames from the dataset.
+
+        Args:
+            index (int): Index of self.valid_seq valid sequences that will be returned.
+
+        Returns:
+            img_seq (torch.Tensor): Sequence of LSC frames organized as a
+                [self.seq_len, len(self.hydro_fields), H, W] tensor.
+            Dt (torch.Tensor): Time offset between frames in `img_seq`.
+        """
         # Rotate index if necessary
         index = index % self.Nsamples
-        file_prefix = self.file_prefix_list[index]
-
-        # Try multiple attempts to find valid files
-        prefix_attempt = 0
-        while prefix_attempt < self.max_file_checks:
-            # Pick a random start index so that the sequence fits within the range
-            startIDX = self.rng.integers(0, 100 - self.seq_len)
-
-            # Construct the sequence of file paths
-            valid_sequence = True
-            file_paths = []
-            for n in range(self.seq_len):
-                idx = startIDX + self.timeIDX_offset * n
-                file_name = f"{file_prefix}_pvi_idx{idx:05d}.npz"
-                file_path = Path(self.LSC_NPZ_DIR, file_name)
-
-                if not file_path.is_file():
-                    valid_sequence = False
-                    break
-
-                file_paths.append(file_path)
-
-            if valid_sequence:
-                break
-
-            # If no valid sequence found, try the next prefix
-            prefix_attempt += 1
-            index = (index + 1) % self.Nsamples  # Rotate index to try another prefix
-
-        if prefix_attempt == self.max_file_checks:
-            err_msg = (
-                f"Failed to find valid sequence for prefix: {file_prefix} "
-                f"after {self.max_file_checks} attempts."
-            )
-            raise RuntimeError(err_msg)
 
         # Load and process the sequence of frames
         frames = []
-        for file_path in file_paths:
+        for file_path in self.valid_seq[index][0]:
             try:
                 data_npz = np.load(file_path)
             except Exception as e:
@@ -960,6 +1002,7 @@ class LSC_rho2rho_sequential_DataSet(Dataset):
             field_imgs = []
             for hfield in self.hydro_fields:
                 tmp_img = LSCread_npz_NaN(data_npz, hfield)
+
                 # Reweight densities by volume fraction
                 tmp_img = volfrac_density(tmp_img, data_npz, hfield)
 
@@ -986,7 +1029,7 @@ class LSC_rho2rho_sequential_DataSet(Dataset):
             img_seq = self.transform(img_seq)
 
         # Fixed time offset
-        Dt = torch.tensor(0.25 * self.timeIDX_offset, dtype=torch.float32)
+        Dt = torch.tensor(0.25 * self.valid_seq[index][1], dtype=torch.float32)
 
         return img_seq, Dt
 
