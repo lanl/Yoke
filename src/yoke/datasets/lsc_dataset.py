@@ -9,6 +9,7 @@ data, *lsc240420*.
 # Packages
 ####################################
 import glob
+import h5py
 import itertools
 import os
 from pathlib import Path
@@ -67,7 +68,9 @@ def LSCcsv2bspline_pts(design_file: str, key: str) -> np.ndarray:
                                    the Layered Shaped Charge
 
     """
-    design_df = pd.read_csv(design_file, sep=",", header=0, index_col=0, engine="python")
+    design_df = pd.read_csv(
+        design_file, sep=",", header=0, index_col=0, engine="python"
+    )
 
     # removed spaces from headers
     for col in design_df.columns:
@@ -724,7 +727,9 @@ class LSC_rho2rho_temporal_DataSet(Dataset):
         """Return effectively infinite number of samples in dataset."""
         return int(1e6)
 
-    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def __getitem__(
+        self, index: int
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Return a tuple of a batch's input and output data."""
         # Rotate index if necessary
         index = index % self.Nsamples
@@ -889,8 +894,8 @@ class LSC_rho2rho_sequential_DataSet(Dataset):
         path_to_cache: str = None,
     ) -> None:
         """Initialization for LSC sequential dataset."""
-        dir_path = Path(LSC_NPZ_DIR)
         # Ensure the directory exists and is indeed a directory
+        dir_path = Path(LSC_NPZ_DIR)
         if not dir_path.is_dir():
             raise FileNotFoundError(f"Directory not found: {LSC_NPZ_DIR}")
 
@@ -900,13 +905,9 @@ class LSC_rho2rho_sequential_DataSet(Dataset):
         self.transform = transform
         self.rng = np.random.default_rng()
 
-        # Load cache if available.
-        if (path_to_cache is not None) and os.path.exists(path_to_cache):
-            cache_data = np.load(path_to_cache)
-            valid_seq = [
-                (s, t) for s, t in zip(cache_data["valid_seq"], cache_data["dt"])
-            ]
-        else:
+        # Create a list of valid sequences.
+        self.path_to_cache = path_to_cache
+        if (self.path_to_cache is None) or not os.path.exists(self.path_to_cache):
             # Load the list of file prefixes
             with open(file_prefix_list) as f:
                 self.file_prefix_list = [line.rstrip() for line in f]
@@ -935,7 +936,8 @@ class LSC_rho2rho_sequential_DataSet(Dataset):
             )
 
             # Find valid file sequences at each time offset.
-            valid_seq = []  # [(file sequence, time offset)]
+            valid_prefix = []
+            valid_inds = []
             for dt in timeIDX_offset:
                 for file in all_files:
                     # Determine starting index from file name.
@@ -944,31 +946,48 @@ class LSC_rho2rho_sequential_DataSet(Dataset):
                     )
 
                     # Search for subsequent indices.
-                    curr_seq = [file[1]]
+                    valid_inds_curr = [startIDX]
                     for t in range(1, seq_len):
                         next_file = os.path.join(
                             self.LSC_NPZ_DIR,
                             f"{file[0]}_pvi_idx{startIDX + t * dt:05d}.npz",
                         )
                         if os.path.exists(next_file):
-                            curr_seq.append(next_file)
+                            valid_inds_curr.append(startIDX + t * dt)
                         else:
                             break
 
                     # If the full sequence was available, append to valid_seq.
-                    if len(curr_seq) == seq_len:
-                        valid_seq.append((curr_seq, dt))
+                    if len(valid_inds_curr) == seq_len:
+                        valid_prefix.append(file[0])
+                        valid_inds.append(valid_inds_curr)
 
-            # Save cache.
-            if path_to_cache is not None:
-                np.savez(
-                    path_to_cache,
-                    valid_seq=np.array([f[0] for f in valid_seq]),
-                    dt=np.array([f[1] for f in valid_seq]),
+            # Store the number of valid sequences and store.
+            self.Nsamples = len(valid_prefix)
+        else:
+            # The cache exists, so we'll load sequences on at a time in __getitem__.
+            valid_prefix = []
+            valid_inds = []
+
+            # Count the number of valid sequences in the cache.
+            with h5py.File(self.path_to_cache, "r") as f:
+                self.Nsamples = len(f["valid_prefix"])
+
+        # Save cache.
+        valid_prefix = np.array(valid_prefix, dtype=object)
+        valid_inds = np.array(valid_inds, dtype=np.int32)
+        if (self.path_to_cache is not None) and not os.path.exists(self.path_to_cache):
+            with h5py.File(self.path_to_cache, "w") as f:
+                f.create_dataset(
+                    "valid_prefix",
+                    data=valid_prefix,
+                    dtype=h5py.string_dtype(encoding="utf-8"),
                 )
+                f.create_dataset("valid_inds", data=valid_inds)
 
-        self.valid_seq = valid_seq
-        self.Nsamples = len(valid_seq)
+        self.filename_format = r"{prefix}_pvi_idx{time_index:05d}.npz"
+        self.valid_prefix = valid_prefix
+        self.valid_inds = valid_inds
 
         # Fields to extract from the simulation
         self.hydro_fields = hydro_fields
@@ -991,9 +1010,29 @@ class LSC_rho2rho_sequential_DataSet(Dataset):
         # Rotate index if necessary
         index = index % self.Nsamples
 
+        # Grab sequence parameters.
+        if len(self.valid_prefix) == 0:
+            # Load sequence parameters from cache.
+            with h5py.File(self.path_to_cache, "r") as f:
+                valid_prefix = f["valid_prefix"][index].decode()
+                valid_inds = f["valid_inds"][index]
+        else:
+            valid_prefix = self.valid_prefix[index]
+            valid_inds = self.valid_inds[index]
+
+        # Build list of files in this sequence.
+        timeIDX_offset = valid_inds[1] - valid_inds[0]
+        valid_seq = [
+            os.path.join(
+                self.LSC_NPZ_DIR,
+                self.filename_format.format(prefix=valid_prefix, time_index=t_ind),
+            )
+            for t_ind in valid_inds
+        ]
+
         # Load and process the sequence of frames
         frames = []
-        for file_path in self.valid_seq[index][0]:
+        for file_path in valid_seq:
             try:
                 data_npz = np.load(file_path)
             except Exception as e:
@@ -1029,7 +1068,7 @@ class LSC_rho2rho_sequential_DataSet(Dataset):
             img_seq = self.transform(img_seq)
 
         # Fixed time offset
-        Dt = torch.tensor(0.25 * self.valid_seq[index][1], dtype=torch.float32)
+        Dt = torch.tensor(0.25 * timeIDX_offset, dtype=torch.float32)
 
         return img_seq, Dt
 
