@@ -68,9 +68,7 @@ def LSCcsv2bspline_pts(design_file: str, key: str) -> np.ndarray:
                                    the Layered Shaped Charge
 
     """
-    design_df = pd.read_csv(
-        design_file, sep=",", header=0, index_col=0, engine="python"
-    )
+    design_df = pd.read_csv(design_file, sep=",", header=0, index_col=0, engine="python")
 
     # removed spaces from headers
     for col in design_df.columns:
@@ -727,9 +725,7 @@ class LSC_rho2rho_temporal_DataSet(Dataset):
         """Return effectively infinite number of samples in dataset."""
         return int(1e6)
 
-    def __getitem__(
-        self, index: int
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Return a tuple of a batch's input and output data."""
         # Rotate index if necessary
         index = index % self.Nsamples
