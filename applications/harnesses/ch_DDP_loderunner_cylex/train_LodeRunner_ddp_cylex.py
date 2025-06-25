@@ -33,9 +33,9 @@ parser = cli.add_cosine_lr_scheduler_args(parser=parser)
 
 # Change some default filepaths.
 parser.set_defaults(
-    train_filelist="lsc240420_prefixes_train_80pct.txt",
-    validation_filelist="lsc240420_prefixes_validation_10pct.txt",
-    test_filelist="lsc240420_prefixes_test_10pct.txt",
+    train_filelist="cx241203_prefixes_train_80pct.txt",
+    validation_filelist="cx241203_prefixes_validation_10pct.txt",
+    test_filelist="cx241203_prefixes_test_10pct.txt",
 )
 
 
