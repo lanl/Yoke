@@ -38,7 +38,9 @@ dependencies = [
     "lightning",
     "sphinx",
     "coverage",
-    "furo"
+    "furo",
+    "onnx",
+    "onnxruntime"
     ]
 requires-python = ">=3.9"
 readme = "README.md"
