@@ -2,6 +2,8 @@
 
 This tutorial shows how to save and load/evaluate a trained model using ONNX, which is loaded from a .pth file. This is useful for deploying trained models so that it can be easily used.
 
+This script is based on the model produced from running the mnist_surrogate in applications/harnesses/mnist_surrogate/, with Epoch=1 and Study_IDX=001.
+
 ---
 
 ## Table of Contents
