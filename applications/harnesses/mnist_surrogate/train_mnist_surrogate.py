@@ -10,6 +10,9 @@ from torch.optim.lr_scheduler import StepLR
 from yoke.models.mnist_model import mnist_CNN
 from yoke.helpers import cli
 
+import yoke.torch_training_utils as tr
+import os
+
 if __name__ == "__main__":
     descr = "Train CNN on MNIST with flexible conv layers"
     parser = argparse.ArgumentParser(
@@ -123,3 +126,32 @@ if __name__ == "__main__":
         out_name = f"mnist_study{args.studyIDX:03d}_epoch{args.epochs:03d}.pt"
         torch.save(model.state_dict(), out_name)
         print("Saved model to", out_name)
+
+    # Save model with save_model_and_optimizer
+    
+    # model arguments in dictionary form
+    model_args = {
+        "conv1_size":args.conv1,
+        "conv2_size":args.conv2,
+        "conv3_size":args.conv3,
+        "conv4_size":args.conv4
+    }
+    
+    studyIDX = args.studyIDX
+    
+    # Epoch that we are saving
+    epoch = 1
+    
+    # file path to save the model
+    chkpt_name_str = "study{0:03d}_modelState.pth"
+    filepath = os.path.join("./", chkpt_name_str.format(studyIDX))
+    
+    # save model and optimizer
+    tr.save_model_and_optimizer(
+        model, 
+        optimizer, 
+        epoch, 
+        filepath, 
+        model_class=mnist_CNN,
+        model_args=model_args
+        )
