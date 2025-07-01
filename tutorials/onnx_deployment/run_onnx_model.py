@@ -1,3 +1,5 @@
+# run_onnx_module.py: example of evaluating a model in ONNX format
+
 import sys
 import os
 
@@ -10,11 +12,12 @@ import yoke.torch_training_utils as tr
 
 # inputs
 
-# directory where model was saved in .pth format
-model_filepath = r'../../applications/harnesses/mnist_surrogate/runs/study_001/'
+# path to load ONNX model
+onnx_model_path = './data/'
+os.makedirs(onnx_model_path, exist_ok=True)
 
-# name of model to be saved in ONNX format
-model_name = 'study001_modelState' 
+# name of ONNX model
+onnx_model_name = "study001_modelState"
 
 # path to test data
 data_dir = './data/MNIST' # args.data_dir
@@ -22,11 +25,9 @@ data_dir = './data/MNIST' # args.data_dir
 # batch size
 batch_size = 64 # args.batch_size
 
-# device
-device = "cpu"
-
 
 # load data to evaluate ONNX model
+
 test_kwargs = {"batch_size": batch_size}
 transform = transforms.Compose(
     [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
@@ -39,18 +40,11 @@ test_loader = torch.utils.data.DataLoader(test_ds, **test_kwargs)
 
 # evaluate onnx model
 
-# path to save ONNX model
-onnx_model_savepath = './data/'
-os.makedirs(onnx_model_savepath, exist_ok=True)
-
-# name of ONNX model
-onnx_model_name = "study001_modelState"
-
 # full path to load ONNX model
-onnx_model_path = onnx_model_savepath + onnx_model_name + '.onx'
+onnx_model_fullpath = onnx_model_path + onnx_model_name + '.onx'
 
 # create ONNX object
-onx = tr.onnx_module(onnx_model_path)
+onx = tr.onnx_module(onnx_model_fullpath)
 
 # evaluate ONNX model, test accuracy with test set by computing percentage of correctly identified classes
 correct = 0
