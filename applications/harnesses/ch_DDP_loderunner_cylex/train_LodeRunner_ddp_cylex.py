@@ -34,7 +34,7 @@ parser = cli.add_cosine_lr_scheduler_args(parser=parser)
 # Change some default filepaths.
 parser.set_defaults(
     train_filelist="cx241203_prefixes_train_80pct.txt",
-    validation_filelist="cx241203_prefixes_validation_10pct.txt",
+    validation_filelist="cx241203_prefixes_val_10pct.txt",
     test_filelist="cx241203_prefixes_test_10pct.txt",
 )
 
@@ -261,19 +261,19 @@ def main(args, rank, world_size, local_rank, device):
     #############################################
     # Data Initialization (Distributed Dataloader)
     #############################################
-    TemporalDataSet
-    train_dataset = LSC_rho2rho_temporal_DataSet(
-        args.LSC_NPZ_DIR,
+    train_dataset = TemporalDataSet(
+        args.NPZ_DIR,
+        args.CSV_FILEPATH,
         file_prefix_list=train_filelist,
-        max_timeIDX_offset=2,
+        max_time_idx_offset=2,
         max_file_checks=10,
         half_image=True,
     )
-    TemporalDataSet
-    val_dataset = LSC_rho2rho_temporal_DataSet(
+    val_dataset = TemporalDataSet(
         args.LSC_NPZ_DIR,
+        args.CSV_FILEPATH,
         file_prefix_list=validation_filelist,
-        max_timeIDX_offset=2,
+        max_time_idx_offset=2,
         max_file_checks=10,
         half_image=True,
     )
