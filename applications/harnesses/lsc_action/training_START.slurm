@@ -8,7 +8,7 @@
 
 #SBATCH --job-name=lsc_tCNN2_study<studyIDX>
 #SBATCH --qos=standard
-#SBATCH -A xd_g
+#SBATCH -A w25_artimis_g 
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:1
 #SBATCH --ntasks-per-gpu=8
