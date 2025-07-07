@@ -171,8 +171,8 @@ if __name__ == "__main__":
     # Initialize Loss
     #############################################
     # Use `reduction='none'` so loss on each sample in batch can be recorded.
-    loss_fn = nn.MSELoss(reduction="none")
-
+    # loss_fn = nn.MSELoss(reduction="none")
+    loss_fn = nn.L1Loss(reduction="none")
     print("Model initialized.")
 
     #############################################

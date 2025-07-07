@@ -21,6 +21,7 @@ import pandas as pd
 # >>> bklist = matplotlib.rcsetup.interactive_bk
 # >>> print(bklist)
 import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 # matplotlib.use('MacOSX')
@@ -106,13 +107,15 @@ parser.add_argument("--savefig", "-S", action="store_true", help="Flag to save f
 
 args_ns = parser.parse_args()
 
+print("SAVEFIG is", args_ns.savefig)
+
 basedir = args_ns.basedir
 IDX = args_ns.IDX
 YLIM = args_ns.ylim
 INPROGRESS = args_ns.inprogress
 savedir = args_ns.savedir
 SAVEFIG = args_ns.savefig
-
+print("118")
 # Number of batches to include in each plot point
 Nsamps_per_trn_pt = args_ns.Nsamps_per_trn_pt
 Nsamps_per_val_pt = args_ns.Nsamps_per_val_pt
@@ -140,7 +143,7 @@ for Vcsv in val_csv_list:
     epoch = Vcsv.split("epoch")[1]
     epoch = int(epoch.split(".")[0])
     val_file_epochs.append(epoch)
-
+print("146")
 # # Retrieve indexes
 # trn_idxlist = trn_DF.index.values
 # val_idxlist = val_DF.index.values
@@ -215,7 +218,7 @@ for tIDX, Tcsv in enumerate(trn_csv_list):
 
 # Make legend
 plt.legend(fontsize=16)
-
+print("221")
 # No xlim
 ax.set_ylim(0.0, YLIM)
 

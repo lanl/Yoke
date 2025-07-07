@@ -49,7 +49,7 @@ parser.add_argument(
     "-D",
     action="store",
     type=str,
-    default="/data2/lsc240420",
+    default="/lustre/scratch5/exempt/artimis/mpmm/lsc240420/",
     help="Directory to find NPZ files.",
 )
 
@@ -71,7 +71,7 @@ parser.add_argument(
     type=str,
     default="lsc240420_id00101_pvi",
     help="Run identifier.",
-)
+)   
 
 # PVI index
 parser.add_argument(

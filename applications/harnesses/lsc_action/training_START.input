@@ -34,6 +34,8 @@ lsc240420_idx00100_test_10pct.txt
 100
 --cycle_epochs
 2
+--anchor_lr
+<ANCHOR_LR>
 --train_batches
 <NTRN_BATCH>
 --val_batches

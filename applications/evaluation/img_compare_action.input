@@ -9,7 +9,7 @@ design_lsc240420_MASTER.csv
 --LSC_NPZ_DIR
 /lustre/scratch5/exempt/artimis/mpmm/lsc240420/
 --checkpoint
-/usr/projects/artimis/mpmm/smyther/Yoke_RL/applications/harnesses/lsc_action/runs/study_013/study013_modelState_epoch0100.hdf5
+/usr/projects/artimis/mpmm/smyther/Yoke_RL/applications/harnesses/lsc_action/runs/study_018/study018_modelState_epoch0100.hdf5
 --sampIDX
 95
 --linearFeatures
