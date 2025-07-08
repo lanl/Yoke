@@ -15,7 +15,8 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, RandomSampler
 from torch.utils.data.distributed import DistributedSampler
 import torch.distributed as dist
-
+import onnx
+import onnxruntime as ort
 
 def count_torch_params(model, trainable=True):
     """Count parameters in a pytorch model.
@@ -388,9 +389,6 @@ class onnx_module:
             check_model (bool): Optional argument to check validity of loaded model.
             verbose (bool): Optional argument to check validity of loaded model.
         """
-        
-        # ONNX modules
-        import onnxruntime as ort
 
         # create an ONNX Runtime session
         ort_session = ort.InferenceSession(self.filepath)
