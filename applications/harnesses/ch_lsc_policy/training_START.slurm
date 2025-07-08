@@ -11,7 +11,7 @@
 # partition. There are optional other constraints.
 
 #SBATCH --job-name=lscpolicy_s<studyIDX>_e0001
-#SBATCH --account=xd_g
+#SBATCH --account=w25_artimis_g
 #SBATCH --partition=gpu
 #SBATCH --time=01:20:00
 #DEBUG #SBATCH --time=2:00:00
