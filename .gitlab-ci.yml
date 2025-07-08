@@ -127,3 +127,15 @@ lint-yoke-models:
   allow_failure: false
   image: 're-registry.lanl.gov/artimis_mpmm/mpmmcicdrbot/bookworm-slim-amd64-conda-py3_12_5__2024_10_29'
 
+lint-tutorials-onnx_deployment:
+  stage: lint_temp
+  script:
+    - echo "starting bashrc"
+    - source /root/.bashrc
+    - echo "Running linting (through ruff)"
+    - ruff check tutorials/onnx_deployment
+    - ruff check tutorials/onnx_deployment --preview
+    - ruff format tutorials/onnx_deployment --check --diff
+  allow_failure: false
+  image: 're-registry.lanl.gov/artimis_mpmm/mpmmcicdrbot/bookworm-slim-amd64-conda-py3_12_5__2024_10_29'
+  
