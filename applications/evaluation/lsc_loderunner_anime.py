@@ -109,6 +109,15 @@ parser.add_argument(
     "--verbose", "-V", action="store_true", help="Flag to turn on debugging output."
 )
 
+parser.add_argument(
+    "--mode",
+    action="store",
+    type=str,
+    choices=["single", "chained", "timestep"],
+    default="single",
+    help="Prediction mode: 'single' for single-step predictions (still generates the entire GIF), 'chained' for multi-step chained predictions (uses the model's predicted output to make the next timestep), 'timestep' for timestep-based predictions (generates a separate image for each timestep based on the initial timestep and the delta t).",
+)
+
 
 def print_NPZ_keys(npzfile: str = "./lsc240420_id00201_pvi_idx00100.npz") -> None:
     """Print keys of NPZ file."""
@@ -156,6 +165,7 @@ if __name__ == "__main__":
     runID = args_ns.runID
     embed_dim = args_ns.embed_dim
     VERBOSE = args_ns.verbose
+    mode = args_ns.mode
 
     if not os.path.exists(outdir):
         os.makedirs(outdir)
@@ -223,11 +233,12 @@ if __name__ == "__main__":
     out_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7])
 
     # Time offset
-    Dt = torch.tensor([0.25])
+    # Dt = torch.tensor([0.25])
 
     # Loop through images
     for k, npzfile in enumerate(npz_list):
         # Get index
+        Dt = torch.tensor([0.25]) if mode != "timestep" else torch.tensor([k * 0.25])
         pviIDX = npzfile.split("idx")[1]
         pviIDX = int(pviIDX.split(".")[0])
 
@@ -246,63 +257,67 @@ if __name__ == "__main__":
             input_img_list.append(tmp_img)
 
         # Concatenate images channel first.
-        input_img = torch.tensor(np.stack(input_img_list, axis=0)).to(torch.float32)
+        temp_img = torch.tensor(np.stack(input_img_list, axis=0)).to(torch.float32)
+        if mode == "timestep" and k == 0:
+            input_img = temp_img
+        elif mode != "timestep":
+            input_img = temp_img
 
         # Sum for true average density
         true_rho = input_img.detach().numpy()
         true_rho = true_rho[0:6, :, :].sum(0)
 
         # Make a prediction
-        pred_img = model(torch.unsqueeze(input_img, 0), in_vars, out_vars, Dt)
-        pred_rho = np.squeeze(pred_img.detach().numpy())
-        pred_rho = pred_rho[0:6, :, :].sum(0)
+        if mode != "chained":
+            pred_img = model(torch.unsqueeze(input_img, 0), in_vars, out_vars, Dt)
+            pred_rho = np.squeeze(pred_img.detach().numpy())
+            pred_rho = pred_rho[0:6, :, :].sum(0)
+        else:
+            if k == 0:
+                input_img_list = []
+                for hfield in default_vars:
+                    tmp_img = singlePVIarray(npzfile=npzfile, FIELD=hfield)
 
-        # Chained prediction
-        # if k == 0:
-        #     input_img_list = []
-        #     for hfield in default_vars:
-        #         tmp_img = singlePVIarray(npzfile=npzfile, FIELD=hfield)
+                    # Remember to replace all NaNs with 0.0
+                    tmp_img = np.nan_to_num(tmp_img, nan=0.0)
+                    input_img_list.append(tmp_img)
 
-        #         # Remember to replace all NaNs with 0.0
-        #         tmp_img = np.nan_to_num(tmp_img, nan=0.0)
-        #         input_img_list.append(tmp_img)
+                # Concatenate images channel first.
+                input_img = torch.tensor(
+                    np.stack(
+                        input_img_list,
+                        axis=0)
+                    ).to(torch.float32)
 
-        #     # Concatenate images channel first.
-        #     input_img = torch.tensor(
-        #          np.stack(
-        #              input_img_list,
-        #              axis=0)
-        #          ).to(torch.float32)
+                # Sum for true average density
+                true_rho = input_img.detach().numpy()
+                true_rho = true_rho[0:6, :, :].sum(0)
 
-        #     # Sum for true average density
-        #     true_rho = input_img.detach().numpy()
-        #     true_rho = true_rho[0:6, :, :].sum(0)
+                # Make a prediction
+                pred_img = model(torch.unsqueeze(input_img, 0), in_vars, out_vars, Dt)
+                pred_rho = np.squeeze(pred_img.detach().numpy())
+                pred_rho = pred_rho[0:6, :, :].sum(0)
 
-        #     # Make a prediction
-        #     pred_img = model(torch.unsqueeze(input_img, 0), in_vars, out_vars, Dt)
-        #     pred_rho = np.squeeze(pred_img.detach().numpy())
-        #     pred_rho = pred_rho[0:6, :, :].sum(0)
+            else:
+                # Get ground-truth average density
+                true_img_list = []
+                for hfield in default_vars:
+                    tmp_img = singlePVIarray(npzfile=npzfile, FIELD=hfield)
 
-        # else:
-        #     # Get ground-truth average density
-        #     true_img_list = []
-        #     for hfield in default_vars:
-        #         tmp_img = singlePVIarray(npzfile=npzfile, FIELD=hfield)
+                    # Remember to replace all NaNs with 0.0
+                    tmp_img = np.nan_to_num(tmp_img, nan=0.0)
+                    true_img_list.append(tmp_img)
 
-        #         # Remember to replace all NaNs with 0.0
-        #         tmp_img = np.nan_to_num(tmp_img, nan=0.0)
-        #         true_img_list.append(tmp_img)
+                # Concatenate images channel and sum
+                true_img = np.stack(true_img_list, axis=0)
 
-        #     # Concatenate images channel and sum
-        #     true_img = np.stack(true_img_list, axis=0)
+                # Sum for true average density
+                true_rho = true_img[0:6, :, :].sum(0)
 
-        #     # Sum for true average density
-        #     true_rho = true_img[0:6, :, :].sum(0)
-
-        #     # Evaluate LodeRunner from last prediction
-        #     pred_img = model(pred_img, in_vars, out_vars, Dt)
-        #     pred_rho = np.squeeze(pred_img.detach().numpy())
-        #     pred_rho = pred_rho[0:6, :, :].sum(0)
+                # Evaluate LodeRunner from last prediction
+                pred_img = model(pred_img, in_vars, out_vars, Dt)
+                pred_rho = np.squeeze(pred_img.detach().numpy())
+                pred_rho = pred_rho[0:6, :, :].sum(0)
 
         # Plot Truth/Prediction/Discrepancy panel.
         fig1, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(16, 6))
