@@ -1,34 +1,47 @@
-"""Train a Gaussian Policy network using DDP."""
+"""Training script for reward/value network using hybrid2vectorCNN.
 
+This script loads the LSC_hfield_reward_DataSet and trains a reward prediction network 
+using the hybrid2vectorCNN architecture.
+
+Includes learning rate scheduling and support for normalized inputs.
+
+"""
+
+#############################################
+# Packages
+#############################################
 import os
 import time
 import argparse
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-from yoke.models.policyCNNmodules import gaussian_policyCNN
-from yoke.datasets.lsc_dataset import LSC_hfield_policy_DataSet
-import yoke.torch_training_utils as tr
+from yoke.models.hybridCNNmodules import hybrid2vectorCNN
+from yoke.datasets.lsc_dataset import LSC_hfield_reward_DataSet
+import yoke.torch_training_utils as tr  # Assuming this exists
 from yoke.lr_schedulers import CosineWithWarmupScheduler
-from yoke.helpers import cli
-
+from yoke.helpers import cli  # Assuming this exists
 
 #############################################
 # Inputs
 #############################################
 descr_str = (
-    "Uses DDP to train Gaussian policy architecture."
+    "Trains reward network architecture to calculate error between current and target density fields."
 )
 parser = argparse.ArgumentParser(
-    prog="Gaussian Policy Training", description=descr_str, fromfile_prefix_chars="@"
+    prog="reward network training", description=descr_str, fromfile_prefix_chars="@"
 )
 parser = cli.add_default_args(parser=parser)
 parser = cli.add_filepath_args(parser=parser)
 parser = cli.add_training_args(parser=parser)
 parser = cli.add_cosine_lr_scheduler_args(parser=parser)
 
+
+# Change some default filepaths.
+parser.set_defaults(design_file="design_lsc240420_MASTER.csv")
 
 def setup_distributed() -> tuple[int, int, int, torch.device]:
     """Sets up distributed training using PyTorch DDP."""
@@ -70,6 +83,8 @@ def cleanup_distributed() -> None:
     dist.destroy_process_group()
 
 
+#############################################
+#############################################
 def main(
         args: argparse.Namespace,
         rank: int,
@@ -77,11 +92,11 @@ def main(
         local_rank: int,
         device: torch.device
         ) -> None:
-    """Main function for training a Gaussian Policy network using DDP."""
-    #############################################
-    # Process Inputs
-    #############################################
-    # Study ID
+
+    #device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    #args = parser.parse_args()
+
+    # Study IDX
     studyIDX = args.studyIDX
 
     # Data Paths
@@ -111,56 +126,65 @@ def main(
     trn_rcrd_filename = args.trn_rcrd_filename
     val_rcrd_filename = args.val_rcrd_filename
     CONTINUATION = args.continuation
+    START = not CONTINUATION
     checkpoint = args.checkpoint
+
+    #############################################
+    # Check Devices
+    #############################################
+    print("\n")
+    print("Slurm & Device Information")
+    print("=========================================")
+    print("Slurm Job ID:", os.environ["SLURM_JOB_ID"])
+    print("Pytorch Cuda Available:", torch.cuda.is_available())
+    print("GPU ID:", os.environ["SLURM_JOB_GPUS"])
+    print("Number of System CPUs:", os.cpu_count())
+    print("Number of CPUs per GPU:", os.environ["SLURM_JOB_CPUS_PER_NODE"])
 
     # Dictionary of available models.
     available_models = {
-        "gaussian_policyCNN": gaussian_policyCNN
+        "hybrid2vectorCNN": hybrid2vectorCNN
     }
-
+    
     #############################################
-    # Model Arguments for Dynamic Reconstruction
+    # Model arguments
     #############################################
     model_args = {
         "img_size": (1, 1120, 800),
         "input_vector_size": 28,
-        "output_dim": 28,
-        "min_variance": 1e-6,
+        "output_dim": 1,
         "features": 12,
-        "depth": 15,
+        "depth": 12,
         "kernel": 3,
         "img_embed_dim": 32,
         "vector_embed_dim": 32,
-        "size_reduce_threshold": (16, 16),
-        "vector_feature_list": (16, 64, 64, 16),
-        "output_feature_list": (16, 64, 64, 16)
-    }
+        "size_reduce_threshold": (8, 8),
+        "vector_feature_list": (32, 32, 64, 64),
+        "output_feature_list": (64, 128, 128, 64),
+        "act_layer": nn.GELU,
+        "norm_layer": nn.LayerNorm
+        }
 
-    model = gaussian_policyCNN(**model_args)
-
-    #############################################
-    # Freeze covariance parameters
-    #############################################
-    for param in model.cov_mlp.parameters():
-        param.requires_grad = False
+    model = hybrid2vectorCNN(**model_args)
 
     #############################################
-    # Initialize Optimizer
+    # Initialize optimizer
     #############################################
+    loss_fn = nn.MSELoss(reduction="none")
     optimizer = torch.optim.AdamW(
         model.parameters(),
-        lr=1e-3,
+        lr=1e-6,
         betas=(0.9, 0.999),
         eps=1e-08,
         weight_decay=0.01
     )
+    print("Model initialized.")
 
     #############################################
     # Initialize Loss
     #############################################
-    # Use `reduction='none'` so loss on each sample in batch can be recorded.
     loss_fn = nn.MSELoss(reduction="none")
-
+    
     #############################################
     # Load Model for Continuation (Rank 0 only)
     #############################################
@@ -171,13 +195,8 @@ def main(
             checkpoint,
             optimizer,
             available_models,
-            device=device,
+            device=device
         )
-
-        # Freeze parameters of loaded model
-        for param in model.cov_mlp.parameters():
-            param.requires_grad = False
-
         print("Model state loaded for continuation.")
     else:
         model.to(device)
@@ -219,20 +238,22 @@ def main(
     #############################################
     # Data Initialization (Distributed Dataloader)
     #############################################
-    train_dataset = LSC_hfield_policy_DataSet(
-        args.LSC_NPZ_DIR,
+    train_dataset = LSC_hfield_reward_DataSet(
+        args.LSC_NPZ_DIR, 
         filelist=train_filelist,
         design_file=design_file,
         half_image=False,
         field_list=["density_throw"]
     )
-    val_dataset = LSC_hfield_policy_DataSet(
+    val_dataset = LSC_hfield_reward_DataSet(
         args.LSC_NPZ_DIR,
         filelist=validation_filelist,
         design_file=design_file,
         half_image=False,
         field_list=["density_throw"]
     )
+
+    print("Datasets initialized.")
 
     # NOTE: For DDP the batch_size is the per-GPU batch_size!!!
     train_dataloader = tr.make_distributed_dataloader(
@@ -274,7 +295,7 @@ def main(
             startTime = time.time()
 
         # Train and Validate
-        tr.train_lsc_policy_epoch(
+        tr.train_lsc_reward_epoch(
             training_data=train_dataloader,
             validation_data=val_dataloader,
             num_train_batches=train_batches,
@@ -315,7 +336,7 @@ def main(
         optimizer,
         epochIDX,
         new_chkpt_path,
-        model_class=gaussian_policyCNN,
+        model_class=hybrid2vectorCNN,
         model_args=model_args
     )
 
