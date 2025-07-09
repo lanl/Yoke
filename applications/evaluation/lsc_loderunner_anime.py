@@ -233,8 +233,6 @@ if __name__ == "__main__":
     out_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7])
 
     # Time offset
-    # Dt = torch.tensor([0.25])
-
     # Loop through images
     for k, npzfile in enumerate(npz_list):
         # Get index
