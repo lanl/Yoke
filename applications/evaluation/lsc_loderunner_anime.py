@@ -262,7 +262,7 @@ if __name__ == "__main__":
             input_img = temp_img
 
         # Sum for true average density
-        true_rho = input_img.detach().numpy()
+        true_rho = temp_img.detach().numpy()
         true_rho = true_rho[0:6, :, :].sum(0)
 
         # Make a prediction
