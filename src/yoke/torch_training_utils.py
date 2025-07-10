@@ -336,38 +336,34 @@ def load_model_and_optimizer(filepath, optimizer, available_models, device="cuda
 ###############################################
 
 class onnx_module:
-    
-    def __init__(self, filepath, example_input):
-        """
+    """ONNX module class."""
+
+    def __init__(self, filepath: str) -> None:
+        """Initialize class.
+
         Args:
-            model (torch.nn.Module): Torch nn.Module instance or DDP version thereof.
-            example_input (torch.Tensor): Example input used to trace the model's computation.
             filepath (str): Checkpoint filename. Should end in .onnx file extension.
+
         """
-        
-        # self.model = model
         self.filepath = filepath
-        self.example_input = example_input
-    
-    def save(self, model):
-        
+        return None
+
+    def save(self, model: nn.Module, example_input: torch.Tensor) -> None:
         """Export model in ONNX format.
 
         Saves model using ONNX.
 
         Args:
             model (torch.nn.Module): Torch nn.Module instance or DDP version thereof.
-            example_input (torch.Tensor): Example input used to trace the model's computation.
-            filepath (str): Checkpoint filename. Should end in .onnx file extension.
+            example_input (torch.Tensor): Example input used to trace
+            the model's computation.
 
         """
-        
         model.eval()
-        # example input matches the shape your model expects
-        # dummy_input = torch.randn(1, 1, 28, 28, device=device) # (batch, channels, height, width)
+
         torch.onnx.export(
             model,
-            self.example_input, #dummy_input,
+            example_input,
             self.filepath,
             input_names=["input"],
             output_names=["output"],
@@ -375,38 +371,39 @@ class onnx_module:
                 "input": {0: "batch_size"},
                 "output": {0: "batch_size"},
             },
-            opset_version=12
+            opset_version=12,
         )
         print(f"Model exported to {self.filepath}")
 
-
-    
-    def evaluate(self, data, check_model=False, verbose=False):
+    def evaluate(
+        self, data: np.ndarray, check_model: bool = False, verbose: bool = False
+    ) -> list:
         """Evaluate onnx model from data.
 
         Args:
-            data (numpy.ndarray): Data to evaluate the model. Must be same type as the exported model: (batch_size, input_size).
+            data (numpy.ndarray): Data to evaluate the model.Must be same type as
+            the exported model, (batch_size, input_size).
             check_model (bool): Optional argument to check validity of loaded model.
             verbose (bool): Optional argument to check validity of loaded model.
         """
-
         # create an ONNX Runtime session
         ort_session = ort.InferenceSession(self.filepath)
         inputs = {ort_session.get_inputs()[0].name: data}
         outputs = ort_session.run(None, inputs)
-        
+
         # (Optional) Check the model is well formed
         if check_model:
+            onnx_model = onnx.load(self.filepath)
             onnx.checker.check_model(onnx_model)
             print("ONNX model check passed!")
-        
+
         # (Optional) Print model information
         if verbose:
             session = ort.InferenceSession(self.filepath)
             for inp in session.get_inputs():
                 print(f"Name: {inp.name}")
-                print(f"  Shape: {inp.shape}")   # e.g. ['batch_size', 10] or [1, 10]
-                print(f"  Type: {inp.type}")     # e.g. 'tensor(float)'
+                print(f"  Shape: {inp.shape}")  # e.g. ['batch_size', 10] or [1, 10]
+                print(f"  Type: {inp.type}")  # e.g. 'tensor(float)'
 
         return outputs
 
