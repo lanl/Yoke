@@ -29,16 +29,59 @@ from torch.utils.data import Dataset
 
 NoneStr = None | str
 
+import numpy as np
+
+def handle_voids(npz_filename: str, hfield: str) -> np.ndarray:
+    """
+    Processes void regions in a given npz file. If hfield ends with '_Void',
+    initializes an array with zeros of shape matching 'av_density', and sets
+    elements to NaN where 'density_booster' or 'density_maincharge' are not NaN.
+
+    Parameters:
+        npz_filename (str): Path to the .npz file.
+        hfield (str): Field name string.
+
+    Returns:
+        np.ndarray: Processed image array.
+    """
+    if not hfield.endswith('_Void'):
+        return None  # Or raise an error or return a default value
+
+    # Step 2: Get array dimensions
+    dims = np.shape(read_npz_nan(npz_filename, 'av_density'))
+
+    # Step 3: Create array of zeros
+    tmp_img = np.zeros(dims)
+
+    # Step 4: Load the required arrays
+    booster = read_npz_nan(npz_filename, 'density_booster')
+    maincharge = read_npz_nan(npz_filename, 'density_maincharge')
+
+    # Step 5: Set corresponding elements to NaN where booster or maincharge is not NaN
+    mask = ~np.isnan(booster) | ~np.isnan(maincharge)
+
+    # Step 5.5: Optionally include 'density_wall' if it exists
+    with np.load(npz_filename) as data:
+        if 'density_wall' in data:
+            wall = read_npz_nan(npz_filename, 'density_wall')
+            mask |= ~np.isnan(wall)
+
+    # Step 6: Apply mask to set NaNs
+    tmp_img[mask] = np.nan
+    return tmp_img
 
 def import_img_from_npz(npz_filename: str, hfield: str) -> np.ndarray:
     """Imports image data from npz file."""
-    tmp_img = read_npz_nan(npz_filename, hfield)
+    if hfield.endswith('_Void'):
+        tmp_img = handle_voids(npz_filename, hfield)
+    else:    
+        print("In import_img_from_npz: hfield=",hfield)
+        tmp_img = read_npz_nan(npz_filename, hfield)
     # If hfield = Rcoord or Zcoord, then meshgrid:
     tmp_img = meshgrid_position(tmp_img, npz_filename, hfield)
     # If hfield = density_..., then multiply by volume fraction:
     tmp_img = volfrac_density(tmp_img, npz_filename, hfield)
     return tmp_img
-
 
 def volfrac_density(tmp_img: np.ndarray, npz_filename: str, hfield: str) -> np.ndarray:
     """Reweigh densities by volume fraction.
@@ -145,7 +188,14 @@ def read_npz_nan(npz: np.lib.npyio.NpzFile, field: str) -> np.ndarray:
         np.ndarray: Field data with NaNs replaced by 0.
 
     """
-    return np.nan_to_num(npz[field], nan=0.0)
+    #return np.nan_to_num(npz[field], nan=0.0)
+    data = np.load(npz)
+    print("npz=",npz)
+    #print("data=", data)
+    #if hasattr(data, "keys") and isinstance(data, np.lib.npyio.NpzFile):
+    #    print("data:Safe to treat as npz archive")
+    print("has keys=",list(data.keys()))
+    return np.nan_to_num(data[field], nan=0.0)
 
 
 class LabeledData:
@@ -305,6 +355,7 @@ class LabeledData:
             self.active_hydro_field_names,
             ["density_" + non_he_mats[0], "density_" + non_he_mats[1]],
         )
+
         # HE density:
         self.active_npz_field_names = np.append(
             self.active_npz_field_names, ["density_maincharge"]
@@ -462,7 +513,9 @@ def process_channel_data(
         img_list_combined = np.array(new_img_list_combined)
         if len(np.unique(new_channel_map[0])) < len(new_channel_map[0]):
             print("\n ERROR: combination of repeated materials fail")
-    return new_channel_map[0], img_list_combined, new_active_hydro_field_names[0]
+        return new_channel_map[0], img_list_combined, new_active_hydro_field_names[0]
+    else:
+        return channel_map, img_list_combined, active_hydro_field_names
 
 
 class TemporalDataSet(Dataset):
@@ -623,14 +676,20 @@ class TemporalDataSet(Dataset):
         end_img_list = []
 
         for hfield in self.active_npz_field_names:
+
             # start npz
-            tmp_img = import_img_from_npz(start_npz, hfield)
+            #tmp_img = import_img_from_npz(start_npz, hfield)
+            # SOUMI added
+            tmp_img = import_img_from_npz(self.npz_dir + start_file, hfield)
             if not self.half_image:
                 tmp_img = np.concatenate((np.fliplr(tmp_img), tmp_img), axis=1)
             start_img_list.append(tmp_img)
 
             # end_npz
-            tmp_img = import_img_from_npz(end_npz, hfield)
+            
+            #tmp_img = import_img_from_npz(end_npz, hfield)
+            # SOUMI added
+            tmp_img = import_img_from_npz(self.npz_dir + end_file, hfield)
             if not self.half_image:
                 tmp_img = np.concatenate((np.fliplr(tmp_img), tmp_img), axis=1)
             end_img_list.append(tmp_img)
@@ -655,7 +714,8 @@ class TemporalDataSet(Dataset):
         start_npz.close()
         end_npz.close()
 
-        return start_img, self.channel_map, end_img, self.channel_map, dt
+        #return start_img, self.channel_map, end_img, self.channel_map, dt
+        return start_img, torch.tensor(self.channel_map), end_img, torch.tensor(self.channel_map), dt
 
 
 class SequentialDataSet(Dataset):
@@ -771,7 +831,9 @@ class SequentialDataSet(Dataset):
 
             field_imgs = []
             for hfield in self.active_npz_field_names:
-                tmp_img = import_img_from_npz(data_npz, hfield)
+                #tmp_img = import_img_from_npz(data_npz, hfield)
+                # SOUMI added
+                tmp_img = import_img_from_npz(file_path, hfield)
                 if not self.half_image:
                     tmp_img = np.concatenate((np.fliplr(tmp_img), tmp_img), axis=1)
                 field_imgs.append(tmp_img)
