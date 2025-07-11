@@ -258,6 +258,18 @@ def main(args, rank, world_size, local_rank, device):
         last_epoch=last_epoch,
     )
 
+    def collate_variable_channels(batch: list) -> list:
+        """
+        Custom collate function for variable-channel tensors.
+
+        Args:
+            batch: List of dataset items (e.g. tensors or tuples).
+
+        Returns:
+            List of dataset items without stacking.
+        """
+        return batch
+
     #############################################
     # Data Initialization (Distributed Dataloader)
     #############################################
@@ -286,6 +298,7 @@ def main(args, rank, world_size, local_rank, device):
         num_workers=num_workers,
         rank=rank,
         world_size=world_size,
+        #collate_fn=collate_variable_channels,
     )
     val_dataloader = tr.make_distributed_dataloader(
         val_dataset,
@@ -294,7 +307,8 @@ def main(args, rank, world_size, local_rank, device):
         num_workers=num_workers,
         rank=rank,
         world_size=world_size,
-    )
+        #collate_fn=collate_variable_channels,
+    )  #SOUMI added last line
 
     #############################################
     # Training Loop (Modified for DDP)
