@@ -347,11 +347,9 @@ if __name__ == "__main__":
                     input_img_list.append(tmp_img)
 
                 # Concatenate images channel first.
-                input_img = torch.tensor(
-                    np.stack(
-                        input_img_list,
-                        axis=0)
-                    ).to(torch.float32)
+                input_img = torch.tensor(np.stack(input_img_list, axis=0)).to(
+                    torch.float32
+                )
 
                 # Sum for true average density
                 true_rho = input_img.detach().numpy()
