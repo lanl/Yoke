@@ -125,7 +125,7 @@ parser.add_argument(
 #         Here is a simplified version of the code for this function:
 #         def RM(inp, steps, dt):
 #             current = inp
-#             for _ in range(n): # underscore used bc it doesn't matter
+#                         for _ in range(n): # underscore used because it doesn't matter
 #                 current = M(current, dt) # where M is the model.
 #             return current
 # In timestep mode, the initial image at time zero is used for ALL
