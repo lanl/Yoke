@@ -1,8 +1,10 @@
 # python applications/harnesses/moving_mnist/train.py
+# python applications/harnesses/moving_mnist/train.py --continuation
 # python applications/evaluation/TandVplot.py -S --basedir . -I 0 -Y 2 -Nt 2 -Nv 250
 import os
 import torch
 import logging
+import argparse
 import numpy as np
 import torch.nn as nn
 from tqdm import tqdm
@@ -56,29 +58,38 @@ class mmnist_dataSet(Dataset):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--continuation", action="store_true", default=False)
+    parser.add_argument("--checkpoint", nargs=1, type=str, default=["checkpoint.ckpt"])
+
+    args = parser.parse_args()
+    checkpoint = args.checkpoint[0]
+    CONTINUATION = args.continuation
+
     yl.configure_logger("yoke_logger", level=logging.INFO)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    model = LodeRunner(
-        default_vars=["var1"],
-        image_size=(64, 64),
-        patch_size=(8, 8),
-        embed_dim=4,
-        emb_factor=2,
-        num_heads=2,
-        block_structure=(1, 1, 3, 1),
-        window_sizes=[
+    model_args = {
+        "default_vars": ["var1"],
+        "image_size": (64, 64),
+        "patch_size": (8, 8),
+        "embed_dim": 4,
+        "emb_factor": 2,
+        "num_heads": 2,
+        "block_structure": (1, 1, 3, 1),
+        "window_sizes": [
             (4, 4),
             (4, 4),
             (2, 2),
             (1, 1),
         ],
-        patch_merge_scales=[
+        "patch_merge_scales": [
             (2, 2),
             (2, 2),
             (2, 2),
         ],
-    )
+    }
+    model = LodeRunner(**model_args)
 
     optimizer = torch.optim.AdamW(
         model.parameters(),
@@ -91,7 +102,18 @@ if __name__ == "__main__":
     # Use `reduction='none'` so loss on each sample in batch can be recorded.
     loss_fn = nn.MSELoss(reduction="none")
 
-    model.to(device)
+    if CONTINUATION:
+        available_models = {"LodeRunner": LodeRunner}
+        model, starting_epoch = tr.load_model_and_optimizer(
+            checkpoint,
+            optimizer,
+            available_models,
+            device=device,
+        )
+        print("Model state loaded for continuation.")
+    else:
+        starting_epoch = 0
+        model.to(device)
 
     # initialize outside of epoch loop because this is a single channel only
     train_dataset = mmnist_dataSet(0.75, "left")
@@ -112,10 +134,11 @@ if __name__ == "__main__":
         prefetch_factor=2,
     )
 
-    num_epochs = 1
-    # num_epochs = 100
+    # num_epochs = 1
+    num_epochs = 20
+
     channel_map = [0]
-    for epoch_idx in tqdm(range(num_epochs)):
+    for epoch_idx in tqdm(range(starting_epoch, starting_epoch + num_epochs)):
         tr.train_simple_loderunner_epoch(
             channel_map=channel_map,
             training_data=train_dataloader,
@@ -132,10 +155,17 @@ if __name__ == "__main__":
         )
         torch.cuda.empty_cache()
 
-        breakpoint()
         if epoch_idx % 10 == 0:
-            # train_loss = 
-            # pred_loss = 
+
+            def last_row(path_file="train.csv"):
+                with open(path_file) as f:
+                    for line in f:
+                        pass
+                    last_line = line
+                    yield last_line
+
+            train_loss = np.loadtxt(last_row(), delimiter=",")[-1]
+            # pred_loss =
             (start_img, true_img, Dt) = next(iter(train_dataloader))
             channel_map = [0]
             pred_img = model(
@@ -144,10 +174,13 @@ if __name__ == "__main__":
                 torch.tensor(channel_map).to(device, non_blocking=True),
                 Dt.to(device),
             )
-            plt.imshow(pred_img[1, 0, ...].detach().cpu())
+            fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
+            ax1.imshow(start_img[1, 0, ...].detach().cpu())
+            ax2.imshow(true_img[1, 0, ...].detach().cpu())
+            ax3.imshow(pred_img[1, 0, ...].detach().cpu())
             plt.savefig(
                 "pred-img_epoch-{}_train-loss-{}_val-loss-{}.pdf".format(
-                    str(epoch_idx), str(train_loss), str(val_loss)
+                    str(epoch_idx), str(train_loss), str("placeholder")
                 )
             )
 
@@ -158,9 +191,12 @@ if __name__ == "__main__":
             if isinstance(v, torch.Tensor):
                 state[k] = v.to("cpu")
 
-    # Save model and optimizer state in hdf5
-    h5_name_str = "study{0:03d}_modelState_epoch{1:04d}.hdf5"
-    new_h5_path = os.path.join("./", h5_name_str.format(studyIDX, epochIDX))
-    tr.save_model_and_optimizer_hdf5(
-        model, optimizer, epochIDX, new_h5_path, compiled=False
+    # Save model and optimizer state
+    tr.save_model_and_optimizer(
+        model,
+        optimizer,
+        epoch_idx,
+        checkpoint,
+        model_class=LodeRunner,
+        model_args=model_args,
     )
