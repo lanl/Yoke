@@ -301,7 +301,7 @@ if __name__ == "__main__":
                 true_rho = true_rho[0:6, :, :].sum(0)
 
                 # Make a prediction
-                pred_img, pred_rho = inference(model, input_img, in_vars, out_vars, Dt)
+                pred_img, pred_rho = loderunner_inference(model, input_img, in_vars, out_vars, Dt)
 
             else:
                 # Get ground-truth average density
