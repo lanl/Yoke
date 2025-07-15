@@ -21,7 +21,7 @@ Instructions
 
 .. caution::
 
-   Generating a GIF requires many calls to the model. The number of model calls will be `O(steps)`, where `steps` are the number of timesteps in the simulation. With larger and more complex models, this can be **very** slow if ran on CPU. You should probably use a **GPU** for this, given the potential for significant performance improvements. Even with 4 Nvidia A100 GPUs, this can still take ~10-15 minutes.
+   Generating a GIF requires many calls to the model. The number of model calls will be `O(steps)`, where `steps` are the number of timesteps in the simulation. With larger and more complex models, this can be **very** slow if run on CPU. You should probably use a **GPU** for this, given the potential for significant performance improvements. Even with 4 Nvidia A100 GPUs, this can still take ~10-15 minutes.
 
 1. Setup the environment, making sure you have a good version of Python loaded as well as Yoke. As stated above, you probably should be using GPUs, so you may want to check that you have GPUs. For Nvidia GPUs you can use the `nvidia-smi` command to check that you have GPUs available. If you need help setting up the environment, please refer to one of the SLURM scripts in the `applications/evaluation/harnesses` folder. This was designed for a specific system, and may not work for you, so adjust as necessary.
 2. Check the `lsc_loderunner_anime.py` script to make sure the command line arguments are set correctly and that the model parameters (especially the block structure) are set to the correct values. Please note: some things are hard coded for now (this should likely change in the future), so you may need to modify the code to suit your needs.
