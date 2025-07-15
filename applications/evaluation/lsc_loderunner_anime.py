@@ -270,14 +270,9 @@ if __name__ == "__main__":
 
         # Concatenate images channel first.
         temp_img = torch.tensor(np.stack(input_img_list, axis=0)).to(torch.float32)
-        if mode == "timestep":
-            if k == 0:
-                input_img = temp_img
-                initial_input = temp_img.clone()  # Save initial state
-            else:
-                input_img = initial_input  # Always use initial state as input
-        else:
-            input_img = temp_img
+        if k == 0:
+            initial_input = temp_img.clone()
+        input_img = initial_input if mode == "timestep" else temp_img
 
         # Sum for true average density
         true_rho = temp_img.detach().numpy()
