@@ -12,6 +12,7 @@ Initial Assumptions & Definitions
 ---------------------------------
 
 Here are some initial assumptions that will be used throughout this document. They are designed to make it easier to understand the differences in modes.
+
 - Assume the initial image is at time zero.
 - Assume you are trying to predict the n'th timestep. For simplicity, n is always a positive integer.
 - Assume there is a constant spacing between timesteps, and call that `k`.
