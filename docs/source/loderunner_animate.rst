@@ -12,6 +12,7 @@ Code
 -----
 
 The code is available in the `applications/evaluation` folder. There are two scripts:
+
 - `lsc_loderunner_anime.py`: This script generates the PNG files for each timestep of the simulation.
 - `lsc_loderunner_create_gif.py`: This script uses `lsc_loderunner_anime.py` to generate PNG files, then generates a GIF from those PNG files.
 
@@ -41,7 +42,7 @@ lsc_loderunner_anime.py
 - `runID`: The index of the simulation to use.
 - `embed_dim`: The size of the embedding dimension.
 - `verbose` (`-V`): Flag to turn on debugging output.
-- `mode`: The prediction mode to use (single, chained, or timestep). Please see the "Prediction Modes Guide" document (`prediction_modes.rst <lanl.github.io/Yoke/prediction_modes.html>`_) for more details on these modes.
+- `mode`: The prediction mode to use (single, chained, or timestep). Please see the `"Prediction Modes Guide" document <prediction_modes.html>`_ for more details on these modes.
 
 
 lsc_loderunner_create_gif.py
