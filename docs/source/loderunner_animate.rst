@@ -1,5 +1,5 @@
 Lode Runner Animation Guide
-=====================
+===========================
 
 This guide explains how to make GIF animations of loderunner models.
 
