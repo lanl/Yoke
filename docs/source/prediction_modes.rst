@@ -20,7 +20,6 @@ Here are some initial assumptions that will be used throughout this document. Th
 - Define P(n) as the prediction of the n'th timestep.
 - Define M(I, dt) to be the model that takes an input image `I` and a time delta `dt` to produce a prediction.
 - Define T(n) to be the true state at timestep `n`.
-- Define P(n) as the prediction of the n'th timestep.
 
 Mode Descriptions
 -----------------

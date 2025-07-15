@@ -158,6 +158,13 @@ def singlePVIarray(
 
     return arrays_dict[FIELD]
 
+def inference(model, inp, inv, outv, delta_t):
+    pred_img = model(torch.unsqueeze(inp, 0), inv, outv, delta_t)
+    pred_rho = np.squeeze(pred_img.detach().numpy())
+    pred_rho = pred_rho[0:6, :, :].sum(0)
+
+    return pred_img, pred_rho
+
 
 if __name__ == "__main__":
     # Parse commandline arguments
@@ -237,11 +244,13 @@ if __name__ == "__main__":
     in_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7])
     out_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7])
 
-    # Time offset
+    # Set constant/default timestep for inference
+    Dt_const = torch.tensor([0.25])  # Constant timestep for inference
+
     # Loop through images
     for k, npzfile in enumerate(npz_list):
         # Get index
-        Dt = torch.tensor([0.25]) if mode != "timestep" else torch.tensor([k * 0.25])
+        Dt = Dt_const if mode != "timestep" else torch.tensor([k * 0.25])
         pviIDX = npzfile.split("idx")[1]
         pviIDX = int(pviIDX.split(".")[0])
 
@@ -276,9 +285,7 @@ if __name__ == "__main__":
 
         # Make a prediction
         if mode != "chained":
-            pred_img = model(torch.unsqueeze(input_img, 0), in_vars, out_vars, Dt)
-            pred_rho = np.squeeze(pred_img.detach().numpy())
-            pred_rho = pred_rho[0:6, :, :].sum(0)
+            pred_img, pred_rho = inference(model, input_img, in_vars, out_vars, Dt)
         else:
             if k == 0:
                 input_img_list = []
@@ -299,9 +306,7 @@ if __name__ == "__main__":
                 true_rho = true_rho[0:6, :, :].sum(0)
 
                 # Make a prediction
-                pred_img = model(torch.unsqueeze(input_img, 0), in_vars, out_vars, Dt)
-                pred_rho = np.squeeze(pred_img.detach().numpy())
-                pred_rho = pred_rho[0:6, :, :].sum(0)
+                pred_img, pred_rho = inference(model, input_img, in_vars, out_vars, Dt)
 
             else:
                 # Get ground-truth average density
@@ -320,9 +325,7 @@ if __name__ == "__main__":
                 true_rho = true_img[0:6, :, :].sum(0)
 
                 # Evaluate LodeRunner from last prediction
-                pred_img = model(pred_img, in_vars, out_vars, Dt)
-                pred_rho = np.squeeze(pred_img.detach().numpy())
-                pred_rho = pred_rho[0:6, :, :].sum(0)
+                pred_img, pred_rho = inference(model, pred_img, in_vars, out_vars, Dt)
 
         # Plot Truth/Prediction/Discrepancy panel.
         fig1, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(16, 6))
