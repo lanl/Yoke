@@ -44,6 +44,8 @@ font = {"family": "serif"}
 plt.rc("font", **font)
 plt.rcParams["figure.figsize"] = (6, 6)
 
+TIMESTEP_DELTA = 0.25  # us, constant timestep for inference
+
 
 ###################################################################
 # Define command line argument parser
