@@ -47,10 +47,12 @@ Chained Mode
 In chained mode, the following relation is used: `P(n) = M(P(n-1), 1 * k)`, with a base case of `P(0) = I`, where `I` is the initial image at time zero.
 
 **Advantages:**
+
 - Requires only the initial timestep to generate predictions.
 - Can be used on models trained to only predict one timestep ahead.
 
 **Disadvantages:**
+
 - Prediction of a timestep far ahead can be costly. It costs `O(n)` model calls to predict the n'th timestep.
 - Predictions lose accuracy across the rollout; the error accumulates over time.
 - Uses a constant dt, so some parts of the model may be wasted.
@@ -62,11 +64,13 @@ In timestep mode, the initial image at time zero is used for ALL predictions.
 The timestep by itself is used to determine how far forward to predict. The relationship would look like this: `P(n) = M(T(0), n * k)`.
 
 **Advantages:**
+
 - Requires only the initial timestep to generate predictions.
 - Does not cause the dt related parameters to be wasted.
 - Allows for predictions of a specific timestep to only require one model call. (`O(1)` model calls)
 
 **Consideration:**
+
 - Training the model to predict one timestep ahead (exclusively) will NOT work effectively in this mode. You need to train with a variety of timesteps, so that the model will properly learn how to predict for different time deltas.
 
 Which Mode Should You Use?
