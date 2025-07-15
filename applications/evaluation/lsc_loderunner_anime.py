@@ -284,7 +284,7 @@ if __name__ == "__main__":
         true_rho = true_rho[0:6, :, :].sum(0)
 
         # Make a prediction
-        if mode != "chained":
+        if mode == "single" or mode == "timestep":
             pred_img, pred_rho = inference(model, input_img, in_vars, out_vars, Dt)
         else:
             if k == 0:
