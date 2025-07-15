@@ -280,7 +280,7 @@ if __name__ == "__main__":
 
         # Make a prediction
         if mode == "single" or mode == "timestep":
-            pred_img, pred_rho = inference(model, input_img, in_vars, out_vars, Dt)
+            pred_img, pred_rho = loderunner_inference(model, input_img, in_vars, out_vars, Dt)
         else:
             if k == 0:
                 input_img_list = []
