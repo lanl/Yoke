@@ -282,7 +282,7 @@ if __name__ == "__main__":
 
         # Make a prediction
         if mode == "single" or mode == "timestep":
-            pred_img, pred_rho = inference(model, input_img, in_vars, out_vars, Dt)
+            pred_img, pred_rho = loderunner_inference(model, input_img, in_vars, out_vars, Dt)
         else:
             if k == 0:
                 input_img_list = []
@@ -303,7 +303,7 @@ if __name__ == "__main__":
                 true_rho = true_rho[0:6, :, :].sum(0)
 
                 # Make a prediction
-                pred_img, pred_rho = inference(model, input_img, in_vars, out_vars, Dt)
+                pred_img, pred_rho = loderunner_inference(model, input_img, in_vars, out_vars, Dt)
 
             else:
                 # Get ground-truth average density
@@ -322,7 +322,7 @@ if __name__ == "__main__":
                 true_rho = true_img[0:6, :, :].sum(0)
 
                 # Evaluate LodeRunner from last prediction
-                pred_img, pred_rho = inference(model, pred_img, in_vars, out_vars, Dt)
+                pred_img, pred_rho = loderunner_inference(model, pred_img, in_vars, out_vars, Dt)
 
         # Plot Truth/Prediction/Discrepancy panel.
         fig1, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(16, 6))
