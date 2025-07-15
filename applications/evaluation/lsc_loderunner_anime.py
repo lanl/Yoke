@@ -262,12 +262,12 @@ if __name__ == "__main__":
     out_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7])
 
     # Set constant/default timestep for inference
-    Dt_const = torch.tensor([TIMESTEP_DELTA])  # Constant timestep for inference
+    DT_CONST = torch.tensor([TIMESTEP_DELTA])  # Constant timestep for inference
 
     # Loop through images
     for k, npzfile in enumerate(npz_list):
         # Get index
-        Dt = Dt_const if mode != "timestep" else torch.tensor([k * TIMESTEP_DELTA])
+        Dt = DT_CONST if mode != "timestep" else torch.tensor([k * TIMESTEP_DELTA])
         pviIDX = npzfile.split("idx")[1]
         pviIDX = int(pviIDX.split(".")[0])
 
