@@ -167,6 +167,21 @@ def loderunner_inference(model, inp, inv, outv, delta_t):
 
     return pred_img, pred_rho
 
+def prepare_input_images(npzfile, default_vars):
+    """Prepare input images from NPZ file."""
+    input_img_list = []
+    for hfield in default_vars:
+        tmp_img = singlePVIarray(npzfile=npzfile, FIELD=hfield)
+
+        # Remember to replace all NaNs with 0.0
+        tmp_img = np.nan_to_num(tmp_img, nan=0.0)
+        input_img_list.append(tmp_img)
+
+    # Concatenate images channel first.
+    return torch.tensor(np.stack(input_img_list, axis=0)).to(
+        torch.float32
+    )
+
 
 if __name__ == "__main__":
     # Parse commandline arguments
@@ -285,18 +300,7 @@ if __name__ == "__main__":
             pred_img, pred_rho = loderunner_inference(model, input_img, in_vars, out_vars, Dt)
         else:
             if k == 0:
-                input_img_list = []
-                for hfield in default_vars:
-                    tmp_img = singlePVIarray(npzfile=npzfile, FIELD=hfield)
-
-                    # Remember to replace all NaNs with 0.0
-                    tmp_img = np.nan_to_num(tmp_img, nan=0.0)
-                    input_img_list.append(tmp_img)
-
-                # Concatenate images channel first.
-                input_img = torch.tensor(np.stack(input_img_list, axis=0)).to(
-                    torch.float32
-                )
+                input_img = prepare_input_images(npzfile, default_vars)
 
                 # Sum for true average density
                 true_rho = input_img.detach().numpy()
