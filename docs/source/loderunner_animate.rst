@@ -6,7 +6,7 @@ This guide explains how to make GIF animations of loderunner models.
 Overview
 --------
 
-This code explains how to generate GIF animations that shows the model's predictions over an entire simulation.
+This code explains how to generate GIF animations that show the model's predictions over an entire simulation.
 
 Code
 -----
