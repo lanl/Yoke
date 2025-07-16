@@ -167,17 +167,20 @@ def loderunner_inference(
     out_vars: torch.tensor,
     delta_t: torch.tensor
     ) -> tuple[torch.tensor, np.Array]:
-    """Function to run prediction on a Yoke model and generate the cumulative density field.
-    
+    """Function to run prediction on a Yoke model and generate the density field.
+
+    The input tensor is either the true state (from an NPZ file),
+    or a predicted state (output from a previous prediction from the model).
+
     Args:
         model (torch.nn.Module): The model used for inferencing.
-        input_img (torch.Tensor): The input tensor describing the system state, or a prediction of it.
+        input_img (torch.Tensor): The input tensor.
         in_vars (torch.Tensor): The list of input channels.
         out_vars (torch.Tensor): The list of channels the model should output.
         delta_t (torch.Tensor): The amount of time forward the model should predict.
 
     Returns:
-        output (tuple[torch.Tensor, np.Array]): A tuple of the predicted image and the cumulative desnity field.
+        output (tuple[torch.Tensor, np.Array]): The predicted output and density field.
     """
     pred_img = model(torch.unsqueeze(input_img, 0), in_vars, out_vars, delta_t)
     pred_rho = np.squeeze(pred_img.detach().numpy())
@@ -188,12 +191,16 @@ def loderunner_inference(
 def prepare_input_images(npzfile: str, default_vars: list[str]) -> torch.tensor:
     """Prepare input images from NPZ file.
 
+    An NPZ file is similar to a dictionary, in that it has keys and values.
+    The keys are stored in default_vars,
+    and the values are the tensors containing material information.
+
     Args:
         npzfile (str): The name of the NPZ file to use.
-        default_vars (list[str]): The list of fields used as keys in the npz files to extract the relevant tensors.
+        default_vars (list[str]): The keys for the NPZ file.
 
     Returns:
-        output (torch.tensor): The tensor containing the combined data of all the PVI arrays.
+        output (torch.tensor): The combined tensor of all the data from the NPZ file.
     """
     input_img_list = []
     for hfield in default_vars:
@@ -323,7 +330,8 @@ if __name__ == "__main__":
 
         # Make a prediction
         if mode == "single" or mode == "timestep":
-            pred_img, pred_rho = loderunner_inference(model, input_img, in_vars, out_vars, Dt)
+            pred_img, pred_rho = loderunner_inference(
+                model, input_img, in_vars, out_vars, Dt)
         else:
             if k == 0:
                 input_img = prepare_input_images(npzfile, default_vars)
@@ -333,7 +341,8 @@ if __name__ == "__main__":
                 true_rho = true_rho[0:6, :, :].sum(0)
 
                 # Make a prediction
-                pred_img, pred_rho = loderunner_inference(model, input_img, in_vars, out_vars, Dt)
+                pred_img, pred_rho = loderunner_inference(
+                    model, input_img, in_vars, out_vars, Dt)
 
             else:
                 # Get ground-truth average density
@@ -352,7 +361,8 @@ if __name__ == "__main__":
                 true_rho = true_img[0:6, :, :].sum(0)
 
                 # Evaluate LodeRunner from last prediction
-                pred_img, pred_rho = loderunner_inference(model, pred_img, in_vars, out_vars, Dt)
+                pred_img, pred_rho = loderunner_inference(
+                    model, pred_img, in_vars, out_vars, Dt)
 
         # Plot Truth/Prediction/Discrepancy panel.
         fig1, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(16, 6))
