@@ -162,24 +162,24 @@ def singlePVIarray(
 
 def loderunner_inference(
     model: torch.nn.Module,
-    inp: torch.tensor,
-    inv: torch.tensor,
-    outv: torch.tensor,
+    input_img: torch.tensor,
+    in_vars: torch.tensor,
+    out_vars: torch.tensor,
     delta_t: torch.tensor
     ) -> tuple[torch.tensor, np.Array]:
     """Function to run prediction on a Yoke model and generate the cumulative density field.
     
     Args:
         model (torch.nn.Module): The model used for inferencing.
-        inp (torch.Tensor): The input tensor describing the system state, or a prediction of it.
-        inv (torch.Tensor): The list of input channels.
-        outv (torch.Tensor): The list of channels the model should output.
+        input_img (torch.Tensor): The input tensor describing the system state, or a prediction of it.
+        in_vars (torch.Tensor): The list of input channels.
+        out_vars (torch.Tensor): The list of channels the model should output.
         delta_t (torch.Tensor): The amount of time forward the model should predict.
 
     Returns:
         output (tuple[torch.Tensor, np.Array]): A tuple of the predicted image and the cumulative desnity field.
     """
-    pred_img = model(torch.unsqueeze(inp, 0), inv, outv, delta_t)
+    pred_img = model(torch.unsqueeze(input_img, 0), in_vars, out_vars, delta_t)
     pred_rho = np.squeeze(pred_img.detach().numpy())
     pred_rho = pred_rho[0:6, :, :].sum(0)
 
