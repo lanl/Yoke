@@ -162,16 +162,22 @@ def singlePVIarray(
 
 def loderunner_inference(
     model: torch.nn.Module,
-    inp: torch.Tensor,
-    inv: torch.Tensor,
-    outv:torch.Tensor,
-    delta_t: torch.Tensor
-    ) -> tuple[torch.Tensor, np.Array]:
+    inp: torch.tensor,
+    inv: torch.tensor,
+    outv: torch.tensor,
+    delta_t: torch.tensor
+    ) -> tuple[torch.tensor, np.Array]:
     """Function to run prediction on a Yoke model and generate the cumulative density field.
     
     Args:
         model (torch.nn.Module): The model used for inferencing.
-        inp (torch.Tensor): The input tensor field used for inference.
+        inp (torch.Tensor): The input tensor describing the system state, or a prediction of it.
+        inv (torch.Tensor): The list of input channels.
+        outv (torch.Tensor): The list of channels the model should output.
+        delta_t (torch.Tensor): The amount of time forward the model should predict.
+
+    Returns:
+        output (tuple[torch.Tensor, np.Array]): A tuple of the predicted image and the cumulative desnity field.
     """
     pred_img = model(torch.unsqueeze(inp, 0), inv, outv, delta_t)
     pred_rho = np.squeeze(pred_img.detach().numpy())
@@ -179,8 +185,16 @@ def loderunner_inference(
 
     return pred_img, pred_rho
 
-def prepare_input_images(npzfile, default_vars):
-    """Prepare input images from NPZ file."""
+def prepare_input_images(npzfile: str, default_vars: list[str]) -> torch.tensor:
+    """Prepare input images from NPZ file.
+
+    Args:
+        npzfile (str): The name of the NPZ file to use.
+        default_vars (list[str]): The list of fields used as keys in the npz files to extract the relevant tensors.
+
+    Returns:
+        output (torch.tensor): The tensor containing the combined data of all the PVI arrays.
+    """
     input_img_list = []
     for hfield in default_vars:
         tmp_img = singlePVIarray(npzfile=npzfile, FIELD=hfield)
