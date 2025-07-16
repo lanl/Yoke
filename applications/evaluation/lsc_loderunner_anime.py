@@ -138,7 +138,7 @@ def print_NPZ_keys(npzfile: str = "./lsc240420_id00201_pvi_idx00100.npz") -> Non
 
 def singlePVIarray(
     npzfile: str = "./lsc240420_id00201_pvi_idx00100.npz", FIELD: str = "av_density"
-) -> np.array:
+) -> np.ndarray:
     """Function to grab single array from NPZ.
 
     Args:
@@ -161,11 +161,11 @@ def singlePVIarray(
 
 def loderunner_inference(
     model: torch.nn.Module,
-    input_img: torch.tensor,
-    in_vars: torch.tensor,
-    out_vars: torch.tensor,
-    delta_t: torch.tensor,
-) -> tuple[torch.tensor, np.Array]:
+    input_img: torch.Tensor,
+    in_vars: torch.Tensor,
+    out_vars: torch.Tensor,
+    delta_t: torch.Tensor,
+) -> tuple[torch.Tensor, np.ndarray]:
     """Function to run prediction on a Yoke model and generate the density field.
 
     The input tensor is either the true state (from an NPZ file),
@@ -188,7 +188,7 @@ def loderunner_inference(
     return pred_img, pred_rho
 
 
-def prepare_input_images(npzfile: str, default_vars: list[str]) -> torch.tensor:
+def prepare_input_images(npzfile: str, default_vars: list[str]) -> torch.Tensor:
     """Prepare input images from NPZ file.
 
     An NPZ file is similar to a dictionary, in that it has keys and values.
