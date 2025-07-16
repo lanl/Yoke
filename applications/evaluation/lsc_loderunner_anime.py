@@ -308,16 +308,7 @@ if __name__ == "__main__":
         Zcoord = singlePVIarray(npzfile=npzfile, FIELD="Zcoord")
 
         # Step prediction
-        input_img_list = []
-        for hfield in default_vars:
-            tmp_img = singlePVIarray(npzfile=npzfile, FIELD=hfield)
-
-            # Remember to replace all NaNs with 0.0
-            tmp_img = np.nan_to_num(tmp_img, nan=0.0)
-            input_img_list.append(tmp_img)
-
-        # Concatenate images channel first.
-        temp_img = torch.tensor(np.stack(input_img_list, axis=0)).to(torch.float32)
+        temp_img = prepare_input_images(npzfile, default_vars)
         if k == 0:
             initial_input = temp_img.clone()
         input_img = initial_input if mode == "timestep" else temp_img
