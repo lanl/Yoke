@@ -15,7 +15,6 @@ import os
 import glob
 import argparse
 import numpy as np
-from typing import Tuple
 
 import torch
 
@@ -167,7 +166,13 @@ def loderunner_inference(
     inv: torch.Tensor,
     outv:torch.Tensor,
     delta_t: torch.Tensor
-    ) -> Tuple[torch.Tensor, np.Array]:
+    ) -> tuple[torch.Tensor, np.Array]:
+    """Function to run prediction on a Yoke model and generate the cumulative density field.
+    
+    Args:
+        model (torch.nn.Module): The model used for inferencing.
+        inp (torch.Tensor): The input tensor field used for inference.
+    """
     pred_img = model(torch.unsqueeze(inp, 0), inv, outv, delta_t)
     pred_rho = np.squeeze(pred_img.detach().numpy())
     pred_rho = pred_rho[0:6, :, :].sum(0)
