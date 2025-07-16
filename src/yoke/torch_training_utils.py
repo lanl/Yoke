@@ -337,7 +337,7 @@ def make_distributed_dataloader(
         shuffle,
         num_workers,
         rank,
-        world_size
+        world_size,
     ) -> torch.utils.data.DataLoader:
     """Creates a DataLoader with a DistributedSampler.
 
@@ -369,7 +369,7 @@ def make_distributed_dataloader(
         drop_last=True,  # Ensures uniform batch size
         num_workers=num_workers,
         pin_memory=pin_memory,
-        prefetch_factor=2
+        prefetch_factor=2,
     )
 
 
@@ -823,6 +823,7 @@ def train_DDP_loderunner_datastep(
     rank: int,
     world_size: int,
 ):
+
     """A DDP-compatible training step for multi-input, multi-output data.
 
         Args:
@@ -833,20 +834,33 @@ def train_DDP_loderunner_datastep(
         device (torch.device): device index to select
         rank (int): Rank of device
         world_size (int): Number of total DDP processes
-
     """
+    # Convert lists of tensors into batched tensors
+    #start_img = torch.stack(start_imgs).to(device, non_blocking=True)
+    #end_img = torch.stack(end_imgs).to(device, non_blocking=True)
+    #Dt = torch.stack(dts).to(device, non_blocking=True)
+
+    # Extract data
+    ##start_img, end_img, Dt = data
+    # SOUMI added
+    #print("data_type =", type(data))
+    #print("data = ", data)
+    start_img, channel_map, end_img, channel_map, Dt = data
+    print("In train_DDP_loderunner_datastep: channel_map =", channel_map)
+    
+    #start_img = start_img.to(device, non_blocking=True)
+    #Dt = Dt.to(device, non_blocking=True)
+    #end_img = end_img.to(device, non_blocking=True)
+
     # Set model to train mode
     model.train()
 
-    # Extract data
-    start_img, end_img, Dt = data
-    start_img = start_img.to(device, non_blocking=True)
-    Dt = Dt.to(device, non_blocking=True)
-    end_img = end_img.to(device, non_blocking=True)
-
     # Fixed input and output variable indices
-    in_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7]).to(device, non_blocking=True)
-    out_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7]).to(device, non_blocking=True)
+    #in_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7]).to(device, non_blocking=True)
+    #out_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7]).to(device, non_blocking=True)
+
+    in_vars = torch.tensor(channel_map).to(device, non_blocking=True)
+    out_vars = torch.tensor(channel_map).to(device, non_blocking=True)
 
     # Forward pass
     pred_img = model(start_img, in_vars, out_vars, Dt)
@@ -1926,8 +1940,15 @@ def train_DDP_loderunner_epoch(
     # Training loop
     model.train()
     train_rcrd_filename = train_rcrd_filename.replace("<epochIDX>", f"{epochIDX:04d}")
+    # SOUMI added
+    print("training_data =", training_data)
+    #sample = next(iter(training_data))
+    #print(f"[DEBUG] idx {0}: {[type(s) for s in sample]} {[s.shape for s in sample if isinstance(s, torch.Tensor)]}")
     with open(train_rcrd_filename, "a") if rank == 0 else nullcontext() as train_rcrd_file:
         for trainbatch_ID, traindata in enumerate(training_data):
+            # SOUMI added
+        #    print("traindata_type =", type(traindata))
+        #    print("traindata = ", traindata)
             # Stop when number of training batches is reached
             if trainbatch_ID >= num_train_batches:
                 break
