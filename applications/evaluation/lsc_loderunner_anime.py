@@ -160,7 +160,7 @@ def singlePVIarray(
 
     return arrays_dict[FIELD]
 
-def loderunner_inference(model, inp, inv, outv, delta_t):
+def loderunner_inference(model: torch.nn.Module, inp: torch.Tensor, inv: torch.Tensor, outv:torch.Tensor, delta_t: torch.Tensor) -> Tuple[torch.Tensor, np.Array]:
     pred_img = model(torch.unsqueeze(inp, 0), inv, outv, delta_t)
     pred_rho = np.squeeze(pred_img.detach().numpy())
     pred_rho = pred_rho[0:6, :, :].sum(0)
