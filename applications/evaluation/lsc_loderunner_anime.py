@@ -164,8 +164,8 @@ def loderunner_inference(
     input_img: torch.tensor,
     in_vars: torch.tensor,
     out_vars: torch.tensor,
-    delta_t: torch.tensor
-    ) -> tuple[torch.tensor, np.Array]:
+    delta_t: torch.tensor,
+) -> tuple[torch.tensor, np.Array]:
     """Function to run prediction on a Yoke model and generate the density field.
 
     The input tensor is either the true state (from an NPZ file),
@@ -211,9 +211,7 @@ def prepare_input_images(npzfile: str, default_vars: list[str]) -> torch.tensor:
         input_img_list.append(tmp_img)
 
     # Concatenate images channel first.
-    return torch.tensor(np.stack(input_img_list, axis=0)).to(
-        torch.float32
-    )
+    return torch.tensor(np.stack(input_img_list, axis=0)).to(torch.float32)
 
 
 if __name__ == "__main__":
@@ -331,7 +329,8 @@ if __name__ == "__main__":
         # Make a prediction
         if mode == "single" or mode == "timestep":
             pred_img, pred_rho = loderunner_inference(
-                model, input_img, in_vars, out_vars, Dt)
+                model, input_img, in_vars, out_vars, Dt
+            )
         else:
             if k == 0:
                 input_img = prepare_input_images(npzfile, default_vars)
@@ -342,7 +341,8 @@ if __name__ == "__main__":
 
                 # Make a prediction
                 pred_img, pred_rho = loderunner_inference(
-                    model, input_img, in_vars, out_vars, Dt)
+                    model, input_img, in_vars, out_vars, Dt
+                )
 
             else:
                 # Get ground-truth average density
@@ -362,7 +362,8 @@ if __name__ == "__main__":
 
                 # Evaluate LodeRunner from last prediction
                 pred_img, pred_rho = loderunner_inference(
-                    model, pred_img, in_vars, out_vars, Dt)
+                    model, pred_img, in_vars, out_vars, Dt
+                )
 
         # Plot Truth/Prediction/Discrepancy panel.
         fig1, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(16, 6))
