@@ -135,8 +135,6 @@ def print_NPZ_keys(npzfile: str = "./lsc240420_id00201_pvi_idx00100.npz") -> Non
 
     NPZ.close()
 
-    return
-
 
 def singlePVIarray(
     npzfile: str = "./lsc240420_id00201_pvi_idx00100.npz", FIELD: str = "av_density"
@@ -159,6 +157,7 @@ def singlePVIarray(
     NPZ.close()
 
     return arrays_dict[FIELD]
+
 
 def loderunner_inference(
     model: torch.nn.Module,
@@ -187,6 +186,7 @@ def loderunner_inference(
     pred_rho = pred_rho[0:6, :, :].sum(0)
 
     return pred_img, pred_rho
+
 
 def prepare_input_images(npzfile: str, default_vars: list[str]) -> torch.tensor:
     """Prepare input images from NPZ file.
