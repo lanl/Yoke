@@ -75,7 +75,7 @@ def import_img_from_npz(npz_filename: str, hfield: str) -> np.ndarray:
     if hfield.endswith('_Void'):
         tmp_img = handle_voids(npz_filename, hfield)
     else:    
-        print("In import_img_from_npz: hfield=",hfield)
+        #print("In import_img_from_npz: hfield=",hfield)
         tmp_img = read_npz_nan(npz_filename, hfield)
     # If hfield = Rcoord or Zcoord, then meshgrid:
     tmp_img = meshgrid_position(tmp_img, npz_filename, hfield)
@@ -714,8 +714,8 @@ class TemporalDataSet(Dataset):
         start_npz.close()
         end_npz.close()
 
-        #return start_img, self.channel_map, end_img, self.channel_map, dt
-        return start_img, torch.tensor(self.channel_map), end_img, torch.tensor(self.channel_map), dt
+        #return start_img, torch.tensor(self.channel_map), end_img, torch.tensor(self.channel_map), dt
+        return start_img, self.channel_map, end_img, self.channel_map, dt
 
 
 class SequentialDataSet(Dataset):
@@ -826,33 +826,36 @@ class SequentialDataSet(Dataset):
                 ).get_active_hydro_field_names()
                 channel_map = LabeledData(file_path, self.csv_filepath).get_channel_map()
 
+            #except Exception as e:
+            #    raise RuntimeError(f"Error loading file: {file_path}") from e
+
+                field_imgs = []
+                for hfield in self.active_npz_field_names:
+                    #tmp_img = import_img_from_npz(data_npz, hfield)
+                    # SOUMI added
+                    tmp_img = import_img_from_npz(file_path, hfield)
+                    if not self.half_image:
+                        tmp_img = np.concatenate((np.fliplr(tmp_img), tmp_img), axis=1)
+                    field_imgs.append(tmp_img)
+
+                data_npz.close()
+
+                img_list_combined = np.array([field_imgs])
+                channel_map, img_list_combined, active_hydro_field_names = (
+                    process_channel_data(
+                        channel_map, img_list_combined, active_hydro_field_names
+                    )
+                )
+                field_imgs = img_list_combined[0]
+
+                # Stack the fields for this frame
+                field_tensor = torch.tensor(
+                    np.stack(field_imgs, axis=0), dtype=torch.float32
+                )
+                frames.append(field_tensor)
+
             except Exception as e:
                 raise RuntimeError(f"Error loading file: {file_path}") from e
-
-            field_imgs = []
-            for hfield in self.active_npz_field_names:
-                #tmp_img = import_img_from_npz(data_npz, hfield)
-                # SOUMI added
-                tmp_img = import_img_from_npz(file_path, hfield)
-                if not self.half_image:
-                    tmp_img = np.concatenate((np.fliplr(tmp_img), tmp_img), axis=1)
-                field_imgs.append(tmp_img)
-
-            data_npz.close()
-
-            img_list_combined = np.array([field_imgs])
-            channel_map, img_list_combined, active_hydro_field_names = (
-                process_channel_data(
-                    channel_map, img_list_combined, active_hydro_field_names
-                )
-            )
-            field_imgs = img_list_combined[0]
-
-            # Stack the fields for this frame
-            field_tensor = torch.tensor(
-                np.stack(field_imgs, axis=0), dtype=torch.float32
-            )
-            frames.append(field_tensor)
 
         self.channel_map = channel_map
         self.active_hydro_field_names = active_hydro_field_names
