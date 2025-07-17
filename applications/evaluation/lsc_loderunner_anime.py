@@ -45,6 +45,7 @@ plt.rc("font", **font)
 plt.rcParams["figure.figsize"] = (6, 6)
 
 TIMESTEP_DELTA = 0.25  # us, constant timestep for inference
+DT_CONST = torch.tensor([TIMESTEP_DELTA])  # Constant timestep for inference
 
 
 ###################################################################
@@ -146,7 +147,7 @@ def singlePVIarray(
        FIELD (str): Field to return array for.
 
     Returns:
-       field (np.array): Array of hydro-dynamic field for plotting
+       field (np.ndarray): Array of hydro-dynamic field for plotting
 
     """
     NPZ = np.load(npzfile)
@@ -179,7 +180,7 @@ def loderunner_inference(
         delta_t (torch.Tensor): The amount of time forward the model should predict.
 
     Returns:
-        output (tuple[torch.Tensor, np.Array]): The predicted output and density field.
+        output (tuple[torch.Tensor, np.ndarray]): The predicted output and density field.
     """
     pred_img = model(torch.unsqueeze(input_img, 0), in_vars, out_vars, delta_t)
     pred_rho = np.squeeze(pred_img.detach().numpy())
@@ -200,7 +201,7 @@ def prepare_input_images(npzfile: str, default_vars: list[str]) -> torch.Tensor:
         default_vars (list[str]): The keys for the NPZ file.
 
     Returns:
-        output (torch.tensor): The combined tensor of all the data from the NPZ file.
+        output (torch.Tensor): The combined tensor of all the data from the NPZ file.
     """
     input_img_list = []
     for hfield in default_vars:
@@ -291,9 +292,6 @@ if __name__ == "__main__":
     # Build input data
     in_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7])
     out_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7])
-
-    # Set constant/default timestep for inference
-    DT_CONST = torch.tensor([TIMESTEP_DELTA])  # Constant timestep for inference
 
     # Loop through images
     for k, npzfile in enumerate(npz_list):
