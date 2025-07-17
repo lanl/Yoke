@@ -354,7 +354,7 @@ if __name__ == "__main__":
                 pred_img, pred_rho = loderunner_inference(
                     model, pred_img, in_vars, out_vars, Dt
                 )
-                pred_img = torch.squeeze(pred_img, 0) # removing the batch dimension.
+                pred_img = torch.squeeze(pred_img, 0)  # removing the batch dimension.
 
         # Plot Truth/Prediction/Discrepancy panel.
         fig1, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(16, 6))
