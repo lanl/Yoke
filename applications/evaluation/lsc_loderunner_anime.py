@@ -332,7 +332,7 @@ if __name__ == "__main__":
                 pred_img, pred_rho = loderunner_inference(
                     model, input_img, in_vars, out_vars, Dt
                 )
-                pred_img = torch.squeeze(pred_img, 0) # removing the batch dimension.
+                pred_img = torch.squeeze(pred_img, 0)  # removing the batch dimension.
 
             else:
                 # Get ground-truth average density
