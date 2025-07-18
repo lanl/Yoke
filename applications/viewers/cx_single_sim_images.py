@@ -1,9 +1,10 @@
-"""
-This viewer makes temporal evolution plots for a single Cylex simulation.
+"""This viewer makes temporal evolution plots for a single Cylex simulation.
+
 Plot dimensions are to scale.
 """
 
 from pathlib import Path
+from typing import Union
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -12,18 +13,25 @@ import matplotlib.pyplot as plt
 # Utility Functions
 # ==============================================================================
 
-def load_sim_data(npz_path):
+def load_sim_data(npz_path: Union[str, Path]) -> dict[str, np.ndarray]:
     """Load .npz data and return a dictionary of variable arrays."""
     with np.load(npz_path) as dataset:
         return {key: np.asarray(dataset[key]) for key in dataset}
 
 
-def extract_densities(dataset, keys):
+def extract_densities(
+    dataset: dict[str, np.ndarray], keys: list[str]
+) -> dict[str, float]:
     """Compute mean density values for a list of keys from dataset."""
     return {key: np.nanmean(dataset[key]) for key in keys}
 
 
-def generate_contour_plot(dataset, extent, output_file, variable_map):
+def generate_contour_plot(
+    dataset: dict[str, np.ndarray],
+    extent: tuple[int, int, int, int],
+    output_file: Union[str, Path],
+    variable_map: list[str],
+) -> None:
     """Generate and save a contour plot for a set of variable arrays."""
     aspect_ratio = (extent[3] - extent[2]) / (extent[1] - extent[0])
     z_arrays = [dataset[var] for var in variable_map]
@@ -86,10 +94,19 @@ if __name__ == "__main__":
                 print(f"{var} mean density (g/cm³): {mean_val}")
 
             if all(key in sim_data for key in VARIABLE_KEYS):
-                image_filename = file_path.stem + "_combined_contour.png"
-                generate_contour_plot(sim_data, PLOT_EXTENT, image_filename, VARIABLE_KEYS)
+                image_filename = (
+                    file_path.stem + "_combined_contour.png"
+                )
+                generate_contour_plot(
+                    sim_data,
+                    PLOT_EXTENT,
+                    image_filename,
+                    VARIABLE_KEYS
+                )
             else:
-                print(f"One or more required variables not found in {file_path}.")
+                print(
+                    f"One or more required variables not found in {file_path}."
+                )
 
-        except (FileNotFoundError, IOError, ValueError, KeyError) as error:
+        except (FileNotFoundError, OSError, ValueError, KeyError) as error:
             print(f"Error processing file {file_path}: {error}")

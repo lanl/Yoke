@@ -1,8 +1,8 @@
-"""
-Unit tests for cx_single_sim_images utility functions:
+"""Unit tests for cx_single_sim_images utility functions.
+
 - load_sim_data
 - extract_densities
-- generate_contour_plot
+- generate_contour_plot.
 """
 
 import tempfile
@@ -14,19 +14,18 @@ from applications.viewers.cx_single_sim_images import (
     generate_contour_plot,
 )
 
-
 # Constants for test
 TEST_VARIABLES = {
     "density_wall": 1.0,
     "density_U.DU": 2.0,
     "density_booster": 3.0,
-    "density_maincharge": 4.0
+    "density_maincharge": 4.0,
 }
 PLOT_EXTENT = (0, 400, 0, 1120)
 VARIABLE_KEYS = list(TEST_VARIABLES.keys())
 
 
-def create_test_npz(file_path, shape=(10, 10)):
+def create_test_npz(file_path: Path, shape: tuple[int, int] = (10, 10)) -> Path:
     """Create a test .npz file with known values and structure."""
     data = {
         key: np.full(shape, value, dtype=np.float64)
@@ -36,7 +35,7 @@ def create_test_npz(file_path, shape=(10, 10)):
     return file_path
 
 
-def test_load_sim_data_reads_npz():
+def test_load_sim_data_reads_npz() -> None:
     """Test that load_sim_data correctly loads all expected arrays."""
     with tempfile.TemporaryDirectory() as tmpdir:
         npz_path = Path(tmpdir) / "test_sim.npz"
@@ -50,7 +49,7 @@ def test_load_sim_data_reads_npz():
         assert np.allclose(loaded["density_booster"], 3.0)
 
 
-def test_extract_densities_returns_expected_means():
+def test_extract_densities_returns_expected_means() -> None:
     """Test that extract_densities computes accurate means."""
     dummy_data = {
         key: np.full((5, 5), value, dtype=np.float64)
@@ -62,7 +61,7 @@ def test_extract_densities_returns_expected_means():
         assert np.isclose(means[key], expected)
 
 
-def test_generate_contour_plot_creates_file():
+def test_generate_contour_plot_creates_file() -> None:
     """Test that generate_contour_plot creates a non-empty output image."""
     with tempfile.TemporaryDirectory() as tmpdir:
         npz_path = Path(tmpdir) / "test_sim.npz"
