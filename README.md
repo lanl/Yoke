@@ -23,9 +23,11 @@ The YOKE module is divided into submodules, installed in a python environment:
 - metrics/
 - losses/
 - utils/
+- utils/training/
+- utils/training/datastep/
+- utils/training/epoch/
 - lr_schedulers.py
 - parellel_utils.py
-- torch_training_utils.py
 
 Helper utilities and examples are under `applications`:
 

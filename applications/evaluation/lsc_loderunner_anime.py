@@ -19,7 +19,7 @@ import numpy as np
 import torch
 
 from yoke.models.vit.swin.bomberman import LodeRunner
-import yoke.torch_training_utils as tr
+from yoke.utils.checkpointing import load_model_and_optimizer_hdf5
 
 # Imports for plotting
 # To view possible matplotlib backends use
@@ -286,7 +286,7 @@ if __name__ == "__main__":
         weight_decay=0.01,
     )
 
-    checkpoint_epoch = tr.load_model_and_optimizer_hdf5(model, optimizer, checkpoint)
+    checkpoint_epoch = load_model_and_optimizer_hdf5(model, optimizer, checkpoint)
     model.eval()
 
     # Build input data

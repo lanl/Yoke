@@ -9,7 +9,11 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 from yoke.models.vit.swin.bomberman import LodeRunner
 from yoke.datasets.lsc_dataset import LSC_rho2rho_temporal_DataSet
-import yoke.torch_training_utils as tr
+from yoke.utils.training.epoch.loderunner import train_DDP_loderunner_epoch
+from yoke.utils.restart import continuation_setup
+from yoke.utils.dataload import make_distributed_dataloader
+from yoke.utils.checkpointing import load_model_and_optimizer
+from yoke.utils.checkpointing import save_model_and_optimizer
 from yoke.lr_schedulers import CosineWithWarmupScheduler
 from yoke.helpers import cli
 
@@ -176,7 +180,7 @@ def main(args, rank, world_size, local_rank, device):
     # Wait to move model to GPU until after the checkpoint load. Then
     # explicitly move model and optimizer state to GPU.
     if CONTINUATION:
-        model, starting_epoch = tr.load_model_and_optimizer(
+        model, starting_epoch = load_model_and_optimizer(
             checkpoint,
             optimizer,
             available_models,
@@ -239,7 +243,7 @@ def main(args, rank, world_size, local_rank, device):
     )
 
     # NOTE: For DDP the batch_size is the per-GPU batch_size!!!
-    train_dataloader = tr.make_distributed_dataloader(
+    train_dataloader = make_distributed_dataloader(
         train_dataset,
         batch_size,
         shuffle=True,
@@ -247,7 +251,7 @@ def main(args, rank, world_size, local_rank, device):
         rank=rank,
         world_size=world_size,
     )
-    val_dataloader = tr.make_distributed_dataloader(
+    val_dataloader = make_distributed_dataloader(
         val_dataset,
         batch_size,
         shuffle=False,
@@ -278,7 +282,7 @@ def main(args, rank, world_size, local_rank, device):
             startTime = time.time()
 
         # Train and Validate
-        tr.train_DDP_loderunner_epoch(
+        train_DDP_loderunner_epoch(
             training_data=train_dataloader,
             validation_data=val_dataloader,
             num_train_batches=train_batches,
@@ -314,11 +318,11 @@ def main(args, rank, world_size, local_rank, device):
     chkpt_name_str = "study{0:03d}_modelState_epoch{1:04d}.pth"
     new_chkpt_path = os.path.join("./", chkpt_name_str.format(studyIDX, epochIDX))
 
-    tr.save_model_and_optimizer(
-        model, 
-        optimizer, 
+    save_model_and_optimizer(
+        model,
+        optimizer,
         epochIDX,
-        new_chkpt_path, 
+        new_chkpt_path,
         model_class=LodeRunner,
         model_args=model_args
     )
@@ -329,7 +333,7 @@ def main(args, rank, world_size, local_rank, device):
         #############################################
         FINISHED_TRAINING = epochIDX + 1 > total_epochs
         if not FINISHED_TRAINING:
-            new_slurm_file = tr.continuation_setup(
+            new_slurm_file = continuation_setup(
                 new_chkpt_path, studyIDX, last_epoch=epochIDX
             )
             os.system(f"sbatch {new_slurm_file}")

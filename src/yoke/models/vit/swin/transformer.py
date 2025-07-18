@@ -7,7 +7,7 @@ from yoke.models.vit.swin.encoder import SwinEncoder, SwinEncoder2
 from yoke.models.vit.patch_embed import SwinEmbedding
 from yoke.models.vit.patch_manipulation import PatchMerge
 
-from yoke.torch_training_utils import count_torch_params
+from yoke.utils.parameters import count_torch_params
 
 
 class Swin(nn.Module):

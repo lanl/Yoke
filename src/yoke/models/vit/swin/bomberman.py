@@ -326,7 +326,7 @@ class Lightning_LodeRunner(LightningModule):
 
 
 if __name__ == "__main__":
-    from yoke.torch_training_utils import count_torch_params
+    from yoke.utils.parameters import count_torch_params
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 

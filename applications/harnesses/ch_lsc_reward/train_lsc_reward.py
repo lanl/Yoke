@@ -13,7 +13,6 @@ Includes learning rate scheduling and support for normalized inputs.
 import os
 import time
 import argparse
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.distributed as dist
@@ -21,15 +20,20 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 from yoke.models.hybridCNNmodules import hybrid2vectorCNN
 from yoke.datasets.lsc_dataset import LSC_hfield_reward_DataSet
-import yoke.torch_training_utils as tr  # Assuming this exists
+from yoke.utils.training.epoch import train_lsc_reward_epoch
+from yoke.utils.restart import continuation_setup
+from yoke.utils.dataload import make_distributed_dataloader
+from yoke.utils.checkpointing import load_model_and_optimizer
+from yoke.utils.checkpointing import save_model_and_optimizer
 from yoke.lr_schedulers import CosineWithWarmupScheduler
-from yoke.helpers import cli  # Assuming this exists
+from yoke.helpers import cli
 
 #############################################
 # Inputs
 #############################################
 descr_str = (
-    "Trains reward network architecture to calculate error between current and target density fields."
+    "Trains reward network architecture to calculate error between current and target "
+    "density fields."
 )
 parser = argparse.ArgumentParser(
     prog="reward network training", description=descr_str, fromfile_prefix_chars="@"
@@ -191,7 +195,7 @@ def main(
     # Wait to move model to GPU until after the checkpoint load. Then
     # explicitly move model and optimizer state to GPU.
     if CONTINUATION:
-        model, starting_epoch = tr.load_model_and_optimizer(
+        model, starting_epoch = load_model_and_optimizer(
             checkpoint,
             optimizer,
             available_models,
@@ -256,7 +260,7 @@ def main(
     print("Datasets initialized.")
 
     # NOTE: For DDP the batch_size is the per-GPU batch_size!!!
-    train_dataloader = tr.make_distributed_dataloader(
+    train_dataloader = make_distributed_dataloader(
         train_dataset,
         batch_size,
         shuffle=True,
@@ -264,7 +268,7 @@ def main(
         rank=rank,
         world_size=world_size,
     )
-    val_dataloader = tr.make_distributed_dataloader(
+    val_dataloader = make_distributed_dataloader(
         val_dataset,
         batch_size,
         shuffle=False,
@@ -295,7 +299,7 @@ def main(
             startTime = time.time()
 
         # Train and Validate
-        tr.train_lsc_reward_epoch(
+        train_lsc_reward_epoch(
             training_data=train_dataloader,
             validation_data=val_dataloader,
             num_train_batches=train_batches,
@@ -331,7 +335,7 @@ def main(
     chkpt_name_str = "study{0:03d}_modelState_epoch{1:04d}.pth"
     new_chkpt_path = os.path.join("./", chkpt_name_str.format(studyIDX, epochIDX))
 
-    tr.save_model_and_optimizer(
+    save_model_and_optimizer(
         model,
         optimizer,
         epochIDX,
@@ -346,7 +350,7 @@ def main(
         #############################################
         FINISHED_TRAINING = epochIDX + 1 > total_epochs
         if not FINISHED_TRAINING:
-            new_slurm_file = tr.continuation_setup(
+            new_slurm_file = continuation_setup(
                 new_chkpt_path, studyIDX, last_epoch=epochIDX
             )
             os.system(f"sbatch {new_slurm_file}")

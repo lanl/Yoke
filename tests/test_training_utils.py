@@ -10,14 +10,15 @@ import torch.distributed as dist
 from tempfile import TemporaryDirectory
 import h5py
 from collections.abc import Generator
-from yoke.torch_training_utils import count_torch_params
-from yoke.torch_training_utils import save_model_and_optimizer_hdf5
-from yoke.torch_training_utils import load_model_and_optimizer_hdf5
-from yoke.torch_training_utils import make_dataloader
+from yoke.utils.parameters import count_torch_params
+from yoke.utils.checkpointing import save_model_and_optimizer_hdf5
+from yoke.utils.checkpointing import load_model_and_optimizer_hdf5
+from yoke.utils.dataload import make_dataloader
 from torch.optim import SGD
 from torch.optim.lr_scheduler import StepLR
-import yoke.torch_training_utils as ttu
-from yoke.torch_training_utils import train_lsc_reward_epoch, eval_lsc_reward_datastep
+import yoke.utils.training.epoch.lsc_reward as lscr_epoch
+from yoke.utils.training.epoch.lsc_reward import train_lsc_reward_epoch
+from yoke.utils.training.epoch.lsc_reward import eval_lsc_reward_datastep
 
 
 class SimpleModel(nn.Module):
@@ -330,13 +331,13 @@ def patch_datasteps(monkeypatch: pytest.MonkeyPatch) -> None:
         return reward, pred, losses
 
     monkeypatch.setattr(
-        ttu,
+        lscr_epoch,
         "train_lsc_reward_datastep",
         fake_train,
         raising=True,
     )
     monkeypatch.setattr(
-        ttu,
+        lscr_epoch,
         "eval_lsc_reward_datastep",
         fake_eval,
         raising=True,
