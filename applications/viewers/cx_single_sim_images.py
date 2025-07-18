@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 # Utility Functions
 # ==============================================================================
 
+
 def load_sim_data(npz_path: Union[str, Path]) -> dict[str, np.ndarray]:
     """Load .npz data and return a dictionary of variable arrays."""
     with np.load(npz_path) as dataset:
