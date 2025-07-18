@@ -39,18 +39,17 @@ def generate_contour_plot(
     rows, cols = z_arrays[0].shape
 
     x_grid, y_grid = np.meshgrid(
-        np.linspace(extent[0], extent[1], cols),
-        np.linspace(extent[2], extent[3], rows)
+        np.linspace(extent[0], extent[1], cols), np.linspace(extent[2], extent[3], rows)
     )
 
     fig, ax = plt.subplots(figsize=(10, 10 * aspect_ratio))
-    for array, cmap in zip(z_arrays, ['Blues', 'Purples', 'YlOrBr', 'Oranges']):
+    for array, cmap in zip(z_arrays, ["Blues", "Purples", "YlOrBr", "Oranges"]):
         ax.contourf(x_grid, y_grid, array, levels=50, cmap=cmap)
 
-    ax.set_aspect('equal')
+    ax.set_aspect("equal")
     ax.set_xticks([])
     ax.set_yticks([])
-    plt.savefig(output_file, dpi=300, bbox_inches='tight')
+    plt.savefig(output_file, dpi=300, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -71,8 +70,7 @@ VARIABLE_KEYS = [WALL, BACKGROUND, BOOSTER, MAINCHARGE]
 PLOT_EXTENT = (0, 400, 0, 1120)
 
 file_paths = [
-    DATA_DIR / f"cx241203_id{SIM_ID}_pvi_idx{idx:05d}.npz"
-    for idx in INDEX_RANGE
+    DATA_DIR / f"cx241203_id{SIM_ID}_pvi_idx{idx:05d}.npz" for idx in INDEX_RANGE
 ]
 
 # ==============================================================================
@@ -84,10 +82,12 @@ if __name__ == "__main__":
         try:
             sim_data = load_sim_data(file_path)
 
-            df = pd.DataFrame({
-                "Variable": list(sim_data.keys()),
-                "Size": [sim_data[key].shape for key in sim_data]
-            })
+            df = pd.DataFrame(
+                {
+                    "Variable": list(sim_data.keys()),
+                    "Size": [sim_data[key].shape for key in sim_data],
+                }
+            )
             print(f"\nData from {file_path}:\n{df}\n")
 
             densities = extract_densities(sim_data, VARIABLE_KEYS)
@@ -95,19 +95,12 @@ if __name__ == "__main__":
                 print(f"{var} mean density (g/cm³): {mean_val}")
 
             if all(key in sim_data for key in VARIABLE_KEYS):
-                image_filename = (
-                    file_path.stem + "_combined_contour.png"
-                )
+                image_filename = file_path.stem + "_combined_contour.png"
                 generate_contour_plot(
-                    sim_data,
-                    PLOT_EXTENT,
-                    image_filename,
-                    VARIABLE_KEYS
+                    sim_data, PLOT_EXTENT, image_filename, VARIABLE_KEYS
                 )
             else:
-                print(
-                    f"One or more required variables not found in {file_path}."
-                )
+                print(f"One or more required variables not found in {file_path}.")
 
         except (FileNotFoundError, OSError, ValueError, KeyError) as error:
             print(f"Error processing file {file_path}: {error}")
