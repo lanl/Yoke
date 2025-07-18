@@ -70,7 +70,7 @@ select = [
     "W",
     "ANN"]
 
-ignore = ["ANN101"]  # Wants a `type` defined for `self` argument!
+# ignore = ["ANN101"]  # Wants a `type` defined for `self` argument!
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
