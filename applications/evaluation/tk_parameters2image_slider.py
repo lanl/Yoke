@@ -13,7 +13,7 @@ import torch
 import torch.nn as nn
 
 from yoke.models.surrogateCNNmodules import tCNNsurrogate
-import yoke.torch_training_utils as tr
+from yoke.utils.checkpointing import load_model_and_optimizer_hdf5
 
 import tkinter as tk
 from PIL import Image, ImageTk
@@ -89,7 +89,7 @@ optimizer = torch.optim.AdamW(
 ##############
 # Load Model
 ##############
-checkpoint_epoch = tr.load_model_and_optimizer_hdf5(model, optimizer, checkpoint)
+checkpoint_epoch = load_model_and_optimizer_hdf5(model, optimizer, checkpoint)
 
 
 # def run_jCNN(sa1, sa2, sa3, sa4, sa5, sa6, sa7,

@@ -10,7 +10,7 @@ from collections import OrderedDict
 import torch
 import torch.nn as nn
 
-from yoke.torch_training_utils import count_torch_params
+from yoke.utils.parameters import count_torch_params
 
 
 class jekelCNNsurrogate(nn.Module):

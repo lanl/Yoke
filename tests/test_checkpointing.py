@@ -11,8 +11,8 @@ import torch.optim as optim
 from torch import Tensor
 
 # Your checkpoint functions here or imported
-from yoke.torch_training_utils import save_model_and_optimizer
-from yoke.torch_training_utils import load_model_and_optimizer
+from yoke.utils.checkpointing import save_model_and_optimizer
+from yoke.utils.checkpointing import load_model_and_optimizer
 
 
 class DummyNet(nn.Module):

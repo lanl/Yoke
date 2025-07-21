@@ -7,7 +7,7 @@ from yoke.models.vit.swin.encoder import SwinEncoder2, SwinConnectEncoder
 from yoke.models.vit.swin.encoder import SwinConnectDecoder
 from yoke.models.vit.patch_manipulation import PatchMerge, PatchExpand
 
-from yoke.torch_training_utils import count_torch_params
+from yoke.utils.parameters import count_torch_params
 
 
 class SwinUnetBackbone(nn.Module):
