@@ -835,18 +835,13 @@ def train_DDP_loderunner_datastep(
         rank (int): Rank of device
         world_size (int): Number of total DDP processes
     """
-    # Convert lists of tensors into batched tensors
-    #start_img = torch.stack(start_imgs).to(device, non_blocking=True)
-    #end_img = torch.stack(end_imgs).to(device, non_blocking=True)
-    #Dt = torch.stack(dts).to(device, non_blocking=True)
-
     # Extract data
-    ##start_img, end_img, Dt = data
+    start_img, end_img, Dt = data
     # SOUMI added
     #print("data_type =", type(data))
     #print("data = ", data)
-    start_img, channel_map, end_img, channel_map, Dt = data
-    print("In train_DDP_loderunner_datastep: channel_map =", channel_map)
+    #start_img, channel_map, end_img, channel_map, Dt = data
+    #print("In train_DDP_loderunner_datastep: channel_map =", channel_map)
     
     #start_img = start_img.to(device, non_blocking=True)
     #Dt = Dt.to(device, non_blocking=True)
@@ -856,13 +851,20 @@ def train_DDP_loderunner_datastep(
     model.train()
 
     # Fixed input and output variable indices
-    #in_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7]).to(device, non_blocking=True)
-    #out_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7]).to(device, non_blocking=True)
+    in_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7]).to(device, non_blocking=True)
+    out_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7]).to(device, non_blocking=True)
 
-    in_vars = torch.tensor(channel_map).to(device, non_blocking=True)
-    out_vars = torch.tensor(channel_map).to(device, non_blocking=True)
+    # SOUMI: ADDED
+    start_img = start_img.to(device, non_blocking=True)
+    end_img = end_img.to(device, non_blocking=True)
+    Dt = Dt.to(device, non_blocking=True)
+
+
+    #in_vars = torch.tensor(channel_map).to(device, non_blocking=True)
+    #out_vars = torch.tensor(channel_map).to(device, non_blocking=True)
 
     # Forward pass
+    print("In torch_training_utils, start_img size=",start_img.size()) 
     pred_img = model(start_img, in_vars, out_vars, Dt)
 
     # Compute loss

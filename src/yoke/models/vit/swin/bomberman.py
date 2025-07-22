@@ -101,6 +101,10 @@ class LodeRunner(nn.Module):
             window_sizes=window_sizes,
             patch_merge_scales=patch_merge_scales,
         )
+        print("In bomberman: image_size=",image_size)
+        print("In bomberman: patch_size=",patch_size)
+        print("In bomberman: window_sizes=",window_sizes)
+        print("In bomberman: patch_merge_scales=",patch_merge_scales)
         assert np.all(valid), (
             "Invalid combination of image_size, patch_size, window_sizes, "
             "and patch_merge_scales!"
@@ -125,6 +129,12 @@ class LodeRunner(nn.Module):
         # Encode each patch with position information. Position encoding is
         # only index-aware and does not take into account actual spatial
         # information.
+        # SOUMI: printing
+        print("In bomberman: self.embed_dim=",self.embed_dim)
+        print("In bomberman: self.patch_size=",self.patch_size)
+        print("In bomberman: self.image_size=",self.image_size)
+        print("In bomberman: self.parallel_embed.num_patches=",self.parallel_embed.num_patches)
+        print("length default_vars=",len(self.default_vars))
         self.pos_embed = PosEmbed(
             self.embed_dim,
             self.patch_size,
@@ -181,7 +191,12 @@ class LodeRunner(nn.Module):
         x = self.agg_vars(x)
 
         # Encode patch positions, spatial information
+        print("In bomberman size x=",x.size())
+        print("In bomberman size in_vars=",in_vars.size())
+        print("In bomberman size out_vars=",out_vars.size())
+        print("In bomberman size in_times=",lead_times.size())
         x = self.pos_embed(x)
+        print("In bomberman size pos_embed x=",x.size())
 
         # Encode temporal information
         x = self.temporal_encoding(x, lead_times)
@@ -331,48 +346,78 @@ if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     default_vars = [
-        "cu_pressure",
-        "cu_density",
-        "cu_temperature",
-        "al_pressure",
-        "al_density",
-        "al_temperature",
-        "ss_pressure",
-        "ss_density",
-        "ss_temperature",
-        "ply_pressure",
-        "ply_density",
-        "ply_temperature",
-        "air_pressure",
-        "air_density",
-        "air_temperature",
-        "hmx_pressure",
-        "hmx_density",
-        "hmx_temperature",
-        "r_vel",
-        "z_vel",
+        "Rcoord",  # 4 kinematic variable fields
+            "Zcoord",
+            "Uvelocity",
+            "Wvelocity",
+            "density_Air",  # 39 thermodynamic variable fields
+            "energy_Air",
+            "pressure_Air",
+            "density_Al",
+            "energy_Al",
+            "pressure_Al",
+            "density_Be",
+            "energy_Be",
+            "pressure_Be",
+            "density_booster",
+            "energy_booster",
+            "pressure_booster",
+            "density_Cu",
+            "energy_Cu",
+            "pressure_Cu",
+            "density_U.DU",
+            "energy_U.DU",
+            "pressure_U.DU",
+            "density_maincharge",
+            "energy_maincharge",
+            "pressure_maincharge",
+            "density_N",
+            "energy_N",
+            "pressure_N",
+            "density_Sn",
+            "energy_Sn",
+            "pressure_Sn",
+            "density_Steel.alloySS304L",
+            "energy_Steel.alloySS304L",
+            "pressure_Steel.alloySS304L",
+            "density_Polymer.Sylgard",
+            "energy_Polymer.Sylgard",
+            "pressure_Polymer.Sylgard",
+            "density_Ta",
+            "energy_Ta",
+            "pressure_Ta",
+            "density_Void",
+            "energy_Void",
+            "pressure_Void",
+            "density_Water",
+            "energy_Water",
+            "pressure_Water",
     ]
 
     # (B, C, H, W)
-    x = torch.rand(5, 4, 1120, 800)
+    x = torch.rand(1, 6, 560, 200)
+    #x = torch.rand(5, 4, 1120, 800)
     x = x.type(torch.FloatTensor).to(device)
-
-    lead_times = torch.rand(5).to(device)  # Lead time for each entry in batch
+    
+    lead_times = torch.rand(1).to(device)
+    #lead_times = torch.rand(5).to(device)  # Lead time for each entry in batch
     # x_vars = ["cu_density", "ss_density", "ply_density", "air_density"]
-    x_vars = torch.tensor([1, 7, 10, 13]).to(device)
+    x_vars = torch.tensor([1, 2, 5, 6, 9, 13]).to(device) # string of integers for active channels
+    #x_vars = torch.tensor([1, 7, 10, 13]).to(device)
 
     # out_vars = ["cu_density", "ss_density", "ply_density", "air_density"]
-    out_vars = torch.tensor([1, 7, 10, 13]).to(device)
+    out_vars = torch.tensor([1, 2, 5, 6, 9, 13]).to(device)  # string of integers for active channels
+    #out_vars = torch.tensor([1, 7, 10, 13]).to(device)
 
     # Common model setup for LodeRunner
     #
     # NOTE: For half-image `image_size = (1120, 400)` can just halve the second
     # patch_size dimension.
     emb_factor = 2
-    patch_size = (10, 10)
-    image_size = (1120, 800)
+    patch_size = (10, 5) #(10, 10)
+    image_size = (560, 200) #(1120, 800)
     num_heads = 8
-    window_sizes = [(8, 8), (8, 8), (4, 4), (2, 2)]
+    window_sizes = [(8, 8), (4, 4), (2, 2), (7, 5)] #[(8, 8), (8, 8), (4, 4), (2, 2)]
     patch_merge_scales = [(2, 2), (2, 2), (2, 2)]
 
     # Tiny size
@@ -398,115 +443,115 @@ if __name__ == "__main__":
     print("LodeRunner-tiny parameters:", count_torch_params(lode_runner, trainable=True))
 
     # Test lightning wrapper initialization.
-    L_loderunner = Lightning_LodeRunner(
-        lode_runner,
-        in_vars=x_vars,
-        out_vars=out_vars,
-        lr_scheduler=CosineWithWarmupScheduler,
-        scheduler_params={
-            "warmup_steps": 500,
-            "anchor_lr": 1e-3,
-            "terminal_steps": 1000,
-            "num_cycles": 0.5,
-            "min_fraction": 0.5,
-            "last_epoch": 0,
-        },
-    )
-    L_loderunner_out = L_loderunner(x, lead_times)
-    print("Lightning LodeRunner-tiny output shape:", L_loderunner_out.shape)
+    #L_loderunner = Lightning_LodeRunner(
+    #    lode_runner,
+    #    in_vars=x_vars,
+    #    out_vars=out_vars,
+    #    lr_scheduler=CosineWithWarmupScheduler,
+    #    scheduler_params={
+    #        "warmup_steps": 500,
+    #        "anchor_lr": 1e-3,
+    #        "terminal_steps": 1000,
+    #        "num_cycles": 0.5,
+    #        "min_fraction": 0.5,
+    #        "last_epoch": 0,
+    #    },
+    #)
+    #L_loderunner_out = L_loderunner(x, lead_times)
+    #print("Lightning LodeRunner-tiny output shape:", L_loderunner_out.shape)
 
     # Small size
-    embed_dim = 96
-    block_structure = (1, 1, 9, 1)
+    #embed_dim = 96
+    #block_structure = (1, 1, 9, 1)
 
-    lode_runner = LodeRunner(
-        default_vars=default_vars,
-        image_size=image_size,
-        patch_size=patch_size,
-        embed_dim=embed_dim,
-        emb_factor=emb_factor,
-        num_heads=num_heads,
-        block_structure=block_structure,
-        window_sizes=window_sizes,
-        patch_merge_scales=patch_merge_scales,
-        verbose=False,
-    ).to(device)
-    print(
-        "LodeRunner-small parameters:", count_torch_params(lode_runner, trainable=True)
-    )
+    #lode_runner = LodeRunner(
+    #    default_vars=default_vars,
+    #    image_size=image_size,
+    #    patch_size=patch_size,
+    #    embed_dim=embed_dim,
+    #    emb_factor=emb_factor,
+    #    num_heads=num_heads,
+    #    block_structure=block_structure,
+    #    window_sizes=window_sizes,
+    #    patch_merge_scales=patch_merge_scales,
+    #    verbose=False,
+    #).to(device)
+    #print(
+    #    "LodeRunner-small parameters:", count_torch_params(lode_runner, trainable=True)
+    #)
 
     # Big size
-    embed_dim = 128
-    block_structure = (1, 1, 9, 1)
+    #embed_dim = 128
+    #block_structure = (1, 1, 9, 1)
 
-    lode_runner = LodeRunner(
-        default_vars=default_vars,
-        image_size=image_size,
-        patch_size=patch_size,
-        embed_dim=embed_dim,
-        emb_factor=emb_factor,
-        num_heads=num_heads,
-        block_structure=block_structure,
-        window_sizes=window_sizes,
-        patch_merge_scales=patch_merge_scales,
-        verbose=False,
-    ).to(device)
-    print("LodeRunner-big parameters:", count_torch_params(lode_runner, trainable=True))
+    #lode_runner = LodeRunner(
+    #    default_vars=default_vars,
+    #    image_size=image_size,
+    #    patch_size=patch_size,
+    #    embed_dim=embed_dim,
+    #    emb_factor=emb_factor,
+    #    num_heads=num_heads,
+    #    block_structure=block_structure,
+    #    window_sizes=window_sizes,
+    #    patch_merge_scales=patch_merge_scales,
+    #    verbose=False,
+    #).to(device)
+    #print("LodeRunner-big parameters:", count_torch_params(lode_runner, trainable=True))
 
     # Large size
-    embed_dim = 192
-    block_structure = (1, 1, 9, 1)
+    #embed_dim = 192
+    #block_structure = (1, 1, 9, 1)
 
-    lode_runner = LodeRunner(
-        default_vars=default_vars,
-        image_size=image_size,
-        patch_size=patch_size,
-        embed_dim=embed_dim,
-        emb_factor=emb_factor,
-        num_heads=num_heads,
-        block_structure=block_structure,
-        window_sizes=window_sizes,
-        patch_merge_scales=patch_merge_scales,
-        verbose=False,
-    ).to(device)
-    print(
-        "LodeRunner-large parameters:", count_torch_params(lode_runner, trainable=True)
-    )
+    #lode_runner = LodeRunner(
+    #    default_vars=default_vars,
+    #    image_size=image_size,
+    #    patch_size=patch_size,
+    #    embed_dim=embed_dim,
+    #    emb_factor=emb_factor,
+    #    num_heads=num_heads,
+    #    block_structure=block_structure,
+    #    window_sizes=window_sizes,
+    #    patch_merge_scales=patch_merge_scales,
+    #    verbose=False,
+    #).to(device)
+    #print(
+    #    "LodeRunner-large parameters:", count_torch_params(lode_runner, trainable=True)
+    #)
 
     # Huge size
-    embed_dim = 352
-    block_structure = (1, 1, 9, 1)
+    #embed_dim = 352
+    #block_structure = (1, 1, 9, 1)
 
-    lode_runner = LodeRunner(
-        default_vars=default_vars,
-        image_size=image_size,
-        patch_size=patch_size,
-        embed_dim=embed_dim,
-        emb_factor=emb_factor,
-        num_heads=num_heads,
-        block_structure=block_structure,
-        window_sizes=window_sizes,
-        patch_merge_scales=patch_merge_scales,
-        verbose=False,
-    ).to(device)
-    print("LodeRunner-huge parameters:", count_torch_params(lode_runner, trainable=True))
+    #lode_runner = LodeRunner(
+    #    default_vars=default_vars,
+    #    image_size=image_size,
+    #    patch_size=patch_size,
+    #    embed_dim=embed_dim,
+    #    emb_factor=emb_factor,
+    #    num_heads=num_heads,
+    #    block_structure=block_structure,
+    #    window_sizes=window_sizes,
+    #    patch_merge_scales=patch_merge_scales,
+    #    verbose=False,
+    #).to(device)
+    #print("LodeRunner-huge parameters:", count_torch_params(lode_runner, trainable=True))
 
     # Giant size
-    embed_dim = 512
-    block_structure = (1, 1, 11, 2)
+    #embed_dim = 512
+    #block_structure = (1, 1, 11, 2)
 
-    lode_runner = LodeRunner(
-        default_vars=default_vars,
-        image_size=image_size,
-        patch_size=patch_size,
-        embed_dim=embed_dim,
-        emb_factor=emb_factor,
-        num_heads=num_heads,
-        block_structure=block_structure,
-        window_sizes=window_sizes,
-        patch_merge_scales=patch_merge_scales,
-        verbose=False,
-    ).to(device)
-    print(
-        "LodeRunner-giant parameters:", count_torch_params(lode_runner, trainable=True)
-    )
+    #lode_runner = LodeRunner(
+    #    default_vars=default_vars,
+    #    image_size=image_size,
+    #    patch_size=patch_size,
+    #    embed_dim=embed_dim,
+    #    emb_factor=emb_factor,
+    #    num_heads=num_heads,
+    #    block_structure=block_structure,
+    #    window_sizes=window_sizes,
+    #    patch_merge_scales=patch_merge_scales,
+    #    verbose=False,
+    #).to(device)
+    #print(
+    #    "LodeRunner-giant parameters:", count_torch_params(lode_runner, trainable=True)
+    #)
