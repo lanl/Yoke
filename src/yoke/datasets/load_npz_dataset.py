@@ -190,7 +190,7 @@ def read_npz_nan(npz: np.lib.npyio.NpzFile, field: str) -> np.ndarray:
     """
     #return np.nan_to_num(npz[field], nan=0.0)
     data = np.load(npz)
-    print("npz=",npz)
+    print("In read_npz_nan: npz=",npz)
     #print("data=", data)
     #if hasattr(data, "keys") and isinstance(data, np.lib.npyio.NpzFile):
     #    print("data:Safe to treat as npz archive")
@@ -223,6 +223,7 @@ class LabeledData:
         self.thermodynamic_variables = thermodynamic_variables
 
         # Get the hydro_fields
+        print("In LabeledData: npz_filepath=",self.npz_filepath)
         self.get_study_and_key(self.npz_filepath)
         if self.study == "cx":  # cylex dataset
             self.all_hydro_field_names = [

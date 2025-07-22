@@ -268,6 +268,8 @@ class PosEmbed(nn.Module):
         # The input tensor is shape:
         #  (B, L, D)=(B, NumTokens[i.e. Patches], embed_dim)
 
+        print("In embedding_encoders: x.size()=", x.size())
+        print("In embedding_encoders: self.pos_embed.size()=", self.pos_embed.size())
         x = x + self.pos_embed
 
         return x
