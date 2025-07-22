@@ -78,6 +78,7 @@ class LodeRunner(nn.Module):
             (2, 2),
             (2, 2),
         ],
+        noise_scale: float = 0.0,
         verbose: bool = False,
     ) -> None:
         """Initialization for class."""
@@ -93,6 +94,7 @@ class LodeRunner(nn.Module):
         self.block_structure = block_structure
         self.window_sizes = window_sizes
         self.patch_merge_scales = patch_merge_scales
+        self.noise_scale = noise_scale
 
         # Validate patch_size, window_sizes, and patch_merge_scales before proceeding.
         valid = validate_patch_and_window(
@@ -170,7 +172,13 @@ class LodeRunner(nn.Module):
         # WARNING!: Most likely the `in_vars` and `out_vars` need to be tensors
         # of integers corresponding to variables in the `default_vars` list.
 
-        # First embed input
+        # DPOT-style noise injection:
+        # l2_norm = torch.norm(x, dim=(1, 2, 3), keepdim=True)
+        l2_norm = torch.sqrt((x * x).sum(dim=(1, 2, 3), keepdim=True))
+        noise = torch.randn_like(x)
+        x = x + self.noise_scale * l2_norm * noise
+
+        # Embed input
         # varIDXs = self.var_embed_layer.get_var_ids(tuple(in_vars), x.device)
         x = self.parallel_embed(x, in_vars)
 
