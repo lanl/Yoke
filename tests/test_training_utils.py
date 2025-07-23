@@ -2,7 +2,6 @@
 
 import os
 import pathlib
-from pathlib import Path
 import pytest
 import torch
 from torch import nn, optim
@@ -558,7 +557,7 @@ def test_init_sets_filepath_attribute() -> None:
 
 
 def test_save_calls_torch_export_and_prints_message(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """Test that save calls torch.onnx.export and prints confirmation."""
     # Prepare
@@ -594,7 +593,7 @@ def test_save_calls_torch_export_and_prints_message(
         }
         assert opset_version == 12
         # simulate file creation
-        Path(filepath).write_bytes(b"")
+        pathlib.Path(filepath).write_bytes(b"")
 
     monkeypatch.setattr(torch.onnx, "export", fake_export)
     om = onnx_module(str(fp))
@@ -610,7 +609,7 @@ def test_save_calls_torch_export_and_prints_message(
 
 
 def test_evaluate_returns_outputs_without_optional_flags(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
 ) -> None:
     """Test that evaluate returns outputs when no flags are set."""
     fp = tmp_path / "test.onnx"
@@ -645,7 +644,7 @@ def test_evaluate_returns_outputs_without_optional_flags(
 
 def test_evaluate_with_check_model_prints_and_checks(
     monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
+    tmp_path: pathlib.Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Test that evaluate with check_model validates the ONNX model."""
@@ -683,7 +682,7 @@ def test_evaluate_with_check_model_prints_and_checks(
 
 def test_evaluate_with_verbose_prints_input_info(
     monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
+    tmp_path: pathlib.Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Test that evaluate with verbose=True prints input metadata."""
