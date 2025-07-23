@@ -10,6 +10,10 @@ import torch.distributed as dist
 from tempfile import TemporaryDirectory
 import h5py
 from collections.abc import Generator
+from types import SimpleNamespace
+import numpy as np
+import onnx
+import onnxruntime as ort
 from yoke.torch_training_utils import count_torch_params
 from yoke.torch_training_utils import save_model_and_optimizer_hdf5
 from yoke.torch_training_utils import load_model_and_optimizer_hdf5
@@ -18,6 +22,7 @@ from torch.optim import SGD
 from torch.optim.lr_scheduler import StepLR
 import yoke.torch_training_utils as ttu
 from yoke.torch_training_utils import train_lsc_reward_epoch, eval_lsc_reward_datastep
+from yoke.torch_training_utils import onnx_module
 
 
 class SimpleModel(nn.Module):
@@ -541,3 +546,167 @@ def test_eval_lsc_reward_datastep_rank_nonzero() -> None:
     assert all_losses is None
     assert reward_out.shape == (5, 1)
     assert pred_out.shape == (5, 1)
+
+
+def test_init_sets_filepath_attribute() -> None:
+    """Test that __init__ sets the filepath attribute correctly."""
+    fp: str = "foo/bar/model.onnx"
+    mod = onnx_module(fp)
+    assert hasattr(mod, "filepath")
+    assert mod.filepath == fp
+
+
+def test_save_calls_torch_export_and_prints_message(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Test that save calls torch.onnx.export and prints confirmation."""
+    # Prepare
+    fp = tmp_path / "model.onnx"
+    example_input = torch.randn(2, 3)
+
+    class DummyModel(nn.Module):
+        """Dummy model for export testing."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return x * 2
+
+    dummy = DummyModel()
+    called: dict = {}
+
+    def fake_export(
+        model: nn.Module,
+        inp: torch.Tensor,
+        filepath: str,
+        input_names: list[str],
+        output_names: list[str],
+        dynamic_axes: dict,
+        opset_version: int,
+    ) -> None:
+        called["model"] = model
+        called["inp"] = inp
+        called["filepath"] = filepath
+        assert input_names == ["input"]
+        assert output_names == ["output"]
+        assert dynamic_axes == {
+            "input": {0: "batch_size"},
+            "output": {0: "batch_size"},
+        }
+        assert opset_version == 12
+        # simulate file creation
+        Path(filepath).write_bytes(b"")
+
+    monkeypatch.setattr(torch.onnx, "export", fake_export)
+    om = onnx_module(str(fp))
+
+    # Exercise
+    om.save(dummy, example_input)
+
+    # Verify
+    out = capsys.readouterr().out
+    assert "Model exported to" in out
+    assert called["model"] is dummy
+    assert called["filepath"] == str(fp)
+
+
+def test_evaluate_returns_outputs_without_optional_flags(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Test that evaluate returns outputs when no flags are set."""
+    fp = tmp_path / "test.onnx"
+    # create empty file to satisfy session init
+    fp.write_bytes(b"")
+    expected = [np.array([1, 2, 3])]
+
+    class DummySession:
+        """Dummy ONNX Runtime session for inference."""
+
+        def __init__(self, path: str) -> None:
+            assert path == str(fp)
+
+        def get_inputs(self) -> list[SimpleNamespace]:
+            return [SimpleNamespace(name="input")]
+
+        def run(
+            self,
+            output_names: None,
+            inputs: dict[str, np.ndarray],
+        ) -> list[np.ndarray]:
+            assert "input" in inputs
+            return expected
+
+    monkeypatch.setattr(ort, "InferenceSession", DummySession)
+    om = onnx_module(str(fp))
+
+    actual = om.evaluate(np.zeros((1, 3)))
+    assert isinstance(actual, list)
+    assert np.array_equal(actual[0], expected[0])
+
+
+def test_evaluate_with_check_model_prints_and_checks(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Test that evaluate with check_model validates the ONNX model."""
+    fp = tmp_path / "checked.onnx"
+    fp.write_bytes(b"")
+    # stub session as before
+    monkeypatch.setattr(
+        ort,
+        "InferenceSession",
+        lambda path: SimpleNamespace(
+            get_inputs=lambda: [SimpleNamespace(name="i")],
+            run=lambda *args, **kwargs: [np.array([0])],
+        ),
+    )
+    loaded: dict = {}
+
+    def fake_load(path: str) -> object:
+        loaded["path"] = path
+        return object()
+
+    def fake_check_model(model: object) -> None:
+        loaded["checked"] = True
+
+    monkeypatch.setattr(onnx, "load", fake_load)
+    monkeypatch.setattr(onnx.checker, "check_model", fake_check_model)
+    om = onnx_module(str(fp))
+
+    result = om.evaluate(np.ones((1, 1)), check_model=True)
+    out = capsys.readouterr().out
+    assert loaded["path"] == str(fp)
+    assert loaded["checked"] is True
+    assert "ONNX model check passed!" in out
+    assert result == [np.array([0])]
+
+
+def test_evaluate_with_verbose_prints_input_info(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Test that evaluate with verbose=True prints input metadata."""
+    fp = tmp_path / "verb.onnx"
+    fp.write_bytes(b"")
+    dummy_inp = SimpleNamespace(name="in0", shape=[1, 4], type="tensor(float)")
+    # first session for run; second for verbose info
+    sessions: list = [
+        SimpleNamespace(
+            get_inputs=lambda: [dummy_inp],
+            run=lambda *args, **kwargs: [np.array([9])],
+        ),
+        SimpleNamespace(get_inputs=lambda: [dummy_inp]),
+    ]
+    monkeypatch.setattr(
+        ort,
+        "InferenceSession",
+        lambda path: sessions.pop(0),
+    )
+    om = onnx_module(str(fp))
+    res = om.evaluate(np.zeros((1, 4)), verbose=True)
+    captured = capsys.readouterr().out.splitlines()
+    # lines: Name, Shape, Type
+    assert any("Name: in0" in line for line in captured)
+    assert any("Shape: [1, 4]" in line for line in captured)
+    assert any("Type: tensor(float)" in line for line in captured)
+    assert res == [np.array([9])]
