@@ -559,7 +559,7 @@ def test_init_sets_filepath_attribute() -> None:
 def test_save_calls_torch_export_and_prints_message(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: pathlib.Path,
-    capsys: pytest.CaptureFixture[str]
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Test that save calls torch.onnx.export and prints confirmation."""
     # Prepare
