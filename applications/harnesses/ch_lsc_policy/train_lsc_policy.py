@@ -140,41 +140,22 @@ def main(
         "output_feature_list": (16, 64, 64, 16)
     }
 
-    model = gaussian_policyCNN(**model_args)
-
-    #############################################
-    # Freeze covariance parameters
-    #############################################
-    for param in model.cov_mlp.parameters():
-        param.requires_grad = False
-
-    #############################################
-    # Initialize Optimizer
-    #############################################
-    optimizer = torch.optim.AdamW(
-        model.parameters(),
-        lr=1e-3,
-        betas=(0.9, 0.999),
-        eps=1e-08,
-        weight_decay=0.01
-    )
-
-    #############################################
-    # Initialize Loss
-    #############################################
-    # Use `reduction='none'` so loss on each sample in batch can be recorded.
-    loss_fn = nn.MSELoss(reduction="none")
-
     #############################################
     # Load Model for Continuation (Rank 0 only)
     #############################################
     # Wait to move model to GPU until after the checkpoint load. Then
     # explicitly move model and optimizer state to GPU.
     if CONTINUATION:
-        model, starting_epoch = load_model_and_optimizer(
+        model, optimizer, starting_epoch = load_model_and_optimizer(
             checkpoint,
-            optimizer,
-            available_models,
+            optimizer_class=torch.optim.AdamW,
+            optimizer_kwargs={
+                "lr": 1e-6,
+                "betas": (0.9, 0.999),
+                "eps": 1e-08,
+                "weight_decay": 0.01,
+            },
+            available_models=available_models,
             device=device,
         )
 
@@ -184,8 +165,36 @@ def main(
 
         print("Model state loaded for continuation.")
     else:
-        model.to(device)
+        # Initialize model and optimizer state.
+        # If not continuing, set starting_epoch to 0.
         starting_epoch = 0
+        model = gaussian_policyCNN(**model_args)
+        # Move model to GPU before instantiating optimizer and DDP.
+        model.to(device)
+
+        # Instantiate optimizer and move state to GPU.
+        optimizer = torch.optim.AdamW(
+            model.parameters(),
+            lr=1e-6,
+            betas=(0.9, 0.999),
+            eps=1e-08,
+            weight_decay=0.01
+        )
+
+        for state in optimizer.state.values():
+            for key, value in state.items():
+                if isinstance(value, torch.Tensor):
+                    state[key] = value.to(device)
+
+        # Freeze covariance parameters
+        for param in model.cov_mlp.parameters():
+            param.requires_grad = False
+
+    #############################################
+    # Initialize Loss
+    #############################################
+    # Use `reduction='none'` so loss on each sample in batch can be recorded.
+    loss_fn = nn.MSELoss(reduction="none")
 
     #############################################
     # Move Model to DistributedDataParallel
@@ -311,8 +320,8 @@ def main(
             print(f"Epoch time (minutes): {epoch_time:.2f}", flush=True)
 
     # Save model and optimizer state in hdf5
-    chkpt_name_str = "study{0:03d}_modelState_epoch{1:04d}.pth"
-    new_chkpt_path = os.path.join("./", chkpt_name_str.format(studyIDX, epochIDX))
+    chkpt_name_str = f'study{studyIDX:03d}_modelState_epoch{epochIDX:04d}.pth'
+    new_chkpt_path = os.path.join("./", chkpt_name_str)
 
     save_model_and_optimizer(
         model,
