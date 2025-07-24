@@ -194,7 +194,7 @@ def read_npz_nan(npz: np.lib.npyio.NpzFile, field: str) -> np.ndarray:
     #print("data=", data)
     #if hasattr(data, "keys") and isinstance(data, np.lib.npyio.NpzFile):
     #    print("data:Safe to treat as npz archive")
-    print("has keys=",list(data.keys()))
+    #print("has keys=",list(data.keys()))
     return np.nan_to_num(data[field], nan=0.0)
 
 
@@ -716,6 +716,7 @@ class TemporalDataSet(Dataset):
         end_npz.close()
 
         #return start_img, torch.tensor(self.channel_map), end_img, torch.tensor(self.channel_map), dt
+        print("In TemporalDataset getitem: channel_map=",self.channel_map)
         return start_img, self.channel_map, end_img, self.channel_map, dt
 
 

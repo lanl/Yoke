@@ -101,10 +101,10 @@ class LodeRunner(nn.Module):
             window_sizes=window_sizes,
             patch_merge_scales=patch_merge_scales,
         )
-        print("In bomberman: image_size=",image_size)
-        print("In bomberman: patch_size=",patch_size)
-        print("In bomberman: window_sizes=",window_sizes)
-        print("In bomberman: patch_merge_scales=",patch_merge_scales)
+        #print("In bomberman: image_size=",image_size)
+        #print("In bomberman: patch_size=",patch_size)
+        #print("In bomberman: window_sizes=",window_sizes)
+        #print("In bomberman: patch_merge_scales=",patch_merge_scales)
         assert np.all(valid), (
             "Invalid combination of image_size, patch_size, window_sizes, "
             "and patch_merge_scales!"
@@ -130,11 +130,11 @@ class LodeRunner(nn.Module):
         # only index-aware and does not take into account actual spatial
         # information.
         # SOUMI: printing
-        print("In bomberman: self.embed_dim=",self.embed_dim)
-        print("In bomberman: self.patch_size=",self.patch_size)
-        print("In bomberman: self.image_size=",self.image_size)
-        print("In bomberman: self.parallel_embed.num_patches=",self.parallel_embed.num_patches)
-        print("length default_vars=",len(self.default_vars))
+        #print("In bomberman: self.embed_dim=",self.embed_dim)
+        #print("In bomberman: self.patch_size=",self.patch_size)
+        #print("In bomberman: self.image_size=",self.image_size)
+        #print("In bomberman: self.parallel_embed.num_patches=",self.parallel_embed.num_patches)
+        #print("length default_vars=",len(self.default_vars))
         self.pos_embed = PosEmbed(
             self.embed_dim,
             self.patch_size,
@@ -191,12 +191,13 @@ class LodeRunner(nn.Module):
         x = self.agg_vars(x)
 
         # Encode patch positions, spatial information
-        print("In bomberman size x=",x.size())
+        #print("In bomberman size x=",x.size())
+        print("In bomberman in_vars=",in_vars)
         print("In bomberman size in_vars=",in_vars.size())
-        print("In bomberman size out_vars=",out_vars.size())
-        print("In bomberman size in_times=",lead_times.size())
+        #print("In bomberman size out_vars=",out_vars.size())
+        #print("In bomberman size in_times=",lead_times.size())
         x = self.pos_embed(x)
-        print("In bomberman size pos_embed x=",x.size())
+        #print("In bomberman size pos_embed x=",x.size())
 
         # Encode temporal information
         x = self.temporal_encoding(x, lead_times)
