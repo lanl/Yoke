@@ -10,7 +10,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 from yoke.models.policyCNNmodules import gaussian_policyCNN
 from yoke.datasets.lsc_dataset import LSC_hfield_policy_DataSet
-from yoke.utils.training.epoch.loderunner import train_lsc_policy_epoch
+from yoke.utils.training.epoch.lsc_policy import train_lsc_policy_epoch
 from yoke.utils.restart import continuation_setup
 from yoke.utils.dataload import make_distributed_dataloader
 from yoke.utils.checkpointing import save_model_and_optimizer

@@ -14,7 +14,7 @@
 #SBATCH --account=w25_artimis_g
 #PRODUCTION  #SBATCH --partition=gpu
 #PRODUCTION  #SBATCH --time=01:20:00
-#SBATCH --time=1:00:00
+#SBATCH --time=2:00:00
 #SBATCH --qos=debug
 #SBATCH --reservation=gpu_debug
 #SBATCH --partition=gpu_debug

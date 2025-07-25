@@ -10,7 +10,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 from yoke.models.policyCNNmodules import gaussian_policyCNN
 from yoke.datasets.lsc_dataset import LSC_hfield_policy_DataSet
-from yoke.utils.training.epoch import train_lsc_policy_epoch
+from yoke.utils.training.epoch.lsc_policy import train_lsc_policy_epoch
 from yoke.utils.restart import continuation_setup
 from yoke.utils.dataload import make_distributed_dataloader
 from yoke.utils.checkpointing import load_model_and_optimizer
@@ -54,8 +54,8 @@ def setup_distributed() -> tuple[int, int, int, torch.device]:
     print("============================", flush=True)
 
     # ----- 2) Set the current GPU device for this process -----
-    torch.cuda.set_device(local_rank)
     device = torch.device(f"cuda:{local_rank}")
+    torch.cuda.set_device(device)
 
     # ----- 3) Initialize the process group -----
     dist.init_process_group(
@@ -63,6 +63,7 @@ def setup_distributed() -> tuple[int, int, int, torch.device]:
         init_method=f"tcp://{master_addr}:{master_port}",
         world_size=world_size,
         rank=rank,
+        device_id=device,
     )
 
     return rank, world_size, local_rank, device
