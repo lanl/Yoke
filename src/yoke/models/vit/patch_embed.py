@@ -55,8 +55,8 @@ class ParallelVarPatchEmbed(nn.Module):
     def __init__(
         self,
         max_vars: int = 5,
-        img_size: (int, int) = (128, 128),
-        patch_size: (int, int) = (16, 16),
+        img_size: tuple[int, int] = (128, 128),
+        patch_size: tuple[int, int] = (16, 16),
         embed_dim: int = 64,
         norm_layer: Optional[nn.Module] = None,
     ) -> None:
