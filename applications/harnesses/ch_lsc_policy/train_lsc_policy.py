@@ -198,14 +198,14 @@ def main(
         # Set the base learning rate per-block
         base_lr = 1e-2
         param_groups = [
-            {"params": model.module.mean_mlp.parameters(), "lr": base_lr},
-            {"params": model.module.vector_mlp.parameters(), "lr": 2.0*base_lr},
-            {"params": model.module.lin_embed_h1.parameters(), "lr": 10.0*base_lr},
-            {"params": model.module.lin_embed_h2.parameters(), "lr": 10.0*base_lr},
-            {"params": model.module.reduceH1.parameters(), "lr": 5.0*base_lr},
-            {"params": model.module.interpH1.parameters(), "lr": 25.0*base_lr},
-            {"params": model.module.reduceH2.parameters(), "lr": 5.0*base_lr},
-            {"params": model.module.interpH2.parameters(), "lr": 25.0*base_lr},
+            {"params": model.mean_mlp.parameters(), "lr": base_lr},
+            {"params": model.vector_mlp.parameters(), "lr": 2.0*base_lr},
+            {"params": model.lin_embed_h1.parameters(), "lr": 10.0*base_lr},
+            {"params": model.lin_embed_h2.parameters(), "lr": 10.0*base_lr},
+            {"params": model.reduceH1.parameters(), "lr": 5.0*base_lr},
+            {"params": model.interpH1.parameters(), "lr": 25.0*base_lr},
+            {"params": model.reduceH2.parameters(), "lr": 5.0*base_lr},
+            {"params": model.interpH2.parameters(), "lr": 25.0*base_lr},
         ]
 
         # Instantiate optimizer and move state to GPU.
