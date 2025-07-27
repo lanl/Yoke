@@ -60,7 +60,7 @@ def train_lsc_policy_datastep(
             g2 = 0.0
             for n, p in model.module.named_parameters():
                 if p.requires_grad and blk_match(n) and p.grad is not None:
-                    print(f'{n} has grad!')
+                    #print(f'{n} has grad!')
                     g2 += p.grad.norm().item()
             print(f'{blk_name:12s} grad-norm: {g2:.10f}')
 
