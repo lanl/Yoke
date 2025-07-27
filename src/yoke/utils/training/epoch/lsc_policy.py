@@ -18,7 +18,7 @@ def train_lsc_policy_epoch(
     model: torch.nn.Module,
     optimizer: torch.optim.Optimizer,
     loss_fn: torch.nn.Module,
-    LRsched: torch.optim.lr_scheduler._LRScheduler,
+    #LRsched: torch.optim.lr_scheduler._LRScheduler,
     epochIDX: int,
     train_per_val: int,
     train_rcrd_filename: str,
@@ -74,15 +74,15 @@ def train_lsc_policy_epoch(
             )
 
             # Increment the learning-rate scheduler
-            LRsched.step()
+            #LRsched.step()
 
             # Save training record (rank 0 only)
             if rank == 0:
                 # Debugging output
                 print('trainbatch_ID:', trainbatch_ID)
-                print('lr:', optimizer.param_groups[0]['lr'])
+                #print('lr:', optimizer.param_groups[0]['lr'])
                 #print('Mean batch loss:', train_losses.mean().item())
-                
+
                 batch_records = np.column_stack(
                     [
                         np.full(len(train_losses), epochIDX),

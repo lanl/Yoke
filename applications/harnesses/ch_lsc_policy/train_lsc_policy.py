@@ -181,12 +181,12 @@ def main(
         blocks = [
             ('mean head', lambda n: n.startswith('mean_mlp')),
             ('vector MLP', lambda n: n.startswith('vector_mlp')),
-            # ('h1 embed', lambda n: n.startswith('lin_embed_h1')),
-            # ('h2 embed', lambda n: n.startswith('lin_embed_h2')),
-            # ('CNN-H1 reduce', lambda n: n.startswith('reduceH1')),
-            # ('CNN-H1 interp', lambda n: n.startswith('interpH1')),
-            # ('CNN-H2 reduce', lambda n: n.startswith('reduceH2')),
-            # ('CNN-H2 interp', lambda n: n.startswith('interpH2')),
+            ('h1 embed', lambda n: n.startswith('lin_embed_h1')),
+            ('h2 embed', lambda n: n.startswith('lin_embed_h2')),
+            ('CNN-H1 reduce', lambda n: n.startswith('reduceH1')),
+            ('CNN-H1 interp', lambda n: n.startswith('interpH1')),
+            ('CNN-H2 reduce', lambda n: n.startswith('reduceH2')),
+            ('CNN-H2 interp', lambda n: n.startswith('interpH2')),
         ]
 
         # Unfreeze only the mean MLP head
@@ -195,10 +195,24 @@ def main(
                 if matcher(n):
                     p.requires_grad = True
 
+        # Set the base learning rate per-block
+        base_lr = 1e-2
+        param_groups = [
+            {"params": model.module.mean_mlp.parameters(), "lr": base_lr},
+            {"params": model.module.vector_mlp.parameters(), "lr": 2.0*base_lr},
+            {"params": model.module.lin_embed_h1.parameters(), "lr": 10.0*base_lr},
+            {"params": model.module.lin_embed_h2.parameters(), "lr": 10.0*base_lr},
+            {"params": model.module.reduceH1.parameters(), "lr": 5.0*base_lr},
+            {"params": model.module.interpH1.parameters(), "lr": 25.0*base_lr},
+            {"params": model.module.reduceH2.parameters(), "lr": 5.0*base_lr},
+            {"params": model.module.interpH2.parameters(), "lr": 25.0*base_lr},
+        ]
+
         # Instantiate optimizer and move state to GPU.
         optimizer = torch.optim.AdamW(
-            [p for p in model.parameters() if p.requires_grad],
-            lr=1e-2,
+            params=param_groups,
+            # [p for p in model.parameters() if p.requires_grad],
+            # lr=base_lr,
             betas=(0.9, 0.999),
             eps=1e-08,
             weight_decay=0.0  #0.01, zero weight decay for only mean_mlp
@@ -213,7 +227,7 @@ def main(
         if rank == 0:
             for name, p in model.named_parameters():
                 print(name, p.requires_grad)
-            
+
         # # Freeze covariance parameters
         # for param in model.cov_mlp.parameters():
         #     param.requires_grad = False
@@ -244,18 +258,18 @@ def main(
     #original_batchsize = 40.0  # 1 node, 4 gpus, 10 samples/gpu
     #ddp_anchor_lr = anchor_lr * lr_scale / original_batchsize
     #
-    # For single node
-    ddp_anchor_lr = anchor_lr
+    # # For single node
+    # ddp_anchor_lr = anchor_lr
 
-    LRsched = CosineWithWarmupScheduler(
-        optimizer,
-        anchor_lr=ddp_anchor_lr,
-        terminal_steps=terminal_steps,
-        warmup_steps=warmup_steps,
-        num_cycles=num_cycles,
-        min_fraction=min_fraction,
-        last_epoch=last_epoch,
-    )
+    # LRsched = CosineWithWarmupScheduler(
+    #     optimizer,
+    #     anchor_lr=ddp_anchor_lr,
+    #     terminal_steps=terminal_steps,
+    #     warmup_steps=warmup_steps,
+    #     num_cycles=num_cycles,
+    #     min_fraction=min_fraction,
+    #     last_epoch=last_epoch,
+    # )
 
     #############################################
     # Data Initialization (Distributed Dataloader)
@@ -323,7 +337,7 @@ def main(
             model=model,
             optimizer=optimizer,
             loss_fn=loss_fn,
-            LRsched=LRsched,
+            #LRsched=LRsched,
             epochIDX=epochIDX,
             train_per_val=train_per_val,
             train_rcrd_filename=trn_rcrd_filename,
