@@ -49,23 +49,23 @@ def train_lsc_policy_datastep(
     # Compute loss
     loss = loss_fn(pred_mean, x_true)
     per_sample_loss = loss.mean(dim=1)  # Per-sample loss
-    
+
     # Backward pass and optimization
     optimizer.zero_grad(set_to_none=True)
     loss.mean().backward()
-    
+
     if rank == 0:
         # Report gradient norms on unfrozen blocks
         for blk_name, blk_match in blocks:
             g2 = 0.0
-            for n, p in model.named_parameters():
+            for n, p in model.module.named_parameters():
                 if p.requires_grad and blk_match(n) and p.grad is not None:
-                    print('Added to grad...')
+                    print(f'{n} has grad!')
                     g2 += p.grad.norm().item()
-                print(f'{blk_name:12s} grad-norm: {g2:.10f}')
+            print(f'{blk_name:12s} grad-norm: {g2:.10f}')
 
     optimizer.step()
-    
+
     # Gather per-sample losses from all processes
     gathered_losses = [torch.zeros_like(per_sample_loss) for _ in range(world_size)]
     dist.all_gather(gathered_losses, per_sample_loss)
