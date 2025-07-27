@@ -151,7 +151,7 @@ def main(
             checkpoint,
             optimizer_class=torch.optim.AdamW,
             optimizer_kwargs={
-                "lr": 1e-6,
+                "lr": 1e-2,
                 "betas": (0.9, 0.999),
                 "eps": 1e-08,
                 "weight_decay": 0.01,
@@ -173,13 +173,35 @@ def main(
         # Move model to GPU before instantiating optimizer and DDP.
         model.to(device)
 
+        # Freeze everything before handing to optimizer
+        for p in model.parameters():
+            p.requires_grad = False
+
+        # Define blocks we will successively unfreeze
+        blocks = [
+            ('mean head', lambda n: n.startswith('mean_mlp')),
+            ('vector MLP', lambda n: n.startswith('vector_mlp')),
+            # ('h1 embed', lambda n: n.startswith('lin_embed_h1')),
+            # ('h2 embed', lambda n: n.startswith('lin_embed_h2')),
+            # ('CNN-H1 reduce', lambda n: n.startswith('reduceH1')),
+            # ('CNN-H1 interp', lambda n: n.startswith('interpH1')),
+            # ('CNN-H2 reduce', lambda n: n.startswith('reduceH2')),
+            # ('CNN-H2 interp', lambda n: n.startswith('interpH2')),
+        ]
+
+        # Unfreeze only the mean MLP head
+        for name, matcher in blocks:
+            for n, p in model.named_parameters():
+                if matcher(n):
+                    p.requires_grad = True
+
         # Instantiate optimizer and move state to GPU.
         optimizer = torch.optim.AdamW(
-            model.parameters(),
-            lr=1e-6,
+            [p for p in model.parameters() if p.requires_grad],
+            lr=1e-2,
             betas=(0.9, 0.999),
             eps=1e-08,
-            weight_decay=0.01
+            weight_decay=0.0  #0.01, zero weight decay for only mean_mlp
         )
 
         for state in optimizer.state.values():
@@ -187,9 +209,14 @@ def main(
                 if isinstance(value, torch.Tensor):
                     state[key] = value.to(device)
 
-        # Freeze covariance parameters
-        for param in model.cov_mlp.parameters():
-            param.requires_grad = False
+        # Double check which parameters are frozen
+        if rank == 0:
+            for name, p in model.named_parameters():
+                print(name, p.requires_grad)
+            
+        # # Freeze covariance parameters
+        # for param in model.cov_mlp.parameters():
+        #     param.requires_grad = False
 
     #############################################
     # Initialize Loss
@@ -304,6 +331,7 @@ def main(
             device=device,
             rank=rank,
             world_size=world_size,
+            blocks=blocks,  # Temporary list of unfrozen blocks.
         )
 
         if TIME_EPOCH:

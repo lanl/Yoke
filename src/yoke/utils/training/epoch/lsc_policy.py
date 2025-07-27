@@ -26,6 +26,7 @@ def train_lsc_policy_epoch(
     device: torch.device,
     rank: int,
     world_size: int,
+    blocks,  # Temporary list of unfrozen blocks in network for grad observation.
 ) -> None:
     """Epoch training of LSC Gaussian-policy network.
 
@@ -69,7 +70,7 @@ def train_lsc_policy_epoch(
 
             # Perform a single training step
             x_true, pred_mean, train_losses = train_lsc_policy_datastep(
-                traindata, model, optimizer, loss_fn, device, rank, world_size
+                traindata, model, optimizer, loss_fn, device, rank, world_size, blocks
             )
 
             # Increment the learning-rate scheduler
@@ -77,6 +78,11 @@ def train_lsc_policy_epoch(
 
             # Save training record (rank 0 only)
             if rank == 0:
+                # Debugging output
+                print('trainbatch_ID:', trainbatch_ID)
+                print('lr:', optimizer.param_groups[0]['lr'])
+                #print('Mean batch loss:', train_losses.mean().item())
+                
                 batch_records = np.column_stack(
                     [
                         np.full(len(train_losses), epochIDX),
