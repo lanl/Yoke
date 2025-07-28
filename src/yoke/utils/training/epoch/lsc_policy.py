@@ -1,5 +1,6 @@
 """Functions to train and evaluate an lsc240420 policy network over a single epoch."""
 
+import math
 import torch
 import numpy as np
 from contextlib import nullcontext
@@ -60,9 +61,24 @@ def train_lsc_policy_epoch(
     # Training loop
     model.train()
     train_rcrd_filename = train_rcrd_filename.replace("<epochIDX>", f"{epochIDX:04d}")
+    grad_rcrd_filename = train_rcrd_filename.replace(".csv", "_grad.csv")
+
     with (
         open(train_rcrd_filename, "a") if rank == 0 else nullcontext()
-    ) as train_rcrd_file:
+    ) as train_rcrd_file, (
+        open(grad_rcrd_filename, "a") if rank == 0 else nullcontext()
+    ) as grad_rcrd_file:
+        # Write header to training record file (rank 0 only)
+        if rank == 0:
+            trn_header = ["epoch", "batch", "loss"]
+            np.savetxt(train_rcrd_file, [trn_header], fmt="%s", delimiter=",")
+            train_rcrd_file.flush()
+
+            grad_header = ["epoch", "batch"] + [name for name, _ in blocks]
+            np.savetxt(grad_rcrd_file, [grad_header], fmt="%s", delimiter=",")
+            grad_rcrd_file.flush()
+
+        # Iterate over training batches
         for trainbatch_ID, traindata in enumerate(training_data):
             # Stop when number of training batches is reached
             if trainbatch_ID >= num_train_batches:
@@ -83,6 +99,28 @@ def train_lsc_policy_epoch(
                 #print('lr:', optimizer.param_groups[0]['lr'])
                 #print('Mean batch loss:', train_losses.mean().item())
 
+                # Save RMS-gradients for unfrozen blocks
+                rms_list = []
+                for blk_name, blk_match in blocks:
+                    total_sq = 0.0
+                    total_count = 0
+                    for n, p in model.module.named_parameters():
+                        if p.requires_grad and blk_match(n) and p.grad is not None:
+                            g = p.grad.detach().view(-1)
+                            total_sq += float((g * g).sum().item())
+                            total_count += g.numel()
+                    rms = math.sqrt(total_sq / total_count) if total_count > 0 else 0.0
+                    rms_list.append(rms)
+
+                # build a (1, N) array so numpy.savetxt writes a single row
+                row = np.array(
+                    [epochIDX, trainbatch_ID] + rms_list,
+                    dtype=float
+                    )[None, :]
+                fmt = ["%d", "%d"] + ["%.10f"] * len(rms_list)
+                np.savetxt(grad_rcrd_file, row, fmt=fmt, delimiter=",")
+
+                # Save training losses
                 batch_records = np.column_stack(
                     [
                         np.full(len(train_losses), epochIDX),
