@@ -1,5 +1,7 @@
 """Single-step training and evaluation functions for lsc240420 policy networks."""
 
+import math
+
 import torch
 import torch.nn as nn
 import torch.distributed as dist
@@ -13,6 +15,7 @@ def train_lsc_policy_datastep(
     device: torch.device,
     rank: int,
     world_size: int,
+    blocks,  # Temporary list of unfrozen blocks in network for grad observation.
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """A DDP-compatible training step for LSC Gaussian policy.
 
@@ -52,6 +55,27 @@ def train_lsc_policy_datastep(
     # Backward pass and optimization
     optimizer.zero_grad(set_to_none=True)
     loss.mean().backward()
+
+    if rank == 0:
+        # Report RMS‑grad on unfrozen blocks
+        for blk_name, blk_match in blocks:
+            total_sq = 0.0
+            total_count = 0
+
+            for n, p in model.module.named_parameters():
+                if p.requires_grad and blk_match(n) and p.grad is not None:
+                    g = p.grad.detach().view(-1)
+                    total_sq   += (g * g).sum().item()
+                    total_count += g.numel()
+
+            if total_count > 0:
+                rms_grad = math.sqrt(total_sq / total_count)
+            else:
+                rms_grad = 0.0
+
+            print(f'{blk_name:12s} RMS‑grad: {rms_grad:.10f}')
+
+    # Step the optimizer
     optimizer.step()
 
     # Gather per-sample losses from all processes

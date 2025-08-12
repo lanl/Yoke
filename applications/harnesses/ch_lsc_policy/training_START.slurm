@@ -12,12 +12,12 @@
 
 #SBATCH --job-name=lscpolicy_s<studyIDX>_e0001
 #SBATCH --account=w25_artimis_g
-#SBATCH --partition=gpu
-#SBATCH --time=01:20:00
-#DEBUG #SBATCH --time=2:00:00
-#DEBUG #SBATCH --qos=debug
-#DEBUG #SBATCH --reservation=gpu_debug
-#DEBUG #SBATCH --partition=gpu_debug
+#PRODUCTION  #SBATCH --partition=gpu
+#PRODUCTION  #SBATCH --time=02:00:00
+#SBATCH --time=0:45:00
+#SBATCH --qos=debug
+#SBATCH --reservation=gpu_debug
+#SBATCH --partition=gpu_debug
 #SBATCH --nodes=<KNODES>
 #SBATCH --ntasks-per-node=<NGPUS>
 #SBATCH --gpus-per-node=<NGPUS>
@@ -45,9 +45,8 @@ export NCCL_SOCKET_IFNAME=hsn0  # Check possible interfaces with `ip link show`
 # export NCCL_DEBUG_SUBSYS=INIT
 
 # Load correct conda environment
-module load python/3.11-anaconda-2023.07
-source activate
-conda activate <YOKE_TORCH_ENV>
+module load cray-python
+source $HOME/yoke_250724/bin/activate
 
 # Set number of threads per GPU
 export OMP_NUM_THREADS=10
