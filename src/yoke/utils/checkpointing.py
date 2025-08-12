@@ -227,10 +227,11 @@ def save_model_and_optimizer(
 
 def load_model_and_optimizer(
     filepath: str,
-    optimizer: torch.optim.Optimizer,
+    optimizer_class: type,
+    optimizer_kwargs: dict,
     available_models: dict,
     device: str = "cuda",
-) -> tuple[torch.nn.Module, int]:
+) -> tuple[torch.nn.Module, torch.optim.Optimizer, int]:
     """Dynamically load model & optimizer state from checkpoint.
 
     NOTE: This function only works while loading checkpoints created by
@@ -243,7 +244,8 @@ def load_model_and_optimizer(
 
     Args:
         filepath (str): Checkpoint filename.
-        optimizer (torch.optim): Torch optimizer instance
+        optimizer_class (type): Torch optimizer class
+        optimizer_kwargs (dict): Dictionary of optimizer parameters.
         available_models (dict): Dictionary mapping class names to class references.
         device (torch.device): String or device specifier.
 
@@ -282,13 +284,22 @@ def load_model_and_optimizer(
 
     # Load state
     model.load_state_dict(checkpoint["model_state_dict"])
-    optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
 
     # Move model to GPU if necessary
     model.to(device)
+
+    # Initialize optimizer and move to device
+    optimizer = optimizer_class(model.parameters(), **optimizer_kwargs)
+    optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+
+    # Move optimizer state to GPU if necessary
+    for state in optimizer.state.values():
+        for key, value in state.items():
+            if isinstance(value, torch.Tensor):
+                state[key] = value.to(device)
 
     # Synchronize all processes in DDP
     if dist.is_initialized():
         dist.barrier()
 
-    return model, checkpoint["epoch"]
+    return model, optimizer, checkpoint["epoch"]

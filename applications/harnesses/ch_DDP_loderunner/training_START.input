@@ -8,8 +8,6 @@
 lsc240420_prefixes_train_80pct.txt
 --validation_filelist
 lsc240420_prefixes_validation_10pct.txt
---test_filelist
-lsc240420_prefixes_test_10pct.txt
 --block_structure
 <B0>
 <B1>
@@ -48,4 +46,4 @@ lsc240420_prefixes_test_10pct.txt
 --val_batches
 <NVAL_BATCH>
 --TRAIN_PER_VAL
-2
+5
