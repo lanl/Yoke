@@ -172,8 +172,7 @@ class LodeRunner(nn.Module):
         # WARNING!: Most likely the `in_vars` and `out_vars` need to be tensors
         # of integers corresponding to variables in the `default_vars` list.
 
-        # DPOT-style noise injection:
-        # l2_norm = torch.norm(x, dim=(1, 2, 3), keepdim=True)
+        # Noise injection:
         l2_norm = torch.sqrt((x * x).sum(dim=(1, 2, 3), keepdim=True))
         noise = torch.randn_like(x)
         x = x + self.noise_scale * l2_norm * noise
