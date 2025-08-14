@@ -6,7 +6,7 @@ from torch import nn
 
 from yoke.models.CNNmodules import CNN_Interpretability_Module
 from yoke.models.CNNmodules import CNN_Reduction_Module
-from yoke.models.CNNmodules import PVI_SingleField_CNN
+from yoke.models.CNNmodules import Image2ScalarCNN
 
 
 ###############################################################################
@@ -180,30 +180,32 @@ def test_parameter_count_reduction() -> None:
 
 
 ###############################################################################
-# Fixtures for PVI_SingleField_CNN
+# Fixtures for Image2ScalarCNN
 ###############################################################################
 @pytest.fixture
-def default_pvi_model() -> PVI_SingleField_CNN:
-    """Fixture for creating a default PVI_SingleField_CNN."""
-    return PVI_SingleField_CNN()
+def default_image2scalar_model() -> Image2ScalarCNN:
+    """Fixture for creating a default Image2ScalarCNN."""
+    return Image2ScalarCNN()
 
 
 ###############################################################################
-# Tests for PVI_SingleField_CNN
+# Tests for Image2ScalarCNN
 ###############################################################################
-def test_default_pvi_forward_shape(default_pvi_model: PVI_SingleField_CNN) -> None:
-    """Test that the default PVI model produces a scalar output (batch, 1)."""
+def test_default_image2scalar_forward_shape(
+    default_image2scalar_model: Image2ScalarCNN
+) -> None:
+    """Test that the default Image2ScalarCNN model produces a scalar output."""
     batch_size = 2
-    c_in, height, width = default_pvi_model.img_size
+    c_in, height, width = default_image2scalar_model.img_size
     x = torch.randn(batch_size, c_in, height, width)
-    out = default_pvi_model(x)
+    out = default_image2scalar_model(x)
     # Should be [batch_size, 1]
     assert out.shape == (batch_size, 1)
 
 
-def test_custom_pvi_forward_shape() -> None:
-    """Test that a custom-configured PVI model produces a scalar output."""
-    model = PVI_SingleField_CNN(
+def test_custom_image2scalar_forward_shape() -> None:
+    """Test that a custom-configured Image2ScalarCNN model produces a scalar output."""
+    model = Image2ScalarCNN(
         img_size=(3, 224, 224),
         size_threshold=(16, 16),
         kernel=3,
@@ -219,39 +221,41 @@ def test_custom_pvi_forward_shape() -> None:
     assert out.shape == (2, 1)
 
 
-def test_pvi_batchnorm_weights_frozen() -> None:
+def test_image2scalar_batchnorm_weights_frozen() -> None:
     """Test that batchnorm weights are frozen if batchnorm_onlybias=True."""
-    model = PVI_SingleField_CNN(batchnorm_onlybias=True)
+    model = Image2ScalarCNN(batchnorm_onlybias=True)
     for name, param in model.named_parameters():
         if "Norm" in name and "weight" in name:
             assert not param.requires_grad
 
 
-def test_pvi_batchnorm_weights_trainable() -> None:
+def test_image2scalar_batchnorm_weights_trainable() -> None:
     """Test that batchnorm weights are trainable if batchnorm_onlybias=False."""
-    model = PVI_SingleField_CNN(batchnorm_onlybias=False)
+    model = Image2ScalarCNN(batchnorm_onlybias=False)
     for name, param in model.named_parameters():
         if "Norm" in name and "weight" in name:
             assert param.requires_grad
 
 
-def test_pvi_conv_bias_toggle() -> None:
+def test_image2scalar_conv_bias_toggle() -> None:
     """Test that the convolutional bias toggles correctly."""
-    model_no_bias = PVI_SingleField_CNN(conv_onlyweights=True)
-    model_with_bias = PVI_SingleField_CNN(conv_onlyweights=False)
+    model_no_bias = Image2ScalarCNN(conv_onlyweights=True)
+    model_with_bias = Image2ScalarCNN(conv_onlyweights=False)
     # Check the first convolution in the interpretability module
     assert model_no_bias.interp_module.inConv.bias is None
     assert model_with_bias.interp_module.inConv.bias is not None
 
 
-def test_pvi_forward_pass_no_exceptions(default_pvi_model: PVI_SingleField_CNN) -> None:
-    """Test that the forward pass does not raise exceptions for PVI model."""
-    x = torch.randn(1, *default_pvi_model.img_size)
-    _ = default_pvi_model(x)
+def test_image2scalar_forward_pass_no_exceptions(
+    default_image2scalar_model: Image2ScalarCNN
+) -> None:
+    """Test that the forward pass does not raise exceptions for Image2ScalarCNN model."""
+    x = torch.randn(1, *default_image2scalar_model.img_size)
+    _ = default_image2scalar_model(x)
 
 
-def test_parameter_count_pvi() -> None:
-    """Test that parameter count for the PVI model is > 0."""
-    model = PVI_SingleField_CNN()
+def test_parameter_count_image2scalar() -> None:
+    """Test that parameter count for the Image2ScalarCNN model is > 0."""
+    model = Image2ScalarCNN()
     params = list(model.parameters())
     assert len(params) > 0

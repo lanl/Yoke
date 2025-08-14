@@ -280,15 +280,11 @@ class CNN_Reduction_Module(nn.Module):
         return x
 
 
-class PVI_SingleField_CNN(nn.Module):
+class Image2ScalarCNN(nn.Module):
     """Image to scalar CNN.
 
-    The name of this class is a bit misleading, as it is a general CNN that maps
-    an image to a scalar. The PVI task is too specific.
-
-    Convolutional Neural Network Model that uses a single PVI field to predict
-    one scalar value. Constructed using both an interpretability block, defined
-    above, and a reduction block.
+    Convolutional Neural Network Model that maps a single image to a scalar. Constructed
+    using both an interpretability block, defined above, and a reduction block.
 
     Args:
         img_size (tuple[int, int, int]): size of input (channels, height, width)
@@ -540,7 +536,7 @@ if __name__ == "__main__":
     # Excercise model setup
     # NOTE: Model takes (BatchSize, Channels, Height, Width) tensor.
     pvi_input = torch.rand(1, 1, 1700, 500)
-    pvi_CNN = PVI_SingleField_CNN(
+    pvi_CNN = Image2ScalarCNN(
         img_size=(1, 1700, 500),
         size_threshold=(8, 8),
         kernel=5,

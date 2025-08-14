@@ -9,7 +9,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 
-from yoke.models.CNNmodules import PVI_SingleField_CNN
+from yoke.models.CNNmodules import Image2ScalarCNN as PVI_SingleField_CNN
 from yoke.datasets.nestedcyl_dataset import PVI_SingleField_DataSet
 from yoke.utils.training.epoch.scalar_output import train_scalar_epoch
 from yoke.utils.training.epoch.scalar_output import eval_scalar_datastep
