@@ -6,7 +6,8 @@ import torch
 import torch.nn as nn
 
 from yoke.models.cnn_utils import conv2d_shape
-from yoke.models.hybridCNNmodules import generalMLP
+from yoke.models.cnn_utils import generalMLP
+from yoke.utils.parameters import count_torch_params
 
 
 ####################################
@@ -422,6 +423,7 @@ class Image2VectorCNN(nn.Module):
                                    learn only bias or weights and bias
         act_layer (nn.modules.activation): torch neural network layer class to
                                            use as activation
+        norm_layer (nn.modules.normalization): torch neural network layer class
         hidden_features (int): number of hidden features in the fully connected
                                dense layer
 
@@ -552,3 +554,32 @@ if __name__ == "__main__":
 
     pvi_CNN.eval()
     pvi_pred = pvi_CNN(pvi_input)
+
+    # Excercise model setup
+    batch_size = 2
+    img_h = 1120
+    img_w = 800
+    output_dim = 29
+    Hfield = torch.rand(batch_size, 1, img_h, img_w)
+
+    model_args = {
+        "img_size": (1, img_h, img_w),
+        "output_dim": output_dim,
+        "size_threshold": (12, 12),
+        "kernel": 3,
+        "features": 16,
+        "interp_depth": 12,
+        "conv_onlyweights": True,
+        "batchnorm_onlybias": True,
+        "act_layer": nn.GELU,
+        "norm_layer": nn.LayerNorm,
+        "hidden_features": 32,
+    }
+    img2vec_CNN = Image2VectorCNN(**model_args)
+    img2vec_CNN.eval()
+    y_pred = img2vec_CNN(Hfield)
+    print("y_pred shape:", y_pred.shape)
+    print(
+        "Number of trainable parameters in img2vec_CNN network:",
+        count_torch_params(img2vec_CNN, trainable=True),
+    )
