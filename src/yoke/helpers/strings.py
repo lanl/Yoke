@@ -20,7 +20,10 @@ def replace_keys(study_dict: dict, data: str) -> str:
         if key == "studyIDX":
             data = data.replace(f"<{key}>", f"{value:03d}")
         elif isinstance(value, np.float64) or isinstance(value, float):
-            data = data.replace(f"<{key}>", f"{value:5.5f}")
+            if key == "NOISE_SCALE":
+                data = data.replace(f"<{key}>", f"{value:5.5f}")
+            else:
+                data = data.replace(f"<{key}>", f"{value:5.4f}")
         elif isinstance(value, np.int64) or isinstance(value, int):
             data = data.replace(f"<{key}>", f"{value:d}")
         elif isinstance(value, str):
