@@ -1,0 +1,53 @@
+yoke.datasets package
+=====================
+
+Submodules
+----------
+
+yoke.datasets.jwl\_dataset module
+---------------------------------
+
+.. automodule:: yoke.datasets.jwl_dataset
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+yoke.datasets.load\_npz\_dataset module
+---------------------------------------
+
+.. automodule:: yoke.datasets.load_npz_dataset
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+yoke.datasets.lsc\_dataset module
+---------------------------------
+
+.. automodule:: yoke.datasets.lsc_dataset
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+yoke.datasets.nestedcyl\_dataset module
+---------------------------------------
+
+.. automodule:: yoke.datasets.nestedcyl_dataset
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+yoke.datasets.transforms module
+-------------------------------
+
+.. automodule:: yoke.datasets.transforms
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+Module contents
+---------------
+
+.. automodule:: yoke.datasets
+   :members:
+   :show-inheritance:
+   :undoc-members:

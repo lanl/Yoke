@@ -1,0 +1,61 @@
+yoke.utils package
+==================
+
+Subpackages
+-----------
+
+.. toctree::
+   :maxdepth: 4
+
+   yoke.utils.training
+
+Submodules
+----------
+
+yoke.utils.checkpointing module
+-------------------------------
+
+.. automodule:: yoke.utils.checkpointing
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+yoke.utils.dataload module
+--------------------------
+
+.. automodule:: yoke.utils.dataload
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+yoke.utils.parallel module
+--------------------------
+
+.. automodule:: yoke.utils.parallel
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+yoke.utils.parameters module
+----------------------------
+
+.. automodule:: yoke.utils.parameters
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+yoke.utils.restart module
+-------------------------
+
+.. automodule:: yoke.utils.restart
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+Module contents
+---------------
+
+.. automodule:: yoke.utils
+   :members:
+   :show-inheritance:
+   :undoc-members:
