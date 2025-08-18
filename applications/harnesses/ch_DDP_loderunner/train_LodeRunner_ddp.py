@@ -35,6 +35,14 @@ parser = cli.add_model_args(parser=parser)
 parser = cli.add_training_args(parser=parser)
 parser = cli.add_cosine_lr_scheduler_args(parser=parser)
 
+# DPOT‐style noise parameter
+parser.add_argument(
+    "--noise_scale",
+    type=float,
+    default=0.0,
+    help="Relative magnitude ε for Gaussian noise injection (e.g. 5e-5).",
+)
+
 # Change some default filepaths.
 parser.set_defaults(
     train_filelist="lsc240420_prefixes_train_80pct.txt",
@@ -106,6 +114,7 @@ def main(args, rank, world_size, local_rank, device):
     min_fraction = args.min_fraction
     terminal_steps = args.terminal_steps
     warmup_steps = args.warmup_steps
+    noise_scale = args.noise_scale
 
     # Number of workers controls how batches of data are prefetched and,
     # possibly, pre-loaded onto GPUs. If the number of workers is large they
@@ -152,6 +161,7 @@ def main(args, rank, world_size, local_rank, device):
         "block_structure": block_structure,
         "window_sizes": [(8, 8), (8, 8), (4, 4), (2, 2)],
         "patch_merge_scales": [(2, 2), (2, 2), (2, 2)],
+        "noise_scale": noise_scale,
     }
 
     #############################################
