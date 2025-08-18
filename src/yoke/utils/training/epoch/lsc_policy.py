@@ -19,7 +19,7 @@ def train_lsc_policy_epoch(
     model: torch.nn.Module,
     optimizer: torch.optim.Optimizer,
     loss_fn: torch.nn.Module,
-    #LRsched: torch.optim.lr_scheduler._LRScheduler,
+    LRsched: torch.optim.lr_scheduler._LRScheduler,
     epochIDX: int,
     train_per_val: int,
     train_rcrd_filename: str,
@@ -86,19 +86,14 @@ def train_lsc_policy_epoch(
 
             # Perform a single training step
             x_true, pred_mean, train_losses = train_lsc_policy_datastep(
-                traindata, model, optimizer, loss_fn, device, rank, world_size, blocks
+                traindata, model, optimizer, loss_fn, device, rank, world_size,
             )
 
             # Increment the learning-rate scheduler
-            #LRsched.step()
+            LRsched.step()
 
             # Save training record (rank 0 only)
             if rank == 0:
-                # Debugging output
-                print('trainbatch_ID:', trainbatch_ID)
-                #print('lr:', optimizer.param_groups[0]['lr'])
-                #print('Mean batch loss:', train_losses.mean().item())
-
                 # Save RMS-gradients for unfrozen blocks
                 rms_list = []
                 for blk_name, blk_match in blocks:

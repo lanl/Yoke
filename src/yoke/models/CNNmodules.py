@@ -529,9 +529,7 @@ class Image2VectorCNN(nn.Module):
 
 
 if __name__ == "__main__":
-    """For testing and debugging.
-
-    """
+    """For testing and debugging."""
 
     # Excercise model setup
     # NOTE: Model takes (BatchSize, Channels, Height, Width) tensor.
