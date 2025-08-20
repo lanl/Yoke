@@ -9,7 +9,7 @@ import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 from yoke.models.CNNmodules import Image2VectorCNN
-from yoke.datasets.lsc_dataset import LSC_hfield_policy_DataSet
+from yoke.datasets.lsc_dataset import LSC_hfield2cntr_DataSet
 from yoke.utils.training.epoch.array_output import train_DDP_array_epoch
 from yoke.utils.restart import continuation_setup
 from yoke.utils.dataload import make_distributed_dataloader
@@ -222,18 +222,20 @@ def main(
     #############################################
     # Data Initialization (Distributed Dataloader)
     #############################################
-    train_dataset = LSC_hfield_policy_DataSet(
-        args.LSC_NPZ_DIR,
+    train_dataset = LSC_hfield2cntr_DataSet(
+        LSC_NPZ_DIR=args.LSC_NPZ_DIR,
         filelist=train_filelist,
         design_file=design_file,
         half_image=False,
-        field_list=["density_throw"]
+        include_time=True,
+        field_list=["density_throw"],
     )
-    val_dataset = LSC_hfield_policy_DataSet(
+    val_dataset = LSC_hfield2cntr_DataSet(
         args.LSC_NPZ_DIR,
         filelist=validation_filelist,
         design_file=design_file,
         half_image=False,
+        include_time=True,
         field_list=["density_throw"]
     )
 
