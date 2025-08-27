@@ -80,13 +80,10 @@ def test_checkpoint_save_and_load(
             model_args=dummy_model_args,
         )
 
-        # Create new model/optimizer pair to load into
-        new_model = DummyNet(**dummy_model_args)
-        new_optimizer = optim.AdamW(new_model.parameters(), lr=0.01)
-
-        loaded_model, loaded_epoch = load_model_and_optimizer(
+        loaded_model, loaded_optimizer, loaded_epoch = load_model_and_optimizer(
             filepath=ckpt_path,
-            optimizer=new_optimizer,
+            optimizer_class=optim.AdamW,
+            optimizer_kwargs={"lr": 0.01},
             available_models=available_models,
             device="cpu",
         )
@@ -100,7 +97,7 @@ def test_checkpoint_save_and_load(
 
         # Compare optimizer states
         old_opt_state = optimizer.state_dict()
-        new_opt_state = new_optimizer.state_dict()
+        new_opt_state = loaded_optimizer.state_dict()
 
         for k in old_opt_state["state"].keys():
             for subkey in old_opt_state["state"][k]:
