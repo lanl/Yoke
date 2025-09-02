@@ -25,6 +25,8 @@ lsc240420_prefixes_validation_10pct.txt
 <TERMINAL_STEPS>
 --warmup_steps
 <WARMUP_STEPS>
+--noise_scale
+<NOISE_SCALE>
 --trn_rcrd_filename
 ./training_study<studyIDX>_epoch<epochIDX>.csv
 --val_rcrd_filename
