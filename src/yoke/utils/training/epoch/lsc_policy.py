@@ -4,6 +4,7 @@ import math
 import torch
 import numpy as np
 from contextlib import nullcontext
+from collections.abc import Callable
 
 from yoke.utils.training.datastep.lsc_policy import (
     train_lsc_policy_datastep,
@@ -27,7 +28,7 @@ def train_lsc_policy_epoch(
     device: torch.device,
     rank: int,
     world_size: int,
-    blocks,  # Temporary list of unfrozen blocks in network for grad observation.
+    blocks: list[tuple[str, Callable[[str], bool]]] | None = None,
 ) -> None:
     """Epoch training of LSC Gaussian-policy network.
 
@@ -52,7 +53,9 @@ def train_lsc_policy_epoch(
         device (torch.device): device index to select
         rank (int): rank of process
         world_size (int): number of total processes
-
+        blocks (list[tuple[str, Callable[[str], bool]]]): (OPTIONAL) List of unfrozen
+                                                          blocks in network for gradient
+                                                          observation.
     """
     # Initialize things to save
     trainbatch_ID = 0
@@ -61,12 +64,16 @@ def train_lsc_policy_epoch(
     # Training loop
     model.train()
     train_rcrd_filename = train_rcrd_filename.replace("<epochIDX>", f"{epochIDX:04d}")
-    grad_rcrd_filename = train_rcrd_filename.replace(".csv", "_grad.csv")
+
+    # Add condition if there is a blocks argument to monitor gradients
+    BLOCK_CND = blocks is not None
+    if BLOCK_CND:
+        grad_rcrd_filename = train_rcrd_filename.replace(".csv", "_grad.csv")
 
     with (
         open(train_rcrd_filename, "a") if rank == 0 else nullcontext()
     ) as train_rcrd_file, (
-        open(grad_rcrd_filename, "a") if rank == 0 else nullcontext()
+        open(grad_rcrd_filename, "a") if (rank == 0 and BLOCK_CND) else nullcontext()
     ) as grad_rcrd_file:
         # Write header to training record file (rank 0 only)
         if rank == 0:
@@ -74,9 +81,10 @@ def train_lsc_policy_epoch(
             np.savetxt(train_rcrd_file, [trn_header], fmt="%s", delimiter=",")
             train_rcrd_file.flush()
 
-            grad_header = ["epoch", "batch"] + [name for name, _ in blocks]
-            np.savetxt(grad_rcrd_file, [grad_header], fmt="%s", delimiter=",")
-            grad_rcrd_file.flush()
+            if BLOCK_CND:
+                grad_header = ["epoch", "batch"] + [name for name, _ in blocks]
+                np.savetxt(grad_rcrd_file, [grad_header], fmt="%s", delimiter=",")
+                grad_rcrd_file.flush()
 
         # Iterate over training batches
         for trainbatch_ID, traindata in enumerate(training_data):
@@ -95,17 +103,22 @@ def train_lsc_policy_epoch(
             # Save training record (rank 0 only)
             if rank == 0:
                 # Save RMS-gradients for unfrozen blocks
-                rms_list = []
-                for blk_name, blk_match in blocks:
-                    total_sq = 0.0
-                    total_count = 0
-                    for n, p in model.module.named_parameters():
-                        if p.requires_grad and blk_match(n) and p.grad is not None:
-                            g = p.grad.detach().view(-1)
-                            total_sq += float((g * g).sum().item())
-                            total_count += g.numel()
-                    rms = math.sqrt(total_sq / total_count) if total_count > 0 else 0.0
-                    rms_list.append(rms)
+                if BLOCK_CND:
+                    rms_list = []
+                    for blk_name, blk_match in blocks:
+                        total_sq = 0.0
+                        total_count = 0
+                        for n, p in model.module.named_parameters():
+                            if p.requires_grad and blk_match(n) and p.grad is not None:
+                                g = p.grad.detach().view(-1)
+                                total_sq += float((g * g).sum().item())
+                                total_count += g.numel()
+
+                        if total_count > 0:
+                            rms = math.sqrt(total_sq / total_count)
+                        else:
+                            rms = 0.0
+                        rms_list.append(rms)
 
                 # build a (1, N) array so numpy.savetxt writes a single row
                 row = np.array(
