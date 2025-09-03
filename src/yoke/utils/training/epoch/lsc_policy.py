@@ -5,6 +5,7 @@ import torch
 import numpy as np
 from contextlib import nullcontext
 from collections.abc import Callable
+from typing import Optional
 
 from yoke.utils.training.datastep.lsc_policy import (
     train_lsc_policy_datastep,
@@ -28,7 +29,7 @@ def train_lsc_policy_epoch(
     device: torch.device,
     rank: int,
     world_size: int,
-    blocks: list[tuple[str, Callable[[str], bool]]] | None = None,
+    blocks: Optional[list[tuple[str, Callable[[str], bool]]]] = None,
 ) -> None:
     """Epoch training of LSC Gaussian-policy network.
 
