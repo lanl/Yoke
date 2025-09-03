@@ -121,13 +121,13 @@ def train_lsc_policy_epoch(
                             rms = 0.0
                         rms_list.append(rms)
 
-                # build a (1, N) array so numpy.savetxt writes a single row
-                row = np.array(
-                    [epochIDX, trainbatch_ID] + rms_list,
-                    dtype=float
-                    )[None, :]
-                fmt = ["%d", "%d"] + ["%.10f"] * len(rms_list)
-                np.savetxt(grad_rcrd_file, row, fmt=fmt, delimiter=",")
+                    # build a (1, N) array so numpy.savetxt writes a single row
+                    row = np.array(
+                        [epochIDX, trainbatch_ID] + rms_list,
+                        dtype=float
+                        )[None, :]
+                    fmt = ["%d", "%d"] + ["%.10f"] * len(rms_list)
+                    np.savetxt(grad_rcrd_file, row, fmt=fmt, delimiter=",")
 
                 # Save training losses
                 batch_records = np.column_stack(
