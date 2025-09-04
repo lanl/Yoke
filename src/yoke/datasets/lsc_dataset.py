@@ -745,8 +745,9 @@ class LSC_rho2rho_temporal_DataSet(Dataset):
                 #
                 # Choose random starting index 0-(100-max_timeIDX_offset) so
                 # the end index will be less than or equal to 99.
-                startIDX = self.rng.integers(0, 100 - self.max_timeIDX_offset)
-                endIDX = self.rng.integers(0, self.max_timeIDX_offset + 1) + startIDX
+                seqLen = self.rng.integers(0, self.max_timeIDX_offset, endpoint=True)
+                startIDX = self.rng.integers(0, 100 - seqLen, endpoint=True)
+                endIDX = startIDX + seqLen
 
                 # Construct file names
                 start_file = file_prefix + f"_pvi_idx{startIDX:05d}.npz"

@@ -9,7 +9,11 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 from yoke.models.vit.swin.bomberman import LodeRunner
 from yoke.datasets.lsc_dataset import LSC_rho2rho_temporal_DataSet
-import yoke.torch_training_utils as tr
+from yoke.utils.training.epoch.loderunner import train_DDP_loderunner_epoch
+from yoke.utils.restart import continuation_setup
+from yoke.utils.dataload import make_distributed_dataloader
+from yoke.utils.checkpointing import load_model_and_optimizer
+from yoke.utils.checkpointing import save_model_and_optimizer
 from yoke.lr_schedulers import CosineWithWarmupScheduler
 from yoke.helpers import cli
 
@@ -30,6 +34,14 @@ parser = cli.add_computing_args(parser=parser)
 parser = cli.add_model_args(parser=parser)
 parser = cli.add_training_args(parser=parser)
 parser = cli.add_cosine_lr_scheduler_args(parser=parser)
+
+# DPOT‐style noise parameter
+parser.add_argument(
+    "--noise_scale",
+    type=float,
+    default=0.0,
+    help="Relative magnitude ε for Gaussian noise injection (e.g. 5e-5).",
+)
 
 # Change some default filepaths.
 parser.set_defaults(
@@ -91,7 +103,6 @@ def main(args, rank, world_size, local_rank, device):
     # Data Paths
     train_filelist = args.FILELIST_DIR + args.train_filelist
     validation_filelist = args.FILELIST_DIR + args.validation_filelist
-    test_filelist = args.FILELIST_DIR + args.test_filelist
 
     # Model Parameters
     embed_dim = args.embed_dim
@@ -103,6 +114,7 @@ def main(args, rank, world_size, local_rank, device):
     min_fraction = args.min_fraction
     terminal_steps = args.terminal_steps
     warmup_steps = args.warmup_steps
+    noise_scale = args.noise_scale
 
     # Number of workers controls how batches of data are prefetched and,
     # possibly, pre-loaded onto GPUs. If the number of workers is large they
@@ -119,17 +131,17 @@ def main(args, rank, world_size, local_rank, device):
     trn_rcrd_filename = args.trn_rcrd_filename
     val_rcrd_filename = args.val_rcrd_filename
     CONTINUATION = args.continuation
-    START = not CONTINUATION
     checkpoint = args.checkpoint
 
+    #############################################
+    # Model Arguments for Dynamic Reconstruction
+    #############################################
     # Dictionary of available models.
     available_models = {
         "LodeRunner": LodeRunner
     }
-    
-    #############################################
-    # Model Arguments for Dynamic Reconstruction
-    #############################################
+
+    # Model arguments for LodeRunner.
     model_args = {
         "default_vars": [
             "density_case",
@@ -149,26 +161,8 @@ def main(args, rank, world_size, local_rank, device):
         "block_structure": block_structure,
         "window_sizes": [(8, 8), (8, 8), (4, 4), (2, 2)],
         "patch_merge_scales": [(2, 2), (2, 2), (2, 2)],
+        "noise_scale": noise_scale,
     }
-
-    model = LodeRunner(**model_args)
-
-    #############################################
-    # Initialize Optimizer
-    #############################################
-    optimizer = torch.optim.AdamW(
-        model.parameters(),
-        lr=1e-6,
-        betas=(0.9, 0.999),
-        eps=1e-08,
-        weight_decay=0.01
-    )
-
-    #############################################
-    # Initialize Loss
-    #############################################
-    # Use `reduction='none'` so loss on each sample in batch can be recorded.
-    loss_fn = nn.MSELoss(reduction="none")
 
     #############################################
     # Load Model for Continuation (Rank 0 only)
@@ -176,16 +170,46 @@ def main(args, rank, world_size, local_rank, device):
     # Wait to move model to GPU until after the checkpoint load. Then
     # explicitly move model and optimizer state to GPU.
     if CONTINUATION:
-        model, starting_epoch = tr.load_model_and_optimizer(
+        model, optimizer, starting_epoch = load_model_and_optimizer(
             checkpoint,
-            optimizer,
-            available_models,
+            optimizer_class=torch.optim.AdamW,
+            optimizer_kwargs={
+                "lr": 1e-6,
+                "betas": (0.9, 0.999),
+                "eps": 1e-08,
+                "weight_decay": 0.01,
+            },
+            available_models=available_models,
             device=device,
         )
         print("Model state loaded for continuation.")
     else:
-        model.to(device)
+        # Initialize model and optimizer state.
+        # If not continuing, set starting_epoch to 0.
         starting_epoch = 0
+        model = LodeRunner(**model_args)
+        # Move model to GPU before instantiating optimizer and DDP.
+        model.to(device)
+
+        # Instantiate optimizer and move state to GPU.
+        optimizer = torch.optim.AdamW(
+            model.parameters(),
+            lr=1e-6,
+            betas=(0.9, 0.999),
+            eps=1e-08,
+            weight_decay=0.01
+        )
+
+        for state in optimizer.state.values():
+            for key, value in state.items():
+                if isinstance(value, torch.Tensor):
+                    state[key] = value.to(device)
+
+    #############################################
+    # Initialize Loss
+    #############################################
+    # Use `reduction='none'` so loss on each sample in batch can be recorded.
+    loss_fn = nn.MSELoss(reduction="none")
 
     #############################################
     # Move Model to DistributedDataParallel
@@ -195,6 +219,7 @@ def main(args, rank, world_size, local_rank, device):
     #############################################
     # Learning Rate Scheduler
     #############################################
+    print("Starting epoch: ", starting_epoch)
     if starting_epoch == 0:
         last_epoch = -1
     else:
@@ -239,7 +264,7 @@ def main(args, rank, world_size, local_rank, device):
     )
 
     # NOTE: For DDP the batch_size is the per-GPU batch_size!!!
-    train_dataloader = tr.make_distributed_dataloader(
+    train_dataloader = make_distributed_dataloader(
         train_dataset,
         batch_size,
         shuffle=True,
@@ -247,7 +272,7 @@ def main(args, rank, world_size, local_rank, device):
         rank=rank,
         world_size=world_size,
     )
-    val_dataloader = tr.make_distributed_dataloader(
+    val_dataloader = make_distributed_dataloader(
         val_dataset,
         batch_size,
         shuffle=False,
@@ -278,7 +303,7 @@ def main(args, rank, world_size, local_rank, device):
             startTime = time.time()
 
         # Train and Validate
-        tr.train_DDP_loderunner_epoch(
+        train_DDP_loderunner_epoch(
             training_data=train_dataloader,
             validation_data=val_dataloader,
             num_train_batches=train_batches,
@@ -310,17 +335,17 @@ def main(args, rank, world_size, local_rank, device):
             print(f"Completed epoch {epochIDX}...", flush=True)
             print(f"Epoch time (minutes): {epoch_time:.2f}", flush=True)
 
-    # Save model and optimizer state in hdf5
-    chkpt_name_str = "study{0:03d}_modelState_epoch{1:04d}.pth"
-    new_chkpt_path = os.path.join("./", chkpt_name_str.format(studyIDX, epochIDX))
+    # Save model and optimizer
+    chkpt_name_str = f'study{studyIDX:03d}_modelState_epoch{epochIDX:04d}.pth'
+    new_chkpt_path = os.path.join("./", chkpt_name_str)
 
-    tr.save_model_and_optimizer(
-        model, 
-        optimizer, 
+    save_model_and_optimizer(
+        model,
+        optimizer,
         epochIDX,
-        new_chkpt_path, 
+        new_chkpt_path,
         model_class=LodeRunner,
-        model_args=model_args
+        model_args=model_args,
     )
 
     if rank == 0:
@@ -329,7 +354,7 @@ def main(args, rank, world_size, local_rank, device):
         #############################################
         FINISHED_TRAINING = epochIDX + 1 > total_epochs
         if not FINISHED_TRAINING:
-            new_slurm_file = tr.continuation_setup(
+            new_slurm_file = continuation_setup(
                 new_chkpt_path, studyIDX, last_epoch=epochIDX
             )
             os.system(f"sbatch {new_slurm_file}")

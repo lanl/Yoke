@@ -11,7 +11,13 @@ import torch.nn as nn
 
 from yoke.models.CNNmodules import PVI_SingleField_CNN
 from yoke.datasets.nestedcyl_dataset import PVI_SingleField_DataSet
-import yoke.torch_training_utils as tr
+from yoke.utils.training.epoch.scalar_output import train_scalar_epoch
+from yoke.utils.training.epoch.scalar_output import eval_scalar_datastep
+from yoke.utils.training.epoch.scalar_output import append_to_dict
+from yoke.utils.dataload import make_dataloader
+from yoke.utils.restart import continuation_setup
+from yoke.utils.checkpointing import save_model_and_optimizer_hdf5
+from yoke.utils.checkpointing import load_model_and_optimizer_hdf5
 from yoke.helpers import cli
 
 
@@ -21,9 +27,11 @@ from yoke.helpers import cli
 descr_str = (
     "Trains CNN to estimate PTW strength scale from density " "for the nested cylinder"
 )
+
 parser = argparse.ArgumentParser(
     prog="NC CNN Training", description=descr_str, fromfile_prefix_chars="@"
 )
+
 parser = cli.add_default_args(parser=parser)
 parser = cli.add_filepath_args(parser=parser)
 parser = cli.add_computing_args(parser=parser)
@@ -37,6 +45,7 @@ parser.add_argument(
     default="hr_MOICyl",
     help="Data field the models will train on",
 )
+
 parser.add_argument(
     "--size_threshold_W",
     action="store",
@@ -44,6 +53,7 @@ parser.add_argument(
     default=8,
     help="Upper limit for width of reduced image",
 )
+
 parser.add_argument(
     "--size_threshold_H",
     action="store",
@@ -51,6 +61,7 @@ parser.add_argument(
     default=8,
     help="Upper limit for height of reduced image",
 )
+
 parser.add_argument(
     "--kernel",
     action="store",
@@ -58,6 +69,7 @@ parser.add_argument(
     default=5,
     help="Size of square convolutional kernel",
 )
+
 parser.add_argument(
     "--features",
     action="store",
@@ -65,6 +77,7 @@ parser.add_argument(
     default=12,
     help="Number of features (channels) in a convolution",
 )
+
 parser.add_argument(
     "--interp_depth",
     action="store",
@@ -72,6 +85,7 @@ parser.add_argument(
     default=12,
     help="Number of interpertability blocks in the model",
 )
+
 parser.add_argument(
     "--conv_onlyweights",
     action="store",
@@ -81,6 +95,7 @@ parser.add_argument(
         "Determines if convolutional layers learn only weights " "or weights and bias"
     ),
 )
+
 parser.add_argument(
     "--batchnorm_onlybias",
     action="store",
@@ -91,6 +106,7 @@ parser.add_argument(
         "bias or weights and bias"
     ),
 )
+
 parser.add_argument(
     "--act_layer",
     action="store",
@@ -98,6 +114,7 @@ parser.add_argument(
     default="nn.GELU",
     help="Torch layer to use as activation; of the form nn.LAYERNAME",
 )
+
 parser.add_argument(
     "--hidden_features",
     action="store",
@@ -113,7 +130,7 @@ parser.set_defaults(
     validation_filelist="nc231213_val_sample.txt",
     test_filelist="nc231213_test_sample.txt",
 )
-S
+
 
 #############################################
 #############################################
@@ -218,7 +235,7 @@ if __name__ == "__main__":
     # Load Model for Continuation
     #############################################
     if CONTINUATION:
-        starting_epoch = tr.load_model_and_optimizer_hdf5(model, optimizer, checkpoint)
+        starting_epoch = load_model_and_optimizer_hdf5(model, optimizer, checkpoint)
         print("Model state loaded for continuation.")
     else:
         starting_epoch = 0
@@ -266,15 +283,15 @@ if __name__ == "__main__":
 
     for epochIDX in range(starting_epoch, ending_epoch):
         # Setup Dataloaders
-        train_dataloader = tr.make_dataloader(
+        train_dataloader = make_dataloader(
             train_dataset, batch_size, train_batches, num_workers=num_workers
         )
-        val_dataloader = tr.make_dataloader(
+        val_dataloader = make_dataloader(
             val_dataset, batch_size, val_batches, num_workers=num_workers
         )
 
         # Train an Epoch
-        tr.train_scalar_csv_epoch(
+        train_scalar_epoch(
             training_data=train_dataloader,
             validation_data=val_dataloader,
             model=model,
@@ -304,14 +321,14 @@ if __name__ == "__main__":
     # Save model and optimizer state in hdf5
     h5_name_str = "study{0:03d}_modelState_epoch{1:04d}.hdf5"
     new_h5_path = os.path.join("./", h5_name_str.format(studyIDX, epochIDX))
-    tr.save_model_and_optimizer_hdf5(model, optimizer, epochIDX, new_h5_path)
+    save_model_and_optimizer_hdf5(model, optimizer, epochIDX, new_h5_path)
 
     #############################################
     # Continue if Necessary
     #############################################
     FINISHED_TRAINING = epochIDX + 1 > total_epochs
     if not FINISHED_TRAINING:
-        new_slurm_file = tr.continuation_setup(
+        new_slurm_file = continuation_setup(
             new_h5_path, studyIDX, last_epoch=epochIDX
         )
         os.system(f"sbatch {new_slurm_file}")
@@ -321,7 +338,7 @@ if __name__ == "__main__":
     #############################################
     if FINISHED_TRAINING:
         print("Testing Model . . .")
-        test_dataloader = tr.make_dataloader(test_dataset, batch_size=batch_size)
+        test_dataloader = make_dataloader(test_dataset, batch_size=batch_size)
         testbatch_ID = 0
         testing_dict = {
             "epoch": [],
@@ -337,10 +354,10 @@ if __name__ == "__main__":
         with torch.no_grad():
             for testdata in test_dataloader:
                 testbatch_ID += 1
-                truth, pred, loss = tr.eval_scalar_datastep(
+                truth, pred, loss = eval_scalar_datastep(
                     testdata, model, loss_fn, device
                 )
-                testing_dict = tr.append_to_dict(
+                testing_dict = append_to_dict(
                     testing_dict, testbatch_ID, truth, pred, loss
                 )
 

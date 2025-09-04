@@ -1,17 +1,24 @@
 """Tests for torch training utilities."""
 
 import os
+import pathlib
 import pytest
 import torch
 from torch import nn, optim
 from torch.utils.data import Dataset, DataLoader
+import torch.distributed as dist
 from tempfile import TemporaryDirectory
 import h5py
 from collections.abc import Generator
-from yoke.torch_training_utils import count_torch_params
-from yoke.torch_training_utils import save_model_and_optimizer_hdf5
-from yoke.torch_training_utils import load_model_and_optimizer_hdf5
-from yoke.torch_training_utils import make_dataloader
+from yoke.utils.parameters import count_torch_params
+from yoke.utils.checkpointing import save_model_and_optimizer_hdf5
+from yoke.utils.checkpointing import load_model_and_optimizer_hdf5
+from yoke.utils.dataload import make_dataloader
+from torch.optim import SGD
+from torch.optim.lr_scheduler import StepLR
+import yoke.utils.training.epoch.lsc_reward as lscr_epoch
+from yoke.utils.training.epoch.lsc_reward import train_lsc_reward_epoch
+from yoke.utils.training.epoch.lsc_reward import eval_lsc_reward_datastep
 
 
 class SimpleModel(nn.Module):
@@ -285,3 +292,253 @@ def test_make_dataloader_parametrized(
     sampled_data = list(dataloader)
     for batch in sampled_data[:-1]:
         assert batch.shape[0] == batch_size
+
+
+@pytest.fixture(autouse=True)
+def patch_datasteps(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stub out reward datastep functions.
+
+    They would return fixed losses for epoch tests.
+    """
+
+    def fake_train(
+        data: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+        model: torch.nn.Module,
+        opt: optim.Optimizer,
+        loss_fn: torch.nn.Module,
+        dev: torch.device,
+        rank: int,
+        ws: int,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        batch = data[0].shape[0]
+        reward = data[3].unsqueeze(1).to(dev)
+        pred = data[0].to(dev)
+        losses = torch.full((batch, 1), 0.5, device=dev)
+        return reward, pred, losses
+
+    def fake_eval(
+        data: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+        model: torch.nn.Module,
+        loss_fn: torch.nn.Module,
+        dev: torch.device,
+        rank: int,
+        ws: int,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        batch = data[0].shape[0]
+        reward = data[3].unsqueeze(1).to(dev)
+        pred = data[0].to(dev)
+        losses = torch.full((batch, 1), 0.25, device=dev)
+        return reward, pred, losses
+
+    monkeypatch.setattr(
+        lscr_epoch,
+        "train_lsc_reward_datastep",
+        fake_train,
+        raising=True,
+    )
+    monkeypatch.setattr(
+        lscr_epoch,
+        "eval_lsc_reward_datastep",
+        fake_eval,
+        raising=True,
+    )
+
+
+@pytest.fixture(autouse=True)
+def patch_dist_all_gather(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Patch torch.distributed.all_gather so it does'nt require process group init."""
+
+    def fake_all_gather(gather_list: list[torch.Tensor], local: torch.Tensor) -> None:
+        for i in range(len(gather_list)):
+            gather_list[i].copy_(local)
+
+    monkeypatch.setattr(dist, "all_gather", fake_all_gather, raising=True)
+
+
+class DummyRewardModel(torch.nn.Module):
+    """Identity model mapping (batch,1) → (batch,1)."""
+
+    def __init__(self) -> None:
+        """Initialize the DummyRewardModel.
+
+        Sets up a single linear layer (1→1) with weight fixed to 1.0
+        and no bias, so output equals input.
+        """
+        super().__init__()
+        self.linear = torch.nn.Linear(1, 1, bias=False)
+        torch.nn.init.constant_(self.linear.weight, 1.0)
+
+    def forward(
+        self,
+        state_y: torch.Tensor,
+        stateH: torch.Tensor,
+        targetH: torch.Tensor,
+    ) -> torch.Tensor:
+        """Perform a forward pass.
+
+        Args:
+            state_y: Main input tensor of shape (batch,1).
+            stateH: Secondary input tensor of shape (batch,1) (unused).
+            targetH: Tertiary input tensor of shape (batch,1) (unused).
+
+        Returns:
+            A tensor of shape (batch,1) identical to state_y.
+        """
+        return self.linear(state_y)
+
+
+def make_lsc_data(
+    batch_size: int = 4,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Create dummy LSC data.
+
+    Makes a tuple: state_y, stateH, targetH of shape (batch,1), reward of shape (batch,).
+    """
+    state_y = torch.arange(batch_size, dtype=torch.float32).unsqueeze(1)
+    stateH = state_y + 1.0
+    targetH = state_y + 2.0
+    reward = torch.arange(batch_size, dtype=torch.float32)
+    return state_y, stateH, targetH, reward
+
+
+def make_dataset(
+    batch_size: int, num_batches: int
+) -> list[tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]]:
+    """Build a list of dummy batches for training or validation loops."""
+    return [make_lsc_data(batch_size) for _ in range(num_batches)]
+
+
+@pytest.mark.filterwarnings(
+    "ignore:Detected call of `lr_scheduler.step\\(\\)` before "
+    "`optimizer.step\\(\\)`:UserWarning"
+)
+def test_train_epoch_writes_records(tmp_path: pathlib.Path) -> None:
+    """train_lsc_reward_epoch should write correct CSV records for train and val."""
+    train_data = make_dataset(batch_size=2, num_batches=3)
+    val_data = make_dataset(batch_size=3, num_batches=2)
+    model = torch.nn.Linear(1, 1)
+    optimizer = SGD(model.parameters(), lr=0.01)
+    loss_fn = torch.nn.MSELoss(reduction="none")
+    sched = StepLR(optimizer, step_size=1)
+    train_file = tmp_path / "train_<epochIDX>.csv"
+    val_file = tmp_path / "val_<epochIDX>.csv"
+
+    train_lsc_reward_epoch(
+        training_data=train_data,
+        validation_data=val_data,
+        num_train_batches=2,
+        num_val_batches=1,
+        model=model,
+        optimizer=optimizer,
+        loss_fn=loss_fn,
+        LRsched=sched,
+        epochIDX=7,
+        train_per_val=1,
+        train_rcrd_filename=str(train_file),
+        val_rcrd_filename=str(val_file),
+        device=torch.device("cpu"),
+        rank=0,
+        world_size=1,
+    )
+
+    # train: 2 batches × 2 samples = 4 lines
+    train_lines = (tmp_path / "train_0007.csv").read_text().splitlines()
+    assert len(train_lines) == 4
+    for line in train_lines:
+        ep, bid, loss = line.split(", ")
+        assert ep == "7"
+        assert bid in {"0", "1"}
+        assert loss == "0.50000000"
+
+    # val: 1 batch × 3 samples = 3 lines
+    val_lines = (tmp_path / "val_0007.csv").read_text().splitlines()
+    assert len(val_lines) == 3
+    for line in val_lines:
+        ep, bid, loss = line.split(", ")
+        assert ep == "7"
+        assert bid == "0"
+        assert loss == "0.25000000"
+
+
+@pytest.mark.filterwarnings(
+    "ignore:Detected call of `lr_scheduler.step\\(\\)` before "
+    "`optimizer.step\\(\\)`:UserWarning"
+)
+def test_train_epoch_rank_not_zero(tmp_path: pathlib.Path) -> None:
+    """rank!=0 should not create any CSV files."""
+    model = torch.nn.Linear(1, 1)
+    optimizer = SGD(model.parameters(), lr=0.01)
+    loss_fn = torch.nn.MSELoss(reduction="none")
+    sched = StepLR(optimizer, step_size=1)
+    train_file = tmp_path / "train_<epochIDX>.csv"
+    val_file = tmp_path / "val_<epochIDX>.csv"
+
+    train_lsc_reward_epoch(
+        training_data=make_dataset(1, 1),
+        validation_data=make_dataset(1, 1),
+        num_train_batches=1,
+        num_val_batches=1,
+        model=model,
+        optimizer=optimizer,
+        loss_fn=loss_fn,
+        LRsched=sched,
+        epochIDX=1,
+        train_per_val=1,
+        train_rcrd_filename=str(train_file),
+        val_rcrd_filename=str(val_file),
+        device=torch.device("cpu"),
+        rank=1,
+        world_size=1,
+    )
+
+    assert not (tmp_path / "train_0001.csv").exists()
+    assert not (tmp_path / "val_0001.csv").exists()
+
+
+def test_eval_lsc_reward_datastep_rank0() -> None:
+    """rank=0 returns reward, pred, and concatenated losses for all ranks."""
+    device = torch.device("cpu")
+    model = DummyRewardModel()
+    loss_fn = torch.nn.MSELoss(reduction="none")
+    data = make_lsc_data(batch_size=3)
+    rank = 0
+    world_size = 2
+
+    reward_out, pred_out, all_losses = eval_lsc_reward_datastep(
+        data, model, loss_fn, device, rank, world_size
+    )
+
+    # reward should be (batch,1)
+    expected_reward = data[3].unsqueeze(1).to(device)
+    assert torch.equal(reward_out, expected_reward)
+
+    # pred should match state_y
+    assert torch.equal(pred_out, data[0])
+
+    # loss = (pred - reward)^2
+    diff = pred_out - expected_reward
+    expected_loss = diff * diff
+
+    # all_losses is two copies concatenated
+    expected_all = torch.cat([expected_loss, expected_loss], dim=0)
+    assert all_losses is not None
+    assert all_losses.shape == expected_all.shape
+    assert torch.allclose(all_losses, expected_all)
+
+
+def test_eval_lsc_reward_datastep_rank_nonzero() -> None:
+    """rank!=0 returns None for all_losses, but valid reward and pred shapes."""
+    device = torch.device("cpu")
+    model = DummyRewardModel()
+    loss_fn = torch.nn.MSELoss(reduction="none")
+    data = make_lsc_data(batch_size=5)
+    rank = 1
+    world_size = 2
+
+    reward_out, pred_out, all_losses = eval_lsc_reward_datastep(
+        data, model, loss_fn, device, rank, world_size
+    )
+
+    assert all_losses is None
+    assert reward_out.shape == (5, 1)
+    assert pred_out.shape == (5, 1)

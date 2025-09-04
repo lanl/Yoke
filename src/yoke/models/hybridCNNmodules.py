@@ -10,7 +10,7 @@ from collections import OrderedDict
 import torch
 import torch.nn as nn
 
-from yoke.torch_training_utils import count_torch_params
+from yoke.utils.parameters import count_torch_params
 
 from yoke.models.CNNmodules import CNN_Interpretability_Module
 from yoke.models.CNNmodules import CNN_Reduction_Module
@@ -263,7 +263,7 @@ class hybrid2vectorCNN(nn.Module):
         h1_out = self.reduceH1(h1_out)
         h1_out = torch.flatten(h1_out, start_dim=1)
         h1_out = self.lin_embed_h1(h1_out)
-        h1_out = self.h2_embed_act(h1_out)
+        h1_out = self.h1_embed_act(h1_out)
 
         # Process second image
         h2_out = self.interpH2(h2)

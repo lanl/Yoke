@@ -20,7 +20,11 @@ import torch.nn as nn
 
 from yoke.models.surrogateCNNmodules import tCNNsurrogate
 from yoke.datasets.lsc_dataset import LSC_cntr2rho_DataSet
-import yoke.torch_training_utils as tr
+from yoke.utils.training.epoch.array_output import train_array_epoch
+from yoke.utils.dataload import make_dataloader
+from yoke.utils.restart import continuation_setup
+from yoke.utils.checkpointing import load_model_and_optimizer_hdf5
+from yoke.utils.checkpointing import save_model_and_optimizer_hdf5
 from yoke.helpers import cli
 
 
@@ -143,7 +147,7 @@ if __name__ == "__main__":
     # Load Model for Continuation
     #############################################
     if CONTINUATION:
-        starting_epoch = tr.load_model_and_optimizer_hdf5(model, optimizer, checkpoint)
+        starting_epoch = load_model_and_optimizer_hdf5(model, optimizer, checkpoint)
         print("Model state loaded for continuation.")
     else:
         starting_epoch = 0
@@ -207,10 +211,10 @@ if __name__ == "__main__":
     ending_epoch = min(starting_epoch + cycle_epochs, total_epochs + 1)
 
     # Setup Dataloaders
-    train_dataloader = tr.make_dataloader(
+    train_dataloader = make_dataloader(
         train_dataset, batch_size, train_batches, num_workers=num_workers
     )
-    val_dataloader = tr.make_dataloader(
+    val_dataloader = make_dataloader(
         val_dataset, batch_size, val_batches, num_workers=num_workers
     )
 
@@ -219,7 +223,7 @@ if __name__ == "__main__":
         startTime = time.time()
 
         # Train an Epoch
-        tr.train_array_csv_epoch(
+        train_array_epoch(
             training_data=train_dataloader,
             validation_data=val_dataloader,
             model=compiled_model,
@@ -256,7 +260,7 @@ if __name__ == "__main__":
     # Save model and optimizer state in hdf5
     h5_name_str = "study{0:03d}_modelState_epoch{1:04d}.hdf5"
     new_h5_path = os.path.join("./", h5_name_str.format(studyIDX, epochIDX))
-    tr.save_model_and_optimizer_hdf5(
+    save_model_and_optimizer_hdf5(
         compiled_model, optimizer, epochIDX, new_h5_path, compiled=True
     )
 
@@ -265,7 +269,7 @@ if __name__ == "__main__":
     #############################################
     FINISHED_TRAINING = epochIDX + 1 > total_epochs
     if not FINISHED_TRAINING:
-        new_slurm_file = tr.continuation_setup(
+        new_slurm_file = continuation_setup(
             new_h5_path, studyIDX, last_epoch=epochIDX
         )
         os.system(f"sbatch {new_slurm_file}")

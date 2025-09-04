@@ -13,7 +13,7 @@ import torch.nn as nn
 
 from yoke.models.surrogateCNNmodules import tCNNsurrogate
 from yoke.datasets.lsc_dataset import LSCnpz2key, LSC_cntr2rho_DataSet
-import yoke.torch_training_utils as tr
+from yoke.utils.checkpointing import load_model_and_optimizer_hdf5
 
 # Imports for plotting
 # To view possible matplotlib backends use
@@ -179,7 +179,7 @@ optimizer = torch.optim.AdamW(
 ##############
 # Load Model
 ##############
-checkpoint_epoch = tr.load_model_and_optimizer_hdf5(model, optimizer, checkpoint)
+checkpoint_epoch = load_model_and_optimizer_hdf5(model, optimizer, checkpoint)
 
 ################
 # Load dataset
