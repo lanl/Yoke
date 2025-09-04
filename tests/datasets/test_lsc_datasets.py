@@ -50,9 +50,7 @@ class MockNpzFile:
 # Mock LSCread_npz_NaN
 def mock_LSCread_npz_NaN(npz_file: MockNpzFile, hfield: str) -> np.ndarray:
     """Test function to read data and replace NaNs with 0.0."""
-    return np.nan_to_num(
-        np.ones((10, 10)), nan=0.0
-    )  # Return a simple array for testing
+    return np.nan_to_num(np.ones((10, 10)), nan=0.0)  # Return a simple array for testing
 
 
 # For LSC_rho2rho_temporal_DataSet
@@ -300,9 +298,7 @@ def mock_reward_dataset(
     reward_fn = MagicMock(return_value=torch.tensor(1.0))
 
     # Mock numpy.load to return a mock dictionary
-    mock_np_load.return_value = MockNpzFile(
-        {"density_throw": np.array([1.0, 2.0, 3.0])}
-    )
+    mock_np_load.return_value = MockNpzFile({"density_throw": np.array([1.0, 2.0, 3.0])})
 
     mock_file_list = "mock_file_1\nmock_file_2\nmock_file_3\n"
     with patch("builtins.open", mock_open(read_data=mock_file_list)):
@@ -400,9 +396,7 @@ def mock_policy_dataset(
     field_list = ("density_throw",)
 
     # Mock numpy.load to return a mock dictionary
-    mock_np_load.return_value = MockNpzFile(
-        {"density_throw": np.array([1.0, 2.0, 3.0])}
-    )
+    mock_np_load.return_value = MockNpzFile({"density_throw": np.array([1.0, 2.0, 3.0])})
 
     mock_file_list = "mock_file_1\nmock_file_2\nmock_file_3\n"
     with patch("builtins.open", mock_open(read_data=mock_file_list)):
@@ -455,9 +449,9 @@ def test_policy_getitem(
     assert state_geom_params.shape == torch.Size([3])  # Mocked B-spline node shape
     assert state_hfield.shape == torch.Size([1, 10, 10])
     assert target_hfield.shape == torch.Size([1, 10, 10])
-    assert torch.allclose(
-        geom_discrepancy, torch.tensor([0.0, 0.0, 0.0]), atol=1e-6
-    ), "Tensors are not equal."
+    assert torch.allclose(geom_discrepancy, torch.tensor([0.0, 0.0, 0.0]), atol=1e-6), (
+        "Tensors are not equal."
+    )
 
 
 def test_LSCcsv2bspline_pts(tmp_path: Path) -> None:
