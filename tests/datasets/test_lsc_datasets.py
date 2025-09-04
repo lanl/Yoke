@@ -26,6 +26,7 @@ from yoke.datasets.lsc_dataset import (
     LSC_cntr2rho_DataSet,
     LSCnorm_cntr2rho_DataSet,
     volfrac_density,
+    LSCDataModule,
 )
 
 
@@ -49,7 +50,9 @@ class MockNpzFile:
 # Mock LSCread_npz_NaN
 def mock_LSCread_npz_NaN(npz_file: MockNpzFile, hfield: str) -> np.ndarray:
     """Test function to read data and replace NaNs with 0.0."""
-    return np.nan_to_num(np.ones((10, 10)), nan=0.0)  # Return a simple array for testing
+    return np.nan_to_num(
+        np.ones((10, 10)), nan=0.0
+    )  # Return a simple array for testing
 
 
 # For LSC_rho2rho_temporal_DataSet
@@ -297,7 +300,9 @@ def mock_reward_dataset(
     reward_fn = MagicMock(return_value=torch.tensor(1.0))
 
     # Mock numpy.load to return a mock dictionary
-    mock_np_load.return_value = MockNpzFile({"density_throw": np.array([1.0, 2.0, 3.0])})
+    mock_np_load.return_value = MockNpzFile(
+        {"density_throw": np.array([1.0, 2.0, 3.0])}
+    )
 
     mock_file_list = "mock_file_1\nmock_file_2\nmock_file_3\n"
     with patch("builtins.open", mock_open(read_data=mock_file_list)):
@@ -332,7 +337,8 @@ def test_reward_len(mock_reward_dataset: LSC_hfield_reward_DataSet) -> None:
     return_value=np.array([0.5, 0.6, 0.7]),
 )
 @patch(
-    "numpy.load", side_effect=lambda _: MockNpzFile({"density_throw": np.ones((10, 10))})
+    "numpy.load",
+    side_effect=lambda _: MockNpzFile({"density_throw": np.ones((10, 10))}),
 )
 @patch("pathlib.Path.is_file", return_value=True)
 def test_reward_getitem(
@@ -360,7 +366,8 @@ def test_reward_getitem(
     return_value=np.array([0.5, 0.6, 0.7]),
 )
 @patch(
-    "numpy.load", side_effect=lambda _: MockNpzFile({"density_throw": np.ones((10, 10))})
+    "numpy.load",
+    side_effect=lambda _: MockNpzFile({"density_throw": np.ones((10, 10))}),
 )
 @patch("pathlib.Path.is_file", return_value=True)
 def test_reward_function_invocation(
@@ -393,7 +400,9 @@ def mock_policy_dataset(
     field_list = ("density_throw",)
 
     # Mock numpy.load to return a mock dictionary
-    mock_np_load.return_value = MockNpzFile({"density_throw": np.array([1.0, 2.0, 3.0])})
+    mock_np_load.return_value = MockNpzFile(
+        {"density_throw": np.array([1.0, 2.0, 3.0])}
+    )
 
     mock_file_list = "mock_file_1\nmock_file_2\nmock_file_3\n"
     with patch("builtins.open", mock_open(read_data=mock_file_list)):
@@ -427,7 +436,8 @@ def test_policy_len(mock_policy_dataset: LSC_hfield_policy_DataSet) -> None:
     return_value=np.array([0.5, 0.6, 0.7]),
 )
 @patch(
-    "numpy.load", side_effect=lambda _: MockNpzFile({"density_throw": np.ones((10, 10))})
+    "numpy.load",
+    side_effect=lambda _: MockNpzFile({"density_throw": np.ones((10, 10))}),
 )
 @patch("pathlib.Path.is_file", return_value=True)
 def test_policy_getitem(
@@ -445,9 +455,9 @@ def test_policy_getitem(
     assert state_geom_params.shape == torch.Size([3])  # Mocked B-spline node shape
     assert state_hfield.shape == torch.Size([1, 10, 10])
     assert target_hfield.shape == torch.Size([1, 10, 10])
-    assert torch.allclose(geom_discrepancy, torch.tensor([0.0, 0.0, 0.0]), atol=1e-6), (
-        "Tensors are not equal."
-    )
+    assert torch.allclose(
+        geom_discrepancy, torch.tensor([0.0, 0.0, 0.0]), atol=1e-6
+    ), "Tensors are not equal."
 
 
 def test_LSCcsv2bspline_pts(tmp_path: Path) -> None:
@@ -583,3 +593,16 @@ def test_volfrac_density_variants(tmp_path: Path) -> None:
     out3 = volfrac_density(base, None, "density_bar")
     assert np.allclose(out3, base * 2.0)
     mod.LSCread_npz_NaN = orig
+
+
+# Tests for LSCDataModule (a LightningDataModule).
+def test_lscdatamodule() -> None:
+    """Test basic functionality of the LSCDataModule."""
+    # Verify that initializer runs.
+    LSCDataModule(
+        ds_name="LSC_rho2rho_sequential_DataSet",
+        ds_params_train={},
+        ds_params_val={},
+        dl_params_train={},
+        dl_params_val={},
+    )
