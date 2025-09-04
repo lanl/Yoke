@@ -7,6 +7,7 @@ from torch import nn
 from yoke.models.CNNmodules import CNN_Interpretability_Module
 from yoke.models.CNNmodules import CNN_Reduction_Module
 from yoke.models.CNNmodules import Image2ScalarCNN
+from yoke.models.CNNmodules import Image2VectorCNN
 
 
 ###############################################################################
@@ -259,3 +260,98 @@ def test_parameter_count_image2scalar() -> None:
     model = Image2ScalarCNN()
     params = list(model.parameters())
     assert len(params) > 0
+
+
+###############################################################################
+# Fixtures for Image2VectorCNN
+##############################################################################
+@pytest.fixture
+def small_image2vector_model() -> Image2VectorCNN:
+    """Create a small, fast Image2VectorCNN instance for unit tests.
+
+    Returns:
+        An Image2VectorCNN configured with modest sizes to keep tests fast.
+    """
+    return Image2VectorCNN(
+        img_size=(1, 64, 64),
+        output_dim=5,
+        size_threshold=(8, 8),
+        kernel=3,
+        features=8,
+        interp_depth=2,
+        conv_onlyweights=True,
+        batchnorm_onlybias=True,
+        act_layer=nn.GELU,
+        norm_layer=nn.LayerNorm,
+        hidden_features=16,
+    )
+
+
+###############################################################################
+# Tests for Image2VectorCNN
+###############################################################################
+def test_image2vector_forward_shape(small_image2vector_model: Image2VectorCNN) -> None:
+    """Validate that forward returns a (batch, output_dim) tensor."""
+    bs = 2
+    x = torch.randn(bs, *small_image2vector_model.img_size)
+    y = small_image2vector_model.eval()(x)
+    assert y.shape == (bs, small_image2vector_model.output_dim)
+
+
+def test_image2vector_endconv_bias_flag() -> None:
+    """Check conv bias flag mapping from conv_onlyweights parameter.
+
+    When conv_onlyweights is True, convolutions should have no bias. When
+    False, bias parameters should be present.
+    """
+    m_no_bias = Image2VectorCNN(img_size=(1, 32, 32), output_dim=3,
+                                conv_onlyweights=True)
+    assert m_no_bias.endConv.bias is None
+
+    m_with_bias = Image2VectorCNN(img_size=(1, 32, 32), output_dim=3,
+                                  conv_onlyweights=False)
+    assert m_with_bias.endConv.bias is not None
+
+
+def test_image2vector_batchnorm_freeze_flags() -> None:
+    """Verify batch norm weights are frozen when batchnorm_onlybias is True."""
+    m = Image2VectorCNN(img_size=(1, 32, 32), output_dim=3,
+                        batchnorm_onlybias=True)
+    # Check a representative BN in each submodule.
+    assert m.interp_module.inNorm.weight.requires_grad is False
+    assert m.reduction_module.inNorm.weight.requires_grad is False
+
+
+def test_image2vector_reduction_sizes(small_image2vector_model: Image2VectorCNN
+                                      ) -> None:
+    """Ensure reduction yields spatial dims not exceeding the threshold.
+
+    The reduction module computes finalH/finalW based on halving operations;
+    those should be positive and less than or equal to the requested threshold.
+    """
+    h, w = small_image2vector_model.finalH, small_image2vector_model.finalW
+    th_h, th_w = small_image2vector_model.size_threshold
+    assert h > 0 and w > 0
+    assert h <= th_h and w <= th_w
+
+
+def test_image2vector_backward_pass(small_image2vector_model: Image2VectorCNN
+                                    ) -> None:
+    """Confirm gradients flow through the model on a simple loss."""
+    m = small_image2vector_model.train()
+    x = torch.randn(3, *m.img_size, requires_grad=False)
+    y = m(x)
+    loss = y.sum()
+    loss.backward()
+    # Pick a representative parameter and ensure it received gradients.
+    assert m.endConv.weight.grad is not None
+
+
+def test_image2vector_invalid_input_channels_raises(
+    small_image2vector_model: Image2VectorCNN,
+) -> None:
+    """Passing a tensor with the wrong channel count should raise an error."""
+    m = small_image2vector_model
+    bad_x = torch.randn(1, 2, *m.img_size[1:])  # expecting 1 channel
+    with pytest.raises(RuntimeError):
+        _ = m(bad_x)
