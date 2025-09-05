@@ -599,8 +599,13 @@ class TemporalDataSet(Dataset):
                 #
                 # Choose random starting index 0-(100-max_time_idx_offset) so
                 # the end index will be less than or equal to 99.
-                start_idx = self.rng.integers(0, 100 - self.max_time_idx_offset)
-                end_idx = self.rng.integers(0, self.max_time_idx_offset + 1) + start_idx
+                #start_idx = self.rng.integers(0, 100 - self.max_time_idx_offset)
+                #end_idx = self.rng.integers(0, self.max_time_idx_offset + 1) + start_idx
+
+                # SOUMI: changed startIDX and endIDX to how it is on lsc_dataset main
+                seqLen = self.rng.integers(0, self.max_timeIDX_offset, endpoint=True)
+                startIDX = self.rng.integers(0, 100 - seqLen, endpoint=True)
+                endIDX = startIDX + seqLen
 
                 # Construct file names
                 start_file = file_prefix + f"_pvi_idx{start_idx:05d}.npz"
@@ -638,8 +643,10 @@ class TemporalDataSet(Dataset):
 
         # Load NPZ files. Raise exceptions if file is not able to be loaded.
         try:
+            # SOUMI: we dont end up using start_npz. So we dont need the try except here. We can move it to inside LabeledData maybe
             start_npz = np.load(self.npz_dir + start_file)
 
+            # SOUMI: these following lines can go outside try except loop. They dont use start_npz
             # These will change from simulation key to key:
             self.active_npz_field_names = LabeledData(
                 self.npz_dir + start_file, self.csv_filepath
