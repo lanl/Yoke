@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 from pathlib import Path
 
 import pytest
@@ -211,7 +209,7 @@ def test_train_ddp_array_epoch_no_validation(
         device: torch.device,
         rank: int,
         world_size: int,
-    ) -> tuple[None, None, Optional[torch.Tensor]]:
+    ) -> tuple[None, None, torch.Tensor | None]:
         train_batches.append(databatch)
         # Simulate rank 0 gathering a final vector of per-sample losses.
         return None, None, torch.tensor([0.3, 0.7])
@@ -306,7 +304,7 @@ def test_train_ddp_array_epoch_with_validation(
         device: torch.device,
         rank: int,
         world_size: int,
-    ) -> tuple[None, None, Optional[torch.Tensor]]:
+    ) -> tuple[None, None, torch.Tensor | None]:
         train_batches.append(databatch)
         return None, None, torch.tensor([0.25])
 
@@ -317,7 +315,7 @@ def test_train_ddp_array_epoch_with_validation(
         device: torch.device,
         rank: int,
         world_size: int
-    ) -> tuple[None, None, Optional[torch.Tensor]]:
+    ) -> tuple[None, None, torch.Tensor | None]:
         val_batches.append(databatch)
         return None, None, torch.tensor([0.4, 0.5])
 
