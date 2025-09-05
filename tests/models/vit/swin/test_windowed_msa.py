@@ -14,7 +14,7 @@ from yoke.models.vit.swin.windowed_msa import (
     ShiftedWindowMSA,
     WindowCosMSA,
     ShiftedWindowCosMSA,
-    )
+)
 
 
 ValidParams = tuple[int, int, tuple[int, int], tuple[int, int]]
@@ -70,9 +70,7 @@ def test_embed_not_divisible_raises(cls: type[object]) -> None:
     emb, heads, grid, win = _valid_params()
     bad_emb = emb - 4  # 60 % 8 != 0
     with pytest.raises(AssertionError) as ei:
-        _ = cls(
-            emb_size=bad_emb, num_heads=heads, patch_grid_size=grid, window_size=win
-        )
+        _ = cls(emb_size=bad_emb, num_heads=heads, patch_grid_size=grid, window_size=win)
     # The first arg is the message; additional context is appended.
     args = ei.value.args
     msg = "Embedding size not divisible by number of heads"
@@ -94,9 +92,7 @@ def test_patch_grid_height_not_divisible_raises(cls: type[object]) -> None:
     emb, heads, grid, win = _valid_params()
     bad_grid = (grid[0] - 2, grid[1])  # 14 % 8 != 0
     with pytest.raises(AssertionError) as ei:
-        _ = cls(
-            emb_size=emb, num_heads=heads, patch_grid_size=bad_grid, window_size=win
-        )
+        _ = cls(emb_size=emb, num_heads=heads, patch_grid_size=bad_grid, window_size=win)
     args = ei.value.args
     assert "Patch-grid not divisible by window-size" in str(ei.value)
     _assert_label_next(args, "Patch-grid 1:", bad_grid[0])
@@ -116,9 +112,7 @@ def test_patch_grid_width_not_divisible_raises(cls: type[object]) -> None:
     emb, heads, grid, win = _valid_params()
     bad_grid = (grid[0], grid[1] - 2)  # 30 % 4 != 0
     with pytest.raises(AssertionError) as ei:
-        _ = cls(
-            emb_size=emb, num_heads=heads, patch_grid_size=bad_grid, window_size=win
-        )
+        _ = cls(emb_size=emb, num_heads=heads, patch_grid_size=bad_grid, window_size=win)
     args = ei.value.args
     assert "Patch-grid not divisible by window-size" in str(ei.value)
     _assert_label_next(args, "Patch-grid 2:", bad_grid[1])
