@@ -14,9 +14,9 @@ import torch
 from torch import nn, optim
 
 from yoke.utils.training.datastep.array_output import (
-        train_DDP_array_datastep,
-        eval_DDP_array_datastep,
-    )
+    train_DDP_array_datastep,
+    eval_DDP_array_datastep,
+)
 
 
 # Type alias for the all_gather stub signature.
@@ -32,9 +32,11 @@ def _fake_all_gather() -> AllGatherFn:
     Returns:
         A callable matching the distributed `all_gather` signature used here.
     """
+
     def _stub(out_tensors: list[torch.Tensor], in_tensor: torch.Tensor) -> None:
         for i in range(len(out_tensors)):
             out_tensors[i].copy_(in_tensor)
+
     return _stub
 
 
@@ -78,9 +80,7 @@ class TestDDPArrayDataStep:
         assert all_losses.shape == (batch_size,)
         assert torch.allclose(all_losses, torch.ones(batch_size))
 
-    def test_train_ddp_updates_parameters(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_train_ddp_updates_parameters(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """DDP training should update model parameters."""
         monkeypatch.setattr(
             "torch.distributed.all_gather", _fake_all_gather(), raising=True
@@ -101,9 +101,7 @@ class TestDDPArrayDataStep:
         diffs = [not torch.allclose(a, b) for a, b in zip(initial, after)]
         assert any(diffs)
 
-    def test_train_ddp_scalar_loss_raises(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_train_ddp_scalar_loss_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Reduction to a scalar loss should raise ValueError in DDP train."""
         monkeypatch.setattr(
             "torch.distributed.all_gather", _fake_all_gather(), raising=True

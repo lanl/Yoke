@@ -128,9 +128,9 @@ def test_single_pvi_array(sample_npz_data: tuple[Path, dict[str, np.ndarray]]) -
     assert np.allclose(loaded, arrays["Rcoord"])
 
 
-def test_get_field_cleans_nans(sc: mod.SCmetrics,
-                               sample_npz_data: tuple[Path, dict[str, np.ndarray]]
-                               ) -> None:
+def test_get_field_cleans_nans(
+    sc: mod.SCmetrics, sample_npz_data: tuple[Path, dict[str, np.ndarray]]
+) -> None:
     """Ensure get_field replaces NaNs with zeros."""
     _, arrays = sample_npz_data
     raw = arrays["density_throw"]

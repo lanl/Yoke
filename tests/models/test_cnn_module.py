@@ -193,7 +193,7 @@ def default_image2scalar_model() -> Image2ScalarCNN:
 # Tests for Image2ScalarCNN
 ###############################################################################
 def test_default_image2scalar_forward_shape(
-    default_image2scalar_model: Image2ScalarCNN
+    default_image2scalar_model: Image2ScalarCNN,
 ) -> None:
     """Test that the default Image2ScalarCNN model produces a scalar output."""
     batch_size = 2
@@ -248,7 +248,7 @@ def test_image2scalar_conv_bias_toggle() -> None:
 
 
 def test_image2scalar_forward_pass_no_exceptions(
-    default_image2scalar_model: Image2ScalarCNN
+    default_image2scalar_model: Image2ScalarCNN,
 ) -> None:
     """Test that the forward pass does not raise exceptions for Image2ScalarCNN model."""
     x = torch.randn(1, *default_image2scalar_model.img_size)
@@ -304,26 +304,26 @@ def test_image2vector_endconv_bias_flag() -> None:
     When conv_onlyweights is True, convolutions should have no bias. When
     False, bias parameters should be present.
     """
-    m_no_bias = Image2VectorCNN(img_size=(1, 32, 32), output_dim=3,
-                                conv_onlyweights=True)
+    m_no_bias = Image2VectorCNN(
+        img_size=(1, 32, 32), output_dim=3, conv_onlyweights=True
+    )
     assert m_no_bias.endConv.bias is None
 
-    m_with_bias = Image2VectorCNN(img_size=(1, 32, 32), output_dim=3,
-                                  conv_onlyweights=False)
+    m_with_bias = Image2VectorCNN(
+        img_size=(1, 32, 32), output_dim=3, conv_onlyweights=False
+    )
     assert m_with_bias.endConv.bias is not None
 
 
 def test_image2vector_batchnorm_freeze_flags() -> None:
     """Verify batch norm weights are frozen when batchnorm_onlybias is True."""
-    m = Image2VectorCNN(img_size=(1, 32, 32), output_dim=3,
-                        batchnorm_onlybias=True)
+    m = Image2VectorCNN(img_size=(1, 32, 32), output_dim=3, batchnorm_onlybias=True)
     # Check a representative BN in each submodule.
     assert m.interp_module.inNorm.weight.requires_grad is False
     assert m.reduction_module.inNorm.weight.requires_grad is False
 
 
-def test_image2vector_reduction_sizes(small_image2vector_model: Image2VectorCNN
-                                      ) -> None:
+def test_image2vector_reduction_sizes(small_image2vector_model: Image2VectorCNN) -> None:
     """Ensure reduction yields spatial dims not exceeding the threshold.
 
     The reduction module computes finalH/finalW based on halving operations;
@@ -335,8 +335,7 @@ def test_image2vector_reduction_sizes(small_image2vector_model: Image2VectorCNN
     assert h <= th_h and w <= th_w
 
 
-def test_image2vector_backward_pass(small_image2vector_model: Image2VectorCNN
-                                    ) -> None:
+def test_image2vector_backward_pass(small_image2vector_model: Image2VectorCNN) -> None:
     """Confirm gradients flow through the model on a simple loss."""
     m = small_image2vector_model.train()
     x = torch.randn(3, *m.img_size, requires_grad=False)
