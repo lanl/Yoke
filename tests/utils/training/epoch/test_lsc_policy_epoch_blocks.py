@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import math
 import pathlib
-from typing import Iterable
+from collections.abc import Iterable
 
 import pytest
 import torch

@@ -314,7 +314,7 @@ def test_train_ddp_array_epoch_with_validation(
         loss_fn: object,
         device: torch.device,
         rank: int,
-        world_size: int
+        world_size: int,
     ) -> tuple[None, None, torch.Tensor | None]:
         val_batches.append(databatch)
         return None, None, torch.tensor([0.4, 0.5])
