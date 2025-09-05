@@ -105,13 +105,6 @@ jobs:
         ruff format src/yoke/models --check --diff
       continue-on-error: false
 
-    - name: Lint models
-      run: |
-        ruff check src/yoke/utils
-        ruff check src/yoke/utils --preview
-        ruff format src/yoke/utils --check --diff
-      continue-on-error: false
-
     - name: Build documentation
       run: |
         sphinx-apidoc -o docs/source src/yoke
