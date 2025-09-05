@@ -10,20 +10,20 @@
 # The following are one set of SBATCH options for the Venado GPU
 # partition. There are optional other constraints.
 
-#SBATCH --job-name=lscpolicy_s<studyIDX>_e0001
+#SBATCH --job-name=inverse_s<studyIDX>_e<epochIDX>
 #SBATCH --account=w25_artimis_g
-#PRODUCTION  #SBATCH --partition=gpu
-#PRODUCTION  #SBATCH --time=02:00:00
-#SBATCH --time=0:45:00
-#SBATCH --qos=debug
-#SBATCH --reservation=gpu_debug
-#SBATCH --partition=gpu_debug
+#SBATCH --partition=gpu
+#SBATCH --time=02:00:00
+#DEBUG #SBATCH --time=2:00:00
+#DEBUG #SBATCH --qos=debug
+#DEBUG #SBATCH --reservation=gpu_debug
+#DEBUG #SBATCH --partition=gpu_debug
 #SBATCH --nodes=<KNODES>
 #SBATCH --ntasks-per-node=<NGPUS>
 #SBATCH --gpus-per-node=<NGPUS>
 #SBATCH --cpus-per-task=16
-#SBATCH --output=study<studyIDX>_epoch0001.out
-#SBATCH --error=study<studyIDX>_epoch0001.err
+#SBATCH --output=study<studyIDX>_epoch<epochIDX>.out
+#SBATCH --error=study<studyIDX>_epoch<epochIDX>.err
 #SBATCH -vvv
 
 
@@ -59,7 +59,7 @@ export date00=`date`
 
 # Start the Code
 # Explicitly set TCP environment for the following...
-srun python -u <train_script> @study<studyIDX>_START.input
+srun python -u <train_script> @<INPUTFILE>
 
 # Get end time and print to stdout
 export date01=`date`

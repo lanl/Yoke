@@ -8,7 +8,7 @@ from yoke.utils.parameters import count_torch_params
 
 from yoke.models.CNNmodules import CNN_Interpretability_Module
 from yoke.models.CNNmodules import CNN_Reduction_Module
-from yoke.models.hybridCNNmodules import generalMLP
+from yoke.models.cnn_utils import generalMLP
 
 
 class gaussian_policyCNN(nn.Module):

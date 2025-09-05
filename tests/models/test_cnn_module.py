@@ -6,7 +6,8 @@ from torch import nn
 
 from yoke.models.CNNmodules import CNN_Interpretability_Module
 from yoke.models.CNNmodules import CNN_Reduction_Module
-from yoke.models.CNNmodules import PVI_SingleField_CNN
+from yoke.models.CNNmodules import Image2ScalarCNN
+from yoke.models.CNNmodules import Image2VectorCNN
 
 
 ###############################################################################
@@ -180,30 +181,32 @@ def test_parameter_count_reduction() -> None:
 
 
 ###############################################################################
-# Fixtures for PVI_SingleField_CNN
+# Fixtures for Image2ScalarCNN
 ###############################################################################
 @pytest.fixture
-def default_pvi_model() -> PVI_SingleField_CNN:
-    """Fixture for creating a default PVI_SingleField_CNN."""
-    return PVI_SingleField_CNN()
+def default_image2scalar_model() -> Image2ScalarCNN:
+    """Fixture for creating a default Image2ScalarCNN."""
+    return Image2ScalarCNN()
 
 
 ###############################################################################
-# Tests for PVI_SingleField_CNN
+# Tests for Image2ScalarCNN
 ###############################################################################
-def test_default_pvi_forward_shape(default_pvi_model: PVI_SingleField_CNN) -> None:
-    """Test that the default PVI model produces a scalar output (batch, 1)."""
+def test_default_image2scalar_forward_shape(
+    default_image2scalar_model: Image2ScalarCNN,
+) -> None:
+    """Test that the default Image2ScalarCNN model produces a scalar output."""
     batch_size = 2
-    c_in, height, width = default_pvi_model.img_size
+    c_in, height, width = default_image2scalar_model.img_size
     x = torch.randn(batch_size, c_in, height, width)
-    out = default_pvi_model(x)
+    out = default_image2scalar_model(x)
     # Should be [batch_size, 1]
     assert out.shape == (batch_size, 1)
 
 
-def test_custom_pvi_forward_shape() -> None:
-    """Test that a custom-configured PVI model produces a scalar output."""
-    model = PVI_SingleField_CNN(
+def test_custom_image2scalar_forward_shape() -> None:
+    """Test that a custom-configured Image2ScalarCNN model produces a scalar output."""
+    model = Image2ScalarCNN(
         img_size=(3, 224, 224),
         size_threshold=(16, 16),
         kernel=3,
@@ -219,39 +222,135 @@ def test_custom_pvi_forward_shape() -> None:
     assert out.shape == (2, 1)
 
 
-def test_pvi_batchnorm_weights_frozen() -> None:
+def test_image2scalar_batchnorm_weights_frozen() -> None:
     """Test that batchnorm weights are frozen if batchnorm_onlybias=True."""
-    model = PVI_SingleField_CNN(batchnorm_onlybias=True)
+    model = Image2ScalarCNN(batchnorm_onlybias=True)
     for name, param in model.named_parameters():
         if "Norm" in name and "weight" in name:
             assert not param.requires_grad
 
 
-def test_pvi_batchnorm_weights_trainable() -> None:
+def test_image2scalar_batchnorm_weights_trainable() -> None:
     """Test that batchnorm weights are trainable if batchnorm_onlybias=False."""
-    model = PVI_SingleField_CNN(batchnorm_onlybias=False)
+    model = Image2ScalarCNN(batchnorm_onlybias=False)
     for name, param in model.named_parameters():
         if "Norm" in name and "weight" in name:
             assert param.requires_grad
 
 
-def test_pvi_conv_bias_toggle() -> None:
+def test_image2scalar_conv_bias_toggle() -> None:
     """Test that the convolutional bias toggles correctly."""
-    model_no_bias = PVI_SingleField_CNN(conv_onlyweights=True)
-    model_with_bias = PVI_SingleField_CNN(conv_onlyweights=False)
+    model_no_bias = Image2ScalarCNN(conv_onlyweights=True)
+    model_with_bias = Image2ScalarCNN(conv_onlyweights=False)
     # Check the first convolution in the interpretability module
     assert model_no_bias.interp_module.inConv.bias is None
     assert model_with_bias.interp_module.inConv.bias is not None
 
 
-def test_pvi_forward_pass_no_exceptions(default_pvi_model: PVI_SingleField_CNN) -> None:
-    """Test that the forward pass does not raise exceptions for PVI model."""
-    x = torch.randn(1, *default_pvi_model.img_size)
-    _ = default_pvi_model(x)
+def test_image2scalar_forward_pass_no_exceptions(
+    default_image2scalar_model: Image2ScalarCNN,
+) -> None:
+    """Test that the forward pass does not raise exceptions for Image2ScalarCNN model."""
+    x = torch.randn(1, *default_image2scalar_model.img_size)
+    _ = default_image2scalar_model(x)
 
 
-def test_parameter_count_pvi() -> None:
-    """Test that parameter count for the PVI model is > 0."""
-    model = PVI_SingleField_CNN()
+def test_parameter_count_image2scalar() -> None:
+    """Test that parameter count for the Image2ScalarCNN model is > 0."""
+    model = Image2ScalarCNN()
     params = list(model.parameters())
     assert len(params) > 0
+
+
+###############################################################################
+# Fixtures for Image2VectorCNN
+##############################################################################
+@pytest.fixture
+def small_image2vector_model() -> Image2VectorCNN:
+    """Create a small, fast Image2VectorCNN instance for unit tests.
+
+    Returns:
+        An Image2VectorCNN configured with modest sizes to keep tests fast.
+    """
+    return Image2VectorCNN(
+        img_size=(1, 64, 64),
+        output_dim=5,
+        size_threshold=(8, 8),
+        kernel=3,
+        features=8,
+        interp_depth=2,
+        conv_onlyweights=True,
+        batchnorm_onlybias=True,
+        act_layer=nn.GELU,
+        norm_layer=nn.LayerNorm,
+        hidden_features=16,
+    )
+
+
+###############################################################################
+# Tests for Image2VectorCNN
+###############################################################################
+def test_image2vector_forward_shape(small_image2vector_model: Image2VectorCNN) -> None:
+    """Validate that forward returns a (batch, output_dim) tensor."""
+    bs = 2
+    x = torch.randn(bs, *small_image2vector_model.img_size)
+    y = small_image2vector_model.eval()(x)
+    assert y.shape == (bs, small_image2vector_model.output_dim)
+
+
+def test_image2vector_endconv_bias_flag() -> None:
+    """Check conv bias flag mapping from conv_onlyweights parameter.
+
+    When conv_onlyweights is True, convolutions should have no bias. When
+    False, bias parameters should be present.
+    """
+    m_no_bias = Image2VectorCNN(
+        img_size=(1, 32, 32), output_dim=3, conv_onlyweights=True
+    )
+    assert m_no_bias.endConv.bias is None
+
+    m_with_bias = Image2VectorCNN(
+        img_size=(1, 32, 32), output_dim=3, conv_onlyweights=False
+    )
+    assert m_with_bias.endConv.bias is not None
+
+
+def test_image2vector_batchnorm_freeze_flags() -> None:
+    """Verify batch norm weights are frozen when batchnorm_onlybias is True."""
+    m = Image2VectorCNN(img_size=(1, 32, 32), output_dim=3, batchnorm_onlybias=True)
+    # Check a representative BN in each submodule.
+    assert m.interp_module.inNorm.weight.requires_grad is False
+    assert m.reduction_module.inNorm.weight.requires_grad is False
+
+
+def test_image2vector_reduction_sizes(small_image2vector_model: Image2VectorCNN) -> None:
+    """Ensure reduction yields spatial dims not exceeding the threshold.
+
+    The reduction module computes finalH/finalW based on halving operations;
+    those should be positive and less than or equal to the requested threshold.
+    """
+    h, w = small_image2vector_model.finalH, small_image2vector_model.finalW
+    th_h, th_w = small_image2vector_model.size_threshold
+    assert h > 0 and w > 0
+    assert h <= th_h and w <= th_w
+
+
+def test_image2vector_backward_pass(small_image2vector_model: Image2VectorCNN) -> None:
+    """Confirm gradients flow through the model on a simple loss."""
+    m = small_image2vector_model.train()
+    x = torch.randn(3, *m.img_size, requires_grad=False)
+    y = m(x)
+    loss = y.sum()
+    loss.backward()
+    # Pick a representative parameter and ensure it received gradients.
+    assert m.endConv.weight.grad is not None
+
+
+def test_image2vector_invalid_input_channels_raises(
+    small_image2vector_model: Image2VectorCNN,
+) -> None:
+    """Passing a tensor with the wrong channel count should raise an error."""
+    m = small_image2vector_model
+    bad_x = torch.randn(1, 2, *m.img_size[1:])  # expecting 1 channel
+    with pytest.raises(RuntimeError):
+        _ = m(bad_x)
