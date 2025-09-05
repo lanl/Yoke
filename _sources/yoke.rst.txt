@@ -1,0 +1,42 @@
+yoke package
+============
+
+Subpackages
+-----------
+
+.. toctree::
+   :maxdepth: 4
+
+   yoke.datasets
+   yoke.helpers
+   yoke.losses
+   yoke.metrics
+   yoke.models
+   yoke.utils
+
+Submodules
+----------
+
+yoke.lr\_schedulers module
+--------------------------
+
+.. automodule:: yoke.lr_schedulers
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+yoke.scheduled\_sampling module
+-------------------------------
+
+.. automodule:: yoke.scheduled_sampling
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+Module contents
+---------------
+
+.. automodule:: yoke
+   :members:
+   :show-inheritance:
+   :undoc-members:
