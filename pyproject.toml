@@ -74,3 +74,13 @@ select = [
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
+
+# Allow exclusion of specific lines in coverage report
+[tool.coverage.run]
+source = ["src"]
+
+[tool.coverage.report]
+exclude_lines = [
+  "pragma: no cover",
+  "if __name__ == .__main__.:",   
+]
