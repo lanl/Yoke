@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 import torch
+from torch import nn
 
 from yoke.utils.training.epoch import array_output as ao
 
@@ -208,7 +209,6 @@ def test_train_ddp_array_epoch_no_validation(
         optimizer: object,
         loss_fn: object,
         device: torch.device,
-        *,
         rank: int,
         world_size: int,
     ) -> tuple[None, None, Optional[torch.Tensor]]:
@@ -225,7 +225,7 @@ def test_train_ddp_array_epoch_no_validation(
     )
 
     # Run a DDP epoch that does NOT trigger validation
-    model = object()
+    model = nn.Identity()
     optimizer = object()
     loss_fn = object()
     device = torch.device("cpu")
@@ -256,19 +256,24 @@ def test_train_ddp_array_epoch_no_validation(
     )
 
     # Check batches visited
-    assert train_batches == ["x", "y"]
+    assert train_batches == training_data[:1]
 
     # Check training record file
     expected_train_file = tmp_path / "train_0001.csv"
     assert expected_train_file.exists()
     lines = expected_train_file.read_text().strip().splitlines()
-    # Two losses per batch × two batches = 4 lines
-    assert len(lines) == 4
-    # First line content (allow for float rounding)
-    epoch_str, batch_str, loss_str = lines[0].split(", ")
-    assert epoch_str == "1"
-    assert batch_str == "1"
-    assert float(loss_str) == pytest.approx(0.3)
+    # Header + two per-sample losses from a single processed batch.
+    assert len(lines) == 3
+    assert lines[0] == "epoch,batch,loss"
+    # First data line content (allow for float rounding)
+    e1, b1, l1 = [s.strip() for s in lines[1].split(",")]
+    assert e1 == "1"
+    assert b1 == "0"  # batch indices are 0-based
+    assert float(l1) == pytest.approx(0.3)
+    # Second data line (optional extra check)
+    e2, b2, l2 = [s.strip() for s in lines[2].split(",")]
+    assert (e2, b2) == ("1", "0")
+    assert float(l2) == pytest.approx(0.7)
 
 
 def test_train_ddp_array_epoch_with_validation(
@@ -299,7 +304,6 @@ def test_train_ddp_array_epoch_with_validation(
         optimizer: object,
         loss_fn: object,
         device: torch.device,
-        *,
         rank: int,
         world_size: int,
     ) -> tuple[None, None, Optional[torch.Tensor]]:
@@ -311,7 +315,6 @@ def test_train_ddp_array_epoch_with_validation(
         model: object,
         loss_fn: object,
         device: torch.device,
-        *,
         rank: int,
         world_size: int
     ) -> tuple[None, None, Optional[torch.Tensor]]:
@@ -322,7 +325,7 @@ def test_train_ddp_array_epoch_with_validation(
     monkeypatch.setattr(ao, "eval_DDP_array_datastep", dummy_eval_ddp)
 
     # Run a DDP epoch that DOES trigger validation (2 % 2 == 0)
-    model = object()
+    model = nn.Identity()
     optimizer = object()
     loss_fn = object()
     device = torch.device("cpu")
@@ -362,19 +365,22 @@ def test_train_ddp_array_epoch_with_validation(
     train_file = tmp_path / "train_0002.csv"
     assert train_file.exists()
     tlines = train_file.read_text().strip().splitlines()
-    assert len(tlines) == 1
-    epoch_str, batch_str, loss_str = tlines[0].split(", ")
-    assert epoch_str == "2"
-    assert batch_str == "1"
-    assert float(loss_str) == pytest.approx(0.25)
+    # Header + one per-sample loss from a single processed batch.
+    assert len(tlines) == 2
+    assert tlines[0] == "epoch,batch,loss"
+    te, tb, tl = [s.strip() for s in tlines[1].split(",")]
+    assert te == "2"
+    assert tb == "0"  # 0-based batch index
+    assert float(tl) == pytest.approx(0.25)
 
     # Validation file: two batches × two losses = four lines
     val_file = tmp_path / "val_0002.csv"
     assert val_file.exists()
     vlines = val_file.read_text().strip().splitlines()
+    # No header for validation file, 4 data lines (2 batches × 2 per-sample losses)
     assert len(vlines) == 4
-    # First line sanity check
-    epoch_str, batch_str, loss_str = vlines[0].split(", ")
-    assert epoch_str == "2"
-    assert batch_str == "1"
-    assert float(loss_str) == pytest.approx(0.4)
+    # First validation data line sanity check
+    ve, vb, vl = [s.strip() for s in vlines[0].split(",")]
+    assert ve == "2"
+    assert vb == "0"
+    assert float(vl) == pytest.approx(0.4)
