@@ -127,7 +127,8 @@ def test_getitem_valid_sequence(
 
     # Overwrite valid sequence list so we can verify getitem loads fake data.
     dataset.Nsamples = 1
-    dataset.valid_seq = [(["", "", ""], 1.0)]
+    dataset.valid_prefix = np.array([""], dtype=object)
+    dataset.valid_inds = np.array([[1, 2, 3]], dtype=np.int32)
 
     img_seq, dt = dataset[0]
     # seq_len=3, hydro_fields=8 => shape = [3, 8, 2, 2]
