@@ -1,5 +1,7 @@
 """Single-step training and evaluation functions for lsc240420 policy networks."""
 
+import math
+
 import torch
 import torch.nn as nn
 import torch.distributed as dist
@@ -52,6 +54,8 @@ def train_lsc_policy_datastep(
     # Backward pass and optimization
     optimizer.zero_grad(set_to_none=True)
     loss.mean().backward()
+
+    # Step the optimizer
     optimizer.step()
 
     # Gather per-sample losses from all processes

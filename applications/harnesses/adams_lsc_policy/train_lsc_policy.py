@@ -10,7 +10,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 from yoke.models.policyCNNmodules import gaussian_policyCNN
 from yoke.datasets.lsc_dataset import LSC_hfield_policy_DataSet
-from yoke.utils.training.epoch.loderunner import train_lsc_policy_epoch
+from yoke.utils.training.epoch.lsc_policy import train_lsc_policy_epoch
 from yoke.utils.restart import continuation_setup
 from yoke.utils.dataload import make_distributed_dataloader
 from yoke.utils.checkpointing import save_model_and_optimizer
@@ -33,6 +33,39 @@ parser = cli.add_filepath_args(parser=parser)
 parser = cli.add_training_args(parser=parser)
 parser = cli.add_cosine_lr_scheduler_args(parser=parser)
 
+parser.add_argument(
+    "--img_embed_dim",
+    action="store",
+    type=int,
+    default=32,
+    help="Image embedding dimension (default: 32).",
+)
+
+parser.add_argument(
+    "--vector_embed_dim",
+    action="store",
+    type=int,
+    default=32,
+    help="Vector embedding dimension (default: 32).",
+)
+
+parser.add_argument(
+    "--vector_feature_list",
+    action="store",
+    type=int,
+    nargs="+",
+    default=[16, 64, 64, 16],
+    help="List of features for the vector branch (default: [16, 64, 64, 16]).",
+)
+
+parser.add_argument(
+    "--output_feature_list",
+    action="store",
+    type=int,
+    nargs="+",
+    default=[16, 64, 64, 16],
+    help="List of features for the output branch (default: [16, 64, 64, 16]).",
+)
 
 def setup_distributed() -> tuple[int, int, int, torch.device]:
     """Sets up distributed training using PyTorch DDP."""
@@ -136,11 +169,11 @@ def main(
         "features": 12,
         "depth": 15,
         "kernel": 3,
-        "img_embed_dim": 32,
-        "vector_embed_dim": 32,
+        "img_embed_dim": 32,  # Make variable
+        "vector_embed_dim": 32,  # Make variable
         "size_reduce_threshold": (16, 16),
-        "vector_feature_list": (16, 64, 64, 16),
-        "output_feature_list": (16, 64, 64, 16)
+        "vector_feature_list": (16, 64, 64, 16),  # Make variable
+        "output_feature_list": (16, 64, 64, 16)  # Make variable
     }
 
     model = gaussian_policyCNN(**model_args)
