@@ -24,7 +24,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from yoke.models.vit.swin.bomberman import LodeRunner, Lightning_LodeRunner
+from yoke.models.vit.swin.loderunner import LodeRunner, Lightning_LodeRunner
 from yoke.datasets.lsc_dataset import LSCDataModule
 from yoke.datasets.transforms import ResizePadCrop
 from yoke.utils.restart import continuation_setup
