@@ -1,21 +1,17 @@
 """Module for BomberMan network structures.
 
-nn.Module allowing processing of variable channel image input through a SWIN-V2
-U-Net architecture then re-embedded as a variable channel image.
-
-This network architecture will serve as the foundation for a hydro-code
-emulator.
+These architectures expand on the LodeRunner architecture to add multiple time inputs,
+spatial-grid encoding, multiple time outputs, etc.
 
 """
 
-from collections.abc import Callable, Iterable
-import random
+from collections.abc import Iterable
 
 import numpy as np
 import torch
 from torch import nn
-from torch.optim.lr_scheduler import _LRScheduler
-from lightning.pytorch import LightningModule
+
+from einops import rearrange
 
 from yoke.models.vit.swin.unet import SwinUnetBackbone
 from yoke.models.vit.patch_embed import ParallelVarPatchEmbed
@@ -26,18 +22,54 @@ from yoke.models.vit.embedding_encoders import (
     PosEmbed,
     TimeEmbed,
 )
-from yoke.lr_schedulers import CosineWithWarmupScheduler
+
 from yoke.helpers.training_design import validate_patch_and_window
 
 
-class LodeRunner(nn.Module):
-    """LodeRunner neural network.
+class BomberMan(nn.Module):
+    """BomberMan neural network.
 
-    Parallel-patch embedding with SWIN U-Net backbone and
-    unpatchification. This module will take in a variable-channel image format
-    and output an equivalent variable-channel image formate. This will serves
-    as a prototype foundational architecture for multi-material, multi-physics,
-    surrogate models.
+    Parallel-patch embedding with SWIN U-Net backbone and unpatchification. This module
+    will take in multiple timesteps of variable-channel image format and output the next
+    timestep of an equivalent variable-channel image format. This represents a
+    time-dependent advancement on the LodeRunner architecture.
+
+    NOTE: The input size for a batch in LodeRunner is (B, V, H, W). Probably the most
+    natural way to add time-dependency is to expect (B, T, V, H, W) as input.
+
+    Our approach will be as follows:
+
+    Start with x: (B, T, V, H, W)
+    Embed each frame with your existing patch-conv + channel-aggregate:
+    x = rearrange(x, 'b t v h w -> (b t) v h w')
+    x = your_patch_conv_and_channel_query(x)
+    Now x is (B*T, L, d) so we map back to 4D: (B, T, L, d)
+    x = rearrange(x, '(b t) L d -> b t L d')
+
+    Now pass this through M-layers of factorized spatial-temporal MSA
+
+    Spatial MSA over the L tokens in each frame:
+    x_sp = rearrange(x, 'b t L d -> (b t) L d')
+    x_sp = x_sp + SpatialMSA(LN(x_sp))        # (B*T, L, d)
+    x = rearrange(x_sp, '(b t) L d -> b t L d')
+
+    Temporal MSA over the T tokens at each spatial location
+    x_tp = rearrange(x, 'b t L d -> (b L) t d')
+    x_tp = x_tp + TemporalMSA(LN(x_tp))       # (B*L, T, d)
+    x = rearrange(x_tp, '(b L) t d -> b t L d')
+
+    # MLP after layer-normalization and residual connection as usual
+    x = x + MLP(LN(x))
+    Output is still (B, T, L, d)
+
+    Collapse the time dimension to get a single output for each variable:
+    with a learned query:
+    x_read  = rearrange(x, 'b t L d -> (b L) t d')   # (B*L, T, d)
+    q_time  = Parameter(torch.randn(1, 1, d))       # one learnable query
+    q_time  = q_time.expand(b*L, -1, -1)            # (B*L, 1, d)
+    y_read, _ = MultiheadAttention(d, heads)(q_time, x_read, x_read)
+    y = rearrange(y_read, '(b L) 1 d -> b L d')     # (B, L, d)
+
 
     Args:
         default_vars (list[str]): List of default variables to be used for training
@@ -78,7 +110,6 @@ class LodeRunner(nn.Module):
             (2, 2),
             (2, 2),
         ],
-        noise_scale: float = 0.0,
         verbose: bool = False,
     ) -> None:
         """Initialization for class."""
@@ -94,7 +125,6 @@ class LodeRunner(nn.Module):
         self.block_structure = block_structure
         self.window_sizes = window_sizes
         self.patch_merge_scales = patch_merge_scales
-        self.noise_scale = noise_scale
 
         # Validate patch_size, window_sizes, and patch_merge_scales before proceeding.
         valid = validate_patch_and_window(
@@ -166,32 +196,48 @@ class LodeRunner(nn.Module):
         x: torch.Tensor,
         in_vars: torch.Tensor,
         out_vars: torch.Tensor,
-        lead_times: torch.Tensor,
+        lead_times: torch.Tensor,  # Needs to be (B, T) tensor now.
     ) -> torch.Tensor:
-        """Forward method for LodeRunner."""
+        """Forward method for BomberMan."""
         # WARNING!: Most likely the `in_vars` and `out_vars` need to be tensors
         # of integers corresponding to variables in the `default_vars` list.
 
-        # Noise injection:
-        l2_norm = torch.sqrt((x * x).sum(dim=(1, 2, 3), keepdim=True))
-        noise = torch.randn_like(x)
-        x = x + self.noise_scale * l2_norm * noise
+        # x is expected to be of shape (B, T, V, H, W) where:
+        #   B = batch size
+        #   T = number of timesteps
+        #   V = number of variables
+        #   H = height of the image
+        #   W = width of the image
 
-        # Embed input
+        # Reshape input to (B*T, V, H, W) for parallel embedding
+        B = x.shape[0]  # Batch size
+        T = x.shape[1]  # Number of timesteps
+        x = rearrange(x, 'b t v h w -> (b t) v h w')
+
+        # First embed input
         # varIDXs = self.var_embed_layer.get_var_ids(tuple(in_vars), x.device)
-        x = self.parallel_embed(x, in_vars)
+        x = self.parallel_embed(x, in_vars)  # (B*T, V, L=Hw*Ww, D)
 
         # Encode variables
-        x = self.var_embed_layer(x, in_vars)
+        x = self.var_embed_layer(x, in_vars)  # (B*T, V, L, D)
 
         # Aggregate variables
-        x = self.agg_vars(x)
+        x = self.agg_vars(x)  # (B*T, L, D)
 
         # Encode patch positions, spatial information
-        x = self.pos_embed(x)
+        x = self.pos_embed(x)  # (B*T, L, D)
+
+        # Reshape to (B, T, L, D) for temporal encoding
+        x = rearrange(x, '(b t) L d -> b t L d', b=B, t=T)
 
         # Encode temporal information
-        x = self.temporal_encoding(x, lead_times)
+        x = self.multistep_temporal_encoding(x, lead_times)  # (B, T, L, D)
+
+        # Here we insert the SViT structure of factorized spatial-temporal MSA
+        x = self.svit(x)  # (B, T, L, D)
+
+        # Aggregate the temporal dimension to get a single output using a learned query.
+        x = self.agg_temporal(x)  # (B, L, D)
 
         # Pass through SWIN-V2 U-Net encoder
         x = self.unet(x)
@@ -208,312 +254,3 @@ class LodeRunner(nn.Module):
 
         return preds
 
-
-class Lightning_LodeRunner(LightningModule):
-    """Lightning wrapper for LodeRunner.
-
-    Wrap LodeRunner torch.nn.Module class in a lightning.LightningModule for
-    ease of parallelization and encapsulation of training strategy.
-
-    Args:
-        model (nn.Module): Pre-initialized nn.Module to wrap
-        in_vars (torch.Tensor): Input channels to train LodeRunner on
-        out_vars (torch.Tensor): Output channels to train LodeRunner on
-        lr_scheduler (_LRScheduler): Learning-rate scheduler to use with optimizer
-        scheduler_params (dict): Keyword arguments to initialize scheduler
-        loss_fn (Callable): Loss function used to evaluate predictions at each timestep.
-        scheduled_sampling_scheduler (Callable): Function that accepts the current
-            training step and returns a number in [0, 1] for scheduled sampling
-            probability.
-    """
-
-    def __init__(
-        self,
-        model: nn.Module,
-        in_vars: torch.Tensor = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7]),
-        out_vars: torch.Tensor = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7]),
-        lr_scheduler: _LRScheduler = None,
-        scheduler_params: dict = None,
-        loss_fn: Callable = nn.MSELoss(reduction="none"),
-        scheduled_sampling_scheduler: Callable = lambda global_step: 1.0,
-    ) -> None:
-        """Initialization for Lightning wrapper."""
-        super().__init__()
-        self.model = model
-        self.lr_scheduler = lr_scheduler or CosineWithWarmupScheduler
-        self.scheduler_params = scheduler_params or {}
-        self.scheduled_sampling_scheduler = scheduled_sampling_scheduler
-        self.loss_fn = loss_fn
-
-        # Register buffers to ensure auto-transfer to devices as needed.
-        self.register_buffer("in_vars", in_vars)
-        self.register_buffer("out_vars", out_vars)
-
-    def configure_optimizers(self) -> torch.optim.Optimizer:
-        """Setup optimizer with scheduler."""
-        # Optimizer setup
-        optimizer = torch.optim.AdamW(self.model.parameters())
-
-        # Initialize LR scheduler
-        scheduler = self.lr_scheduler(optimizer, **self.scheduler_params)
-        return {
-            "optimizer": optimizer,
-            "lr_scheduler": {
-                "scheduler": scheduler,
-                "interval": "step",  # Step scheduler every batch.
-                "frequency": 1,  # Step every batch (default for "step")
-            },
-        }
-
-    def forward(self, X: torch.Tensor, lead_times: torch.Tensor) -> torch.Tensor:
-        """Forward method for Lightning wrapper."""
-        # Forward pass through the custom model
-        return self.model(
-            X, lead_times=lead_times, in_vars=self.in_vars, out_vars=self.out_vars
-        )
-
-    def training_step(self, batch: torch.Tensor, batch_idx: int) -> torch.Tensor:
-        """Execute training step."""
-        # Compute forward pass, accounting for special training schemes like
-        # scheduled sampling.
-        img_seq, lead_times = batch  # Unpack batch
-        pred_seq = []
-        scheduled_prob = self.scheduled_sampling_scheduler(self.current_epoch)
-        for k, k_img in enumerate(torch.unbind(img_seq[:, :-1], dim=1)):
-            if k == 0:
-                # Forward pass for the initial step
-                pred_img = self(k_img, lead_times)
-            else:
-                # Apply scheduled sampling
-                if random.random() < scheduled_prob:
-                    current_input = k_img
-                else:
-                    current_input = pred_img
-                pred_img = self(current_input, lead_times)
-
-            # Store the prediction
-            pred_seq.append(pred_img)
-
-        # Combine predictions into a tensor of shape [B, SeqLength, C, H, W]
-        pred_seq = torch.stack(pred_seq, dim=1)
-
-        # Per-sample loss
-        losses = self.loss_fn(pred_seq, img_seq[:, 1:])
-        # self.log("train_loss_per_sample", losses, on_epoch=True, on_step=True)
-
-        batch_loss = losses.mean()
-        if hasattr(self, "trainer") and self.trainer.training:
-            self.log("train_loss", batch_loss, sync_dist=True)
-            self.log("scheduled_prob", scheduled_prob, sync_dist=True)
-
-        return batch_loss
-
-    def validation_step(self, batch: torch.Tensor, batch_idx: int) -> None:
-        """Execute validation step."""
-        # Compute forward pass.
-        img_seq, lead_times = batch  # Unpack batch
-        pred_seq = []
-        for k, k_img in enumerate(torch.unbind(img_seq[:, :-1], dim=1)):
-            # For now, stick to next time step prediction for validation step.
-            pred_img = self(k_img, lead_times)
-
-            # Store the prediction
-            pred_seq.append(pred_img)
-
-        # Combine predictions into a tensor of shape [B, SeqLength, C, H, W]
-        pred_seq = torch.stack(pred_seq, dim=1)
-
-        # Per-sample loss
-        losses = self.loss_fn(pred_seq, img_seq[:, 1:])
-        # self.log("val_loss_per_sample", losses, on_epoch=True, on_step=True)
-
-        batch_loss = losses.mean()
-        if hasattr(self, "trainer") and self.trainer.validating:
-            self.log("val_loss", batch_loss, sync_dist=True)
-
-
-if __name__ == "__main__":
-    from yoke.utils.parameters import count_torch_params
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    default_vars = [
-        "cu_pressure",
-        "cu_density",
-        "cu_temperature",
-        "al_pressure",
-        "al_density",
-        "al_temperature",
-        "ss_pressure",
-        "ss_density",
-        "ss_temperature",
-        "ply_pressure",
-        "ply_density",
-        "ply_temperature",
-        "air_pressure",
-        "air_density",
-        "air_temperature",
-        "hmx_pressure",
-        "hmx_density",
-        "hmx_temperature",
-        "r_vel",
-        "z_vel",
-    ]
-
-    # (B, C, H, W)
-    x = torch.rand(5, 4, 1120, 800)
-    x = x.type(torch.FloatTensor).to(device)
-
-    lead_times = torch.rand(5).to(device)  # Lead time for each entry in batch
-    # x_vars = ["cu_density", "ss_density", "ply_density", "air_density"]
-    x_vars = torch.tensor([1, 7, 10, 13]).to(device)
-
-    # out_vars = ["cu_density", "ss_density", "ply_density", "air_density"]
-    out_vars = torch.tensor([1, 7, 10, 13]).to(device)
-
-    # Common model setup for LodeRunner
-    #
-    # NOTE: For half-image `image_size = (1120, 400)` can just halve the second
-    # patch_size dimension.
-    emb_factor = 2
-    patch_size = (10, 10)
-    image_size = (1120, 800)
-    num_heads = 8
-    window_sizes = [(8, 8), (8, 8), (4, 4), (2, 2)]
-    patch_merge_scales = [(2, 2), (2, 2), (2, 2)]
-
-    # Tiny size
-    embed_dim = 96
-    block_structure = (1, 1, 3, 1)
-
-    # Test LodeRunner architecture.
-    lode_runner = LodeRunner(
-        default_vars=default_vars,
-        image_size=image_size,
-        patch_size=patch_size,
-        embed_dim=embed_dim,
-        emb_factor=emb_factor,
-        num_heads=num_heads,
-        block_structure=block_structure,
-        window_sizes=window_sizes,
-        patch_merge_scales=patch_merge_scales,
-        verbose=False,
-    ).to(device)
-    loderunner_out = lode_runner(x, x_vars, out_vars, lead_times)
-    print("LodeRunner-tiny output shape:", loderunner_out.shape)
-    print("LodeRunner-tiny output has NaNs:", torch.isnan(loderunner_out).any())
-    print("LodeRunner-tiny parameters:", count_torch_params(lode_runner, trainable=True))
-
-    # Test lightning wrapper initialization.
-    L_loderunner = Lightning_LodeRunner(
-        lode_runner,
-        in_vars=x_vars,
-        out_vars=out_vars,
-        lr_scheduler=CosineWithWarmupScheduler,
-        scheduler_params={
-            "warmup_steps": 500,
-            "anchor_lr": 1e-3,
-            "terminal_steps": 1000,
-            "num_cycles": 0.5,
-            "min_fraction": 0.5,
-            "last_epoch": 0,
-        },
-    )
-    L_loderunner_out = L_loderunner(x, lead_times)
-    print("Lightning LodeRunner-tiny output shape:", L_loderunner_out.shape)
-
-    # Small size
-    embed_dim = 96
-    block_structure = (1, 1, 9, 1)
-
-    lode_runner = LodeRunner(
-        default_vars=default_vars,
-        image_size=image_size,
-        patch_size=patch_size,
-        embed_dim=embed_dim,
-        emb_factor=emb_factor,
-        num_heads=num_heads,
-        block_structure=block_structure,
-        window_sizes=window_sizes,
-        patch_merge_scales=patch_merge_scales,
-        verbose=False,
-    ).to(device)
-    print(
-        "LodeRunner-small parameters:", count_torch_params(lode_runner, trainable=True)
-    )
-
-    # Big size
-    embed_dim = 128
-    block_structure = (1, 1, 9, 1)
-
-    lode_runner = LodeRunner(
-        default_vars=default_vars,
-        image_size=image_size,
-        patch_size=patch_size,
-        embed_dim=embed_dim,
-        emb_factor=emb_factor,
-        num_heads=num_heads,
-        block_structure=block_structure,
-        window_sizes=window_sizes,
-        patch_merge_scales=patch_merge_scales,
-        verbose=False,
-    ).to(device)
-    print("LodeRunner-big parameters:", count_torch_params(lode_runner, trainable=True))
-
-    # Large size
-    embed_dim = 192
-    block_structure = (1, 1, 9, 1)
-
-    lode_runner = LodeRunner(
-        default_vars=default_vars,
-        image_size=image_size,
-        patch_size=patch_size,
-        embed_dim=embed_dim,
-        emb_factor=emb_factor,
-        num_heads=num_heads,
-        block_structure=block_structure,
-        window_sizes=window_sizes,
-        patch_merge_scales=patch_merge_scales,
-        verbose=False,
-    ).to(device)
-    print(
-        "LodeRunner-large parameters:", count_torch_params(lode_runner, trainable=True)
-    )
-
-    # Huge size
-    embed_dim = 352
-    block_structure = (1, 1, 9, 1)
-
-    lode_runner = LodeRunner(
-        default_vars=default_vars,
-        image_size=image_size,
-        patch_size=patch_size,
-        embed_dim=embed_dim,
-        emb_factor=emb_factor,
-        num_heads=num_heads,
-        block_structure=block_structure,
-        window_sizes=window_sizes,
-        patch_merge_scales=patch_merge_scales,
-        verbose=False,
-    ).to(device)
-    print("LodeRunner-huge parameters:", count_torch_params(lode_runner, trainable=True))
-
-    # Giant size
-    embed_dim = 512
-    block_structure = (1, 1, 11, 2)
-
-    lode_runner = LodeRunner(
-        default_vars=default_vars,
-        image_size=image_size,
-        patch_size=patch_size,
-        embed_dim=embed_dim,
-        emb_factor=emb_factor,
-        num_heads=num_heads,
-        block_structure=block_structure,
-        window_sizes=window_sizes,
-        patch_merge_scales=patch_merge_scales,
-        verbose=False,
-    ).to(device)
-    print(
-        "LodeRunner-giant parameters:", count_torch_params(lode_runner, trainable=True)
-    )
