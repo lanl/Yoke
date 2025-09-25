@@ -170,7 +170,14 @@ class LodeRunner(nn.Module):
         out_vars: torch.Tensor,
         lead_times: torch.Tensor,
     ) -> torch.Tensor:
-        """Forward method for LodeRunner."""
+        """Forward method for LodeRunner.
+
+        Args:
+            x (torch.Tensor): Shape (B, C, H, W)
+            in_vars (torch.Tensor): Shape (C,)
+            out_vars (torch.Tensor): Shape (C',)
+            lead_times (torch.Tensor): Shape (B,)
+        """
         # WARNING!: Most likely the `in_vars` and `out_vars` need to be tensors
         # of integers corresponding to variables in the `default_vars` list.
 
@@ -180,32 +187,51 @@ class LodeRunner(nn.Module):
         x = x + self.noise_scale * l2_norm * noise
 
         # Embed input
-        # varIDXs = self.var_embed_layer.get_var_ids(tuple(in_vars), x.device)
+        # yoke.models.vit.patch_embed.ParallelVarPatchEmbed
+        # For embedding dimension E and patch size p=(p1, p2),
+        # (B, C, H, W) -> (B, CxE, H', W') -> (B, C, L, E)
+        # With H'=H/p1, W'=W/p2, and L=H'*W'
         x = self.parallel_embed(x, in_vars)
 
         # Encode variables
+        # yoke.models.vit.embedding_encoders.VarEmbed
+        # Add encoding along variable and embedding dimension
+        # (B, C, L, E) -> (B, C, L, E)
         x = self.var_embed_layer(x, in_vars)
 
         # Aggregate variables
+        # yoke.models.vit.aggregate_variables.AggVars
+        # (B, C, L, E) -> (B*L, C, E) -> (B*L, 1, E) -> (B, L, E)
         x = self.agg_vars(x)
 
         # Encode patch positions, spatial information
+        # yoke.models.vit.embedding_encoders.PosEmbed
+        # Additive encoding (B, L, E) -> (B, L, E)
         x = self.pos_embed(x)
 
         # Encode temporal information
+        # yoke.models.vit.embedding_encoders.TimeEmbed
+        # (B, L, E) + (B, 1, E) -> (B, L, E)
         x = self.temporal_encoding(x, lead_times)
 
         # Pass through SWIN-V2 U-Net encoder
+        # yoke.models.vit.swin.unet.SwinUnetBackbone
+        # Downward arm
+        # SWIN-layers (B, L, E) -> (B, L, E)
+        # Patch-Merging (B, L=H'*W', E) -> (B, [H'/s1]*[W'/s2], s1*s2*E) -> (B, L', f*E)
+        # Upward arm reverses process to get back to (B, L, E)
         x = self.unet(x)
 
         # Use linear map to remap to correct variable and patchsize dimension
+        # (B, L, E) -> (B, L, max(C)*p1*p2)
         x = self.linear4unpatch(x)
 
         # Unpatchify back to original shape
+        # (B, H'*W', max(C)*p1*p2) -> (B, max(C), H=H'*p1, W=W'*p2)
         x = self.unpatch(x)
 
         # Select only entries corresponding to out_vars for loss
-        # out_var_ids = self.var_embed_layer.get_var_ids(tuple(out_vars), x.device)
+        # (B, max(C), H, W) -> (B, C, H, W)
         preds = x[:, out_vars]
 
         return preds
