@@ -13,23 +13,37 @@ Soumi De
 Bryan Kaiser
 
 """
-
-####################################
-# Packages
-####################################
 import sys
 from pathlib import Path
 import typing
 import random
 import re
+import glob
 import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
-
+from torch.utils.data import get_worker_info
+import os
 NoneStr = typing.Union[None, str]
-
 import numpy as np
+try:
+    import torch.distributed as dist
+except Exception:
+    dist = None
+
+def _current_rank():
+    try:
+        if dist and dist.is_available() and dist.is_initialized():
+            return dist.get_rank()
+    except Exception:
+        pass
+    return 0
+
+def rank_worker_tag(index=None):
+    wid = get_worker_info().id if get_worker_info() is not None else -1
+    tag = f'[rank{_current_rank()} worker{wid} pid{os.getpid()}]'
+    return f'{tag} idx={index}' if index is not None else tag
 
 def handle_voids(npz_filename: str, hfield: str) -> np.ndarray:
     """
@@ -45,28 +59,16 @@ def handle_voids(npz_filename: str, hfield: str) -> np.ndarray:
         np.ndarray: Processed image array.
     """
     if not hfield.endswith('_Void'):
-        return None  # Or raise an error or return a default value
-
-    # Step 2: Get array dimensions
+        return None
     dims = np.shape(read_npz_nan(npz_filename, 'av_density'))
-
-    # Step 3: Create array of zeros
     tmp_img = np.zeros(dims)
-
-    # Step 4: Load the required arrays
     booster = read_npz_nan(npz_filename, 'density_booster')
     maincharge = read_npz_nan(npz_filename, 'density_maincharge')
-
-    # Step 5: Set corresponding elements to NaN where booster or maincharge is not NaN
     mask = ~np.isnan(booster) | ~np.isnan(maincharge)
-
-    # Step 5.5: Optionally include 'density_wall' if it exists
     with np.load(npz_filename) as data:
         if 'density_wall' in data:
             wall = read_npz_nan(npz_filename, 'density_wall')
             mask |= ~np.isnan(wall)
-
-    # Step 6: Apply mask to set NaNs
     tmp_img[mask] = np.nan
     return tmp_img
 
@@ -74,12 +76,9 @@ def import_img_from_npz(npz_filename: str, hfield: str) -> np.ndarray:
     """Imports image data from npz file."""
     if hfield.endswith('_Void'):
         tmp_img = handle_voids(npz_filename, hfield)
-    else:    
-        #print("In import_img_from_npz: hfield=",hfield)
+    else:
         tmp_img = read_npz_nan(npz_filename, hfield)
-    # If hfield = Rcoord or Zcoord, then meshgrid:
     tmp_img = meshgrid_position(tmp_img, npz_filename, hfield)
-    # If hfield = density_..., then multiply by volume fraction:
     tmp_img = volfrac_density(tmp_img, npz_filename, hfield)
     return tmp_img
 
@@ -93,42 +92,36 @@ def volfrac_density(tmp_img: np.ndarray, npz_filename: str, hfield: str) -> np.n
         return tmp_img
     suffix = extract_after_density(hfield)
     if not suffix:
-        print(
-            f"\n [load_npz_dataset.py] Could not extractsuffix from hfield: '{hfield}'"
-        )
+        print(f"\n [load_npz_dataset.py] Could not extractsuffix from hfield:
+'{hfield}'")
         return tmp_img
-    vofm_hfield = "vofm_" + suffix
+    vofm_hfield = 'vofm_' + suffix
     vofm = read_npz_nan(npz_filename, vofm_hfield)
     return tmp_img * vofm
 
-
 def meshgrid_position(tmp_img: np.ndarray, npz_filename: str, hfield: str) -> np.ndarray:
     """If hfield = position, then meshgrid the arrays."""
-    if hfield == "Rcoord":
-        tmp_zcoord = read_npz_nan(npz_filename, "Zcoord")
+    if hfield == 'Rcoord':
+        tmp_zcoord = read_npz_nan(npz_filename, 'Zcoord')
         tmp_img, _ = np.meshgrid(tmp_img, tmp_zcoord)
-    elif hfield == "Zcoord":
-        tmp_rcoord = read_npz_nan(npz_filename, "Rcoord")
+    elif hfield == 'Zcoord':
+        tmp_rcoord = read_npz_nan(npz_filename, 'Rcoord')
         _, tmp_img = np.meshgrid(tmp_rcoord, tmp_img)
     return tmp_img
 
-
 def extract_after_density(s: str) -> None:
     """Get the name of the material."""
-    prefix = "density_"
+    prefix = 'density_'
     if s.startswith(prefix):
-        return s[len(prefix) :]
+        return s[len(prefix):]
     return None
-
 
 def has_density_prefix(s: str) -> None:
     """Returns True if string begins with 'density'."""
-    return s.startswith("density_")
+    return s.startswith('density_')
 
-
-def combine_by_number_and_label(
-    number_list: list[int], array: np.ndarray, label_list: list[str]
-) -> tuple[np.ndarray, np.ndarray, list[str]]:
+def combine_by_number_and_label(number_list: list[int], array: np.ndarray, label_list:
+list[str]) -> tuple[np.ndarray, np.ndarray, list[str]]:
     """Combine entries in a 3D array (n_list, x, z).
 
     Entries are combined based on repeated values in number_list and
@@ -145,58 +138,54 @@ def combine_by_number_and_label(
         combined_array: Array of shape (n_unique, x, z).
         unique_labels: Corresponding hydrofield labels for unique channels.
     """
-    assert len(number_list) == array.shape[0] == len(label_list), (
-        "Mismatched input lengths."
-    )
-
+    assert len(number_list) == array.shape[0] == len(label_list), 'Mismatched input
+lengths.'
     number_to_index = {}
     for idx, num in enumerate(number_list):
         if num not in number_to_index:
             number_to_index[num] = [idx]
         else:
             number_to_index[num].append(idx)
-
     unique_numbers = list(number_to_index.keys())
     unique_labels = []
     combined_arrays = []
-
     for num in unique_numbers:
         indices = number_to_index[num]
         combined = array[indices[0]].copy()
         label = label_list[indices[0]]
-
         combined = np.zeros_like(array[0])
-
         for idx in indices:
             next_img = array[idx]
             combined = np.where(combined == 0, next_img, combined)
-
         combined_arrays.append(combined)
         unique_labels.append(label)
+    return (np.array(unique_numbers), np.array(combined_arrays), unique_labels)
 
-    return np.array(unique_numbers), np.array(combined_arrays), unique_labels
-
-
-def read_npz_nan(npz: np.lib.npyio.NpzFile, field: str) -> np.ndarray:
-    """Extract a specific field from a .npz file and replace NaNs with 0.
+def read_npz_nan(npz: typing.Union[str, np.lib.npyio.NpzFile], field: str) -> np.ndarray:
+    """
+    Extract a specific field from a .npz file and replace NaNs with 0.
 
     Args:
-        npz (np.lib.npyio.NpzFile): Loaded .npz file.
+        npz (str or np.lib.npyio.NpzFile): Path to a .npz file or an opened npz handle.
         field (str): Field name to extract.
 
     Returns:
         np.ndarray: Field data with NaNs replaced by 0.
-
     """
-    #return np.nan_to_num(npz[field], nan=0.0)
-    data = np.load(npz)
-    print("In read_npz_nan: npz=",npz)
-    #print("data=", data)
-    #if hasattr(data, "keys") and isinstance(data, np.lib.npyio.NpzFile):
-    #    print("data:Safe to treat as npz archive")
-    #print("has keys=",list(data.keys()))
-    return np.nan_to_num(data[field], nan=0.0)
-
+    if isinstance(npz, str):
+        with np.load(npz, allow_pickle=False) as data:
+            if field not in data.files:
+                raise KeyError(f"Field '{field}' not found in {npz}. Available fields:
+{data.files}")
+            arr = data[field]
+    elif isinstance(npz, np.lib.npyio.NpzFile):
+        if field not in npz.files:
+            raise KeyError(f"Field '{field}' not found in npz object. Available fields:
+{npz.files}")
+        arr = npz[field]
+    else:
+        raise TypeError(f'npz must be str or NpzFile, not {type(npz)}')
+    return np.nan_to_num(arr, nan=0.0)
 
 class LabeledData:
     """A class to process datasets by relating input data to correct labels.
@@ -204,13 +193,8 @@ class LabeledData:
     Use this to get correctly labeled hydro fields and channel maps.
     """
 
-    def __init__(
-        self,
-        npz_filepath: str,
-        csv_filepath: str,
-        kinematic_variables: str = "velocity",
-        thermodynamic_variables: str = "density",
-    ) -> None:
+    def __init__(self, npz_filepath: str, csv_filepath: str, kinematic_variables:
+str='velocity', thermodynamic_variables: str='density') -> None:
         """Initializes the dataset processor.
 
         Parameters:
@@ -221,79 +205,29 @@ class LabeledData:
         self.csv_filepath = csv_filepath
         self.kinematic_variables = kinematic_variables
         self.thermodynamic_variables = thermodynamic_variables
-
-        # Get the hydro_fields
-        print("In LabeledData: npz_filepath=",self.npz_filepath)
+        print('In LabeledData: npz_filepath=', self.npz_filepath)
         self.get_study_and_key(self.npz_filepath)
-        if self.study == "cx":  # cylex dataset
-            self.all_hydro_field_names = [
-                "Rcoord",  # 4 kinematic variable fields
-                "Zcoord",
-                "Uvelocity",
-                "Wvelocity",
-                "density_Air",  # 39 thermodynamic variable fields
-                "energy_Air",
-                "pressure_Air",
-                "density_Al",
-                "energy_Al",
-                "pressure_Al",
-                "density_Be",
-                "energy_Be",
-                "pressure_Be",
-                "density_booster",
-                "energy_booster",
-                "pressure_booster",
-                "density_Cu",
-                "energy_Cu",
-                "pressure_Cu",
-                "density_U.DU",
-                "energy_U.DU",
-                "pressure_U.DU",
-                "density_maincharge",
-                "energy_maincharge",
-                "pressure_maincharge",
-                "density_N",
-                "energy_N",
-                "pressure_N",
-                "density_Sn",
-                "energy_Sn",
-                "pressure_Sn",
-                "density_Steel.alloySS304L",
-                "energy_Steel.alloySS304L",
-                "pressure_Steel.alloySS304L",
-                "density_Polymer.Sylgard",
-                "energy_Polymer.Sylgard",
-                "pressure_Polymer.Sylgard",
-                "density_Ta",
-                "energy_Ta",
-                "pressure_Ta",
-                "density_Void",
-                "energy_Void",
-                "pressure_Void",
-                "density_Water",
-                "energy_Water",
-                "pressure_Water",
-            ]
-
-            # # channel_map (later in_vars) integer labels for each field
+        if self.study == 'cx':
+            self.all_hydro_field_names = ['Rcoord', 'Zcoord', 'Uvelocity', 'Wvelocity',
+'density_Air', 'energy_Air', 'pressure_Air', 'density_Al', 'energy_Al', 'pressure_Al',
+'density_Be', 'energy_Be', 'pressure_Be', 'density_booster', 'energy_booster',
+'pressure_booster', 'density_Cu', 'energy_Cu', 'pressure_Cu', 'density_U.DU',
+'energy_U.DU', 'pressure_U.DU', 'density_maincharge', 'energy_maincharge',
+'pressure_maincharge', 'density_N', 'energy_N', 'pressure_N', 'density_Sn', 'energy_Sn',
+'pressure_Sn', 'density_Steel.alloySS304L', 'energy_Steel.alloySS304L',
+'pressure_Steel.alloySS304L', 'density_Polymer.Sylgard', 'energy_Polymer.Sylgard',
+'pressure_Polymer.Sylgard', 'density_Ta', 'energy_Ta', 'pressure_Ta', 'density_Void',
+'energy_Void', 'pressure_Void', 'density_Water', 'energy_Water', 'pressure_Water']
             self.channel_map = np.arange(0, len(self.all_hydro_field_names))
-
-            # get the material names that are present in this npz file
             self.cylex_data_loader()
-
         else:
-            print(
-                "\n ERROR: hydro_field information unavailable"
-                "for specified dataset. -> See load_npz_dataset.py\n"
-            )
+            print('\n ERROR: hydro_field information unavailablefor specified dataset. ->
+See load_npz_dataset.py\n')
 
     def get_active_hydro_indices(self) -> list:
         """Returns the indices of active_hydro_field_names within hydro_field_names."""
-        return [
-            self.all_hydro_field_names.index(field)
-            for field in self.active_hydro_field_names
-            if field in self.all_hydro_field_names
-        ]
+        return [self.all_hydro_field_names.index(field) for field in
+self.active_hydro_field_names if field in self.all_hydro_field_names]
 
     def cylex_data_loader(self) -> None:
         """Data loader for the cylex dataset.
@@ -301,138 +235,75 @@ class LabeledData:
         Pairs the data arrays in the .npz file with the corresponding elements of
         hydro_field_names by using the columns in the .csv design file.
         """
-        design_df = pd.read_csv(
-            self.csv_filepath, sep=",", header=0, index_col=0, engine="python"
-        )
-
-        # removed spaces from headers:
+        design_df = pd.read_csv(self.csv_filepath, sep=',', header=0, index_col=0,
+engine='python')
         for col in design_df.columns:
             design_df.rename(columns={col: col.strip()}, inplace=True)
-
-        # get the names of the non-HE material(s) from the design file:
-        non_he_mats = design_df.loc[self.key, "wallMat":"backMat"].values
-        non_he_mats = [
-            m.strip() for m in non_he_mats
-        ]  # materials that are not the high explosive material
-
-        # get the hydro_field_names and the corresponding channel indices
-        # for the given npz data:
+        non_he_mats = design_df.loc[self.key, 'wallMat':'backMat'].values
+        non_he_mats = [m.strip() for m in non_he_mats]
         self.channel_map = []
         self.active_npz_field_names = []
         self.active_hydro_field_names = []
-
-        if self.kinematic_variables == "velocity":
-            self.active_hydro_field_names = ["Uvelocity", "Wvelocity"]
+        if self.kinematic_variables == 'velocity':
+            self.active_hydro_field_names = ['Uvelocity', 'Wvelocity']
             self.active_npz_field_names = self.active_hydro_field_names
-        elif self.kinematic_variables == "position":
-            self.active_hydro_field_names = ["Rcoord", "Zcoord"]
+        elif self.kinematic_variables == 'position':
+            self.active_hydro_field_names = ['Rcoord', 'Zcoord']
             self.active_npz_field_names = self.active_hydro_field_names
-        elif self.kinematic_variables == "both":
-            self.active_hydro_field_names = [
-                "Rcoord",
-                "Zcoord",
-                "Uvelocity",
-                "Wvelocity",
-            ]
+        elif self.kinematic_variables == 'both':
+            self.active_hydro_field_names = ['Rcoord', 'Zcoord', 'Uvelocity',
+'Wvelocity']
             self.active_npz_field_names = self.active_hydro_field_names
         else:
-            raise ValueError(
-                "\n ERROR: Failure to load data. "
-                "Incorrectly specified kinematic "
-                "variables: Choose from 'velocity'"
-                "(default), 'position', or 'both'."
-            )
-
-        # Note: wall and background materials (specific to cylex):
-        # In the csv file the materials are called as `wall_mat' and
-        # `back_mat' but in the npz files, back_mat is the material name.
-
-        # Wall & background material densities:
-        self.active_npz_field_names = np.append(
-            self.active_npz_field_names,
-            ["density_wall", "density_" + non_he_mats[1]],
-        )
-        self.active_hydro_field_names = np.append(
-            self.active_hydro_field_names,
-            ["density_" + non_he_mats[0], "density_" + non_he_mats[1]],
-        )
-
-        # HE density:
-        self.active_npz_field_names = np.append(
-            self.active_npz_field_names, ["density_maincharge"]
-        )
-        self.active_hydro_field_names = np.append(
-            self.active_hydro_field_names, ["density_maincharge"]
-        )
-        self.active_npz_field_names = np.append(
-            self.active_npz_field_names, ["density_booster"]
-        )
-        self.active_hydro_field_names = np.append(
-            self.active_hydro_field_names, ["density_booster"]
-        )
-
-        if self.thermodynamic_variables in ("density and pressure", "all"):
-            # Wall & background material pressures:
-            self.active_npz_field_names = np.append(
-                self.active_npz_field_names,
-                ["pressure_wall", "pressure_" + non_he_mats[1]],
-            )
-            self.active_hydro_field_names = np.append(
-                self.active_hydro_field_names,
-                ["pressure_" + non_he_mats[0], "pressure_" + non_he_mats[1]],
-            )
-            # HE pressures:
-            self.active_npz_field_names = np.append(
-                self.active_npz_field_names, ["pressure_maincharge"]
-            )
-            self.active_hydro_field_names = np.append(
-                self.active_hydro_field_names, ["pressure_maincharge"]
-            )
-            self.active_npz_field_names = np.append(
-                self.active_npz_field_names, ["pressure_booster"]
-            )
-            self.active_hydro_field_names = np.append(
-                self.active_hydro_field_names, ["pressure_booster"]
-            )
-
-        elif self.thermodynamic_variables in ("density and energy", "all"):
-            # Wall & background material energy:
-            self.active_npz_field_names = np.append(
-                self.active_npz_field_names,
-                ["energy_wall", "energy_" + non_he_mats[1]],
-            )
-            self.active_hydro_field_names = np.append(
-                self.active_hydro_field_names,
-                ["energy_" + non_he_mats[0], "energy_" + non_he_mats[1]],
-            )
-            # HE energy:
-            self.active_npz_field_names = np.append(
-                self.active_npz_field_names, ["energy_maincharge"]
-            )
-            self.active_hydro_field_names = np.append(
-                self.active_hydro_field_names, ["energy_maincharge"]
-            )
-            self.active_npz_field_names = np.append(
-                self.active_npz_field_names, ["energy_booster"]
-            )
-            self.active_hydro_field_names = np.append(
-                self.active_hydro_field_names, ["energy_booster"]
-            )
-
-        elif self.thermodynamic_variables != "density":
-            raise ValueError(
-                "\n ERROR: Failure to load data. "
-                "Incorrectly specified thermodynamic "
-                "variables: Choose from 'density'"
-                "(default), 'density and pressure', "
-                "'density and energy', or 'all'."
-            )
-
+            raise ValueError("\n ERROR: Failure to load data. Incorrectly specified
+kinematic variables: Choose from 'velocity'(default), 'position', or 'both'.")
+        self.active_npz_field_names = np.append(self.active_npz_field_names,
+['density_wall', 'density_' + non_he_mats[1]])
+        self.active_hydro_field_names = np.append(self.active_hydro_field_names,
+['density_' + non_he_mats[0], 'density_' + non_he_mats[1]])
+        self.active_npz_field_names = np.append(self.active_npz_field_names,
+['density_maincharge'])
+        self.active_hydro_field_names = np.append(self.active_hydro_field_names,
+['density_maincharge'])
+        self.active_npz_field_names = np.append(self.active_npz_field_names,
+['density_booster'])
+        self.active_hydro_field_names = np.append(self.active_hydro_field_names,
+['density_booster'])
+        if self.thermodynamic_variables in ('density and pressure', 'all'):
+            self.active_npz_field_names = np.append(self.active_npz_field_names,
+['pressure_wall', 'pressure_' + non_he_mats[1]])
+            self.active_hydro_field_names = np.append(self.active_hydro_field_names,
+['pressure_' + non_he_mats[0], 'pressure_' + non_he_mats[1]])
+            self.active_npz_field_names = np.append(self.active_npz_field_names,
+['pressure_maincharge'])
+            self.active_hydro_field_names = np.append(self.active_hydro_field_names,
+['pressure_maincharge'])
+            self.active_npz_field_names = np.append(self.active_npz_field_names,
+['pressure_booster'])
+            self.active_hydro_field_names = np.append(self.active_hydro_field_names,
+['pressure_booster'])
+        elif self.thermodynamic_variables in ('density and energy', 'all'):
+            self.active_npz_field_names = np.append(self.active_npz_field_names,
+['energy_wall', 'energy_' + non_he_mats[1]])
+            self.active_hydro_field_names = np.append(self.active_hydro_field_names,
+['energy_' + non_he_mats[0], 'energy_' + non_he_mats[1]])
+            self.active_npz_field_names = np.append(self.active_npz_field_names,
+['energy_maincharge'])
+            self.active_hydro_field_names = np.append(self.active_hydro_field_names,
+['energy_maincharge'])
+            self.active_npz_field_names = np.append(self.active_npz_field_names,
+['energy_booster'])
+            self.active_hydro_field_names = np.append(self.active_hydro_field_names,
+['energy_booster'])
+        elif self.thermodynamic_variables != 'density':
+            raise ValueError("\n ERROR: Failure to load data. Incorrectly specified
+thermodynamic variables: Choose from 'density'(default), 'density and pressure', 'density
+and energy', or 'all'.")
         self.channel_map = self.get_active_hydro_indices()
 
     def extract_letters(self, s: str) -> str:
         """Match letters at the beginning until the first digit."""
-        match = re.match(r"([a-zA-Z]+)\d", s)
+        match = re.match('([a-zA-Z]+)\\d', s)
         return match.group(1) if match else None
 
     def get_study_and_key(self, npz_filepath: str) -> str:
@@ -452,10 +323,10 @@ class LabeledData:
             study (str): The name of the study/dataset. E.g., 'cx'.
 
         """
-        self.key = npz_filepath.split("/")[-1].split("_pvi_")[0]
+        self.key = npz_filepath.split('/')[-1].split('_pvi_')[0]
         self.study = self.extract_letters(self.key)
 
-    def get_hydro_field_names(self) -> list[str]:
+    def get_all_hydro_field_names(self) -> list[str]:
         """Returns all possible hydro field names."""
         return self.all_hydro_field_names
 
@@ -471,10 +342,8 @@ class LabeledData:
         """Returns only the active field names in a npz file."""
         return self.active_npz_field_names
 
-
-def process_channel_data(
-    channel_map: list, img_list_combined: np.ndarray, active_hydro_field_names: list
-) -> tuple[list, np.ndarray, list]:
+def process_channel_data(channel_map: list, img_list_combined: np.ndarray,
+active_hydro_field_names: list) -> tuple[list, np.ndarray, list]:
     """Processes channel data so that they are unique entries.
 
     Given a channel map, combined image lists, and active hydro field names,
@@ -497,27 +366,22 @@ def process_channel_data(
     """
     unique_channels = np.unique(channel_map)
     if len(unique_channels) < len(channel_map):
-        # Assumes size(img_list_combined) = [n_images,n_hydro_fields,n_x,n_z]
         new_img_list_combined = []
         new_channel_map = []
         new_active_hydro_field_names = []
         for i in np.arange(img_list_combined.shape[0]):
-            result = combine_by_number_and_label(
-                channel_map,
-                img_list_combined[i],
-                active_hydro_field_names,
-            )
+            result = combine_by_number_and_label(channel_map, img_list_combined[i],
+active_hydro_field_names)
             channel_map_, new_img, active_hydro_field_names_ = result
             new_img_list_combined.append(new_img)
             new_channel_map.append(channel_map_)
             new_active_hydro_field_names.append(active_hydro_field_names_)
         img_list_combined = np.array(new_img_list_combined)
         if len(np.unique(new_channel_map[0])) < len(new_channel_map[0]):
-            print("\n ERROR: combination of repeated materials fail")
-        return new_channel_map[0], img_list_combined, new_active_hydro_field_names[0]
+            print('\n ERROR: combination of repeated materials fail')
+        return (new_channel_map[0], img_list_combined, new_active_hydro_field_names[0])
     else:
-        return channel_map, img_list_combined, active_hydro_field_names
-
+        return (channel_map, img_list_combined, active_hydro_field_names)
 
 class TemporalDataSet(Dataset):
     """Temporal field-to-field mapping dataset.
@@ -548,184 +412,236 @@ class TemporalDataSet(Dataset):
                                 of symmetry and half-images are returned instead.
     """
 
-    def __init__(
-        self,
-        npz_dir: str,
-        csv_filepath: str,
-        file_prefix_list: str,
-        max_time_idx_offset: int,
-        max_file_checks: int,
-        half_image: bool = True,
-    ) -> None:
+    def __init__(self, npz_dir: str, csv_filepath: str, file_prefix_list: str,
+max_time_idx_offset: int, max_file_checks: int, half_image: bool=True) -> None:
         """Initialization of timestep dataset."""
         self.npz_dir = npz_dir
         self.csv_filepath = csv_filepath
         self.max_time_idx_offset = max_time_idx_offset
         self.max_file_checks = max_file_checks
         self.half_image = half_image
-
-        # Create filelist
-        with open(file_prefix_list, encoding="utf-8") as f:
+        self.expected_channels: typing.Optional[int] = None
+        with open(file_prefix_list, encoding='utf-8') as f:
             self.file_prefix_list = [line.rstrip() for line in f]
-
-        # Shuffle the list of prefixes in-place
         random.shuffle(self.file_prefix_list)
         self.n_samples = len(self.file_prefix_list)
-
-        # Initialize random number generator for time index selection
         self.rng = np.random.default_rng()
+        self._build_valid_prefixes()
 
     def __len__(self) -> int:
         """Return effectively infinite number of samples in dataset."""
-        return int(8e5)
+        return int(800000.0)
 
-    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Return a tuple of a batch's input and output data."""
-        # Rotate index if necessary
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor,
+torch.Tensor, torch.Tensor, torch.Tensor]:
         index = index % self.n_samples
-
-        # Get the input image. Try several indices if necessary.
+        _depth = getattr(self, '_fallback_depth', 0)
         prefix_attempt = 0
-        prefix_loop_break = False
         while prefix_attempt < 5:
             file_prefix = self.file_prefix_list[index]
-
-            # Use `while` loop to search until a pair of files which exists is
-            # found.
             attempt = 0
             while attempt < self.max_file_checks:
-                # Files have name format
-                # *lsc240420_id01001_pvi_idx00000.npz*.
-                #
-                # Choose random starting index 0-(100-max_time_idx_offset) so
-                # the end index will be less than or equal to 99.
-                #start_idx = self.rng.integers(0, 100 - self.max_time_idx_offset)
-                #end_idx = self.rng.integers(0, self.max_time_idx_offset + 1) + start_idx
-
-                # SOUMI: changed startIDX and endIDX to how it is on lsc_dataset main
-                seqLen = self.rng.integers(0, self.max_timeIDX_offset, endpoint=True)
-                startIDX = self.rng.integers(0, 100 - seqLen, endpoint=True)
-                endIDX = startIDX + seqLen
-
-                # Construct file names
-                start_file = file_prefix + f"_pvi_idx{start_idx:05d}.npz"
-                end_file = file_prefix + f"_pvi_idx{end_idx:05d}.npz"
-
-                # Check if both files exist
+                seqLen = self.rng.integers(0, self.max_time_idx_offset, endpoint=True)
+                start_idx = self.rng.integers(0, 100 - seqLen, endpoint=True)
+                end_idx = start_idx + seqLen
+                start_file = file_prefix + f'_pvi_idx{start_idx:05d}.npz'
+                end_file = file_prefix + f'_pvi_idx{end_idx:05d}.npz'
                 start_file_path = Path(self.npz_dir + start_file)
                 end_file_path = Path(self.npz_dir + end_file)
+                if not (start_file_path.is_file() and end_file_path.is_file()):
+                    attempt += 1
+                    continue
+                try:
+                    start_npz = np.load(self.npz_dir + start_file, allow_pickle=False)
+                except Exception:
+                    attempt += 1
+                    continue
+                try:
+                    end_npz = np.load(self.npz_dir + end_file, allow_pickle=False)
+                except Exception:
+                    try:
+                        start_npz.close()
+                    except:
+                        pass
+                    attempt += 1
+                    continue
+                try:
+                    ld = LabeledData(self.npz_dir + start_file, self.csv_filepath)
+                    active_npz_field_names = ld.get_active_npz_field_names()
+                    active_hydro_field_names = ld.get_active_hydro_field_names()
+                    channel_map = ld.get_channel_map()
+                    self.all_hydro_field_names = ld.get_all_hydro_field_names()
+                    available_start = set(start_npz.files)
+                    m_start = [f in available_start for f in active_npz_field_names]
+                    fields_start = [f for f, keep in zip(active_npz_field_names, m_start)
+if keep]
+                    chmap_start = [cm for cm, keep in zip(channel_map, m_start) if keep]
+                    names_start = [nm for nm, keep in zip(active_hydro_field_names,
+m_start) if keep]
+                    if not fields_start:
+                        start_npz.close()
+                        end_npz.close()
+                        attempt += 1
+                        continue
+                    available_end = set(end_npz.files)
+                    m_both = [f in available_end for f in fields_start]
+                    present_fields = [f for f, keep in zip(fields_start, m_both) if keep]
+                    filtered_chmap = [cm for cm, keep in zip(chmap_start, m_both) if
+keep]
+                    filtered_names = [nm for nm, keep in zip(names_start, m_both) if
+keep]
+                    if not present_fields:
+                        start_npz.close()
+                        end_npz.close()
+                        attempt += 1
+                        continue
+                    self.active_npz_field_names = present_fields
+                    self.channel_map = filtered_chmap
+                    self.active_hydro_field_names = filtered_names
+                    start_img_list, end_img_list = ([], [])
+                    for hfield in present_fields:
+                        tmp = import_img_from_npz(self.npz_dir + start_file, hfield)
+                        if not self.half_image:
+                            tmp = np.concatenate((np.fliplr(tmp), tmp), axis=1)
+                        start_img_list.append(tmp)
+                    for hfield in present_fields:
+                        tmp = import_img_from_npz(self.npz_dir + end_file, hfield)
+                        if not self.half_image:
+                            tmp = np.concatenate((np.fliplr(tmp), tmp), axis=1)
+                        end_img_list.append(tmp)
+                    img_list_combined = np.array([start_img_list, end_img_list])
+                    channel_map, img_list_combined, active_hydro_field_names =
+process_channel_data(self.channel_map, img_list_combined, self.active_hydro_field_names)
+                    self.channel_map = channel_map
+                    self.active_hydro_field_names = active_hydro_field_names
+                    start_img = torch.tensor(np.stack(img_list_combined[0], axis=0),
+dtype=torch.float32).contiguous().clone()
+                    end_img = torch.tensor(np.stack(img_list_combined[1], axis=0),
+dtype=torch.float32).contiguous().clone()
+                    dt = torch.tensor(0.25 * (end_idx - start_idx), dtype=torch.float32)
+                    cm_tensor = torch.as_tensor(self.channel_map, dtype=torch.long)
+                    self._dbg_cnt = getattr(self, '_dbg_cnt', 0)
+                    if self._dbg_cnt < 10 and _current_rank() == 0:
+                        tag = rank_worker_tag(index)
+                        print(f'{tag} start_img: shape={tuple(start_img.shape)}
+dtype={start_img.dtype}', flush=True)
+                        print(f'{tag} channel_map: shape={tuple(cm_tensor.shape)}
+dtype={cm_tensor.dtype}', flush=True)
+                        print(f'{tag} channel_map values:\n{cm_tensor}', flush=True)
 
-                if start_file_path.is_file() and end_file_path.is_file():
-                    prefix_loop_break = True
-                    break
-
-                attempt += 1
-
-            if attempt == self.max_file_checks:
-                fnf_msg = (
-                    "In TemporalDataSet, "
-                    "max_file_checks "
-                    f"reached for prefix: {file_prefix}"
-                )
-                print(fnf_msg, file=sys.stderr)
-
-            # Break outer loop if time-pairs were found.
-            if prefix_loop_break:
-                break
-
-            # Try different prefix if no time-pairs are found.
-            print(
-                f"Prefix attempt {prefix_attempt + 1} failed. Trying next prefix.",
-                file=sys.stderr,
-            )
+                        def _legend_line(idxs):
+                            names = []
+                            L = len(self.all_hydro_field_names) if hasattr(self,
+'all_hydro_field_names') else 0
+                            for i in idxs:
+                                if 0 <= i < L:
+                                    names.append(f'{self.all_hydro_field_names[i]}={i}')
+                                else:
+                                    names.append(f'idx{i}')
+                            return ', '.join(names)
+                        if cm_tensor.ndim == 1:
+                            print(f'{tag} legend: {_legend_line(cm_tensor.tolist())}',
+flush=True)
+                        elif cm_tensor.ndim == 2:
+                            rows_to_show = min(5, cm_tensor.shape[0])
+                            for r in range(rows_to_show):
+                                print(f'{tag} legend row {r}:
+{_legend_line(cm_tensor[r].tolist())}', flush=True)
+                        print(f'{tag} end_img:   shape={tuple(end_img.shape)}
+dtype={end_img.dtype}', flush=True)
+                        print(f'{tag} dt: {dt}', flush=True)
+                        self._dbg_cnt += 1
+                    start_npz.close()
+                    end_npz.close()
+                    return (start_img, cm_tensor.clone(), end_img, cm_tensor.clone(), dt)
+                except Exception:
+                    try:
+                        start_npz.close()
+                    except:
+                        pass
+                    try:
+                        end_npz.close()
+                    except:
+                        pass
+                    attempt += 1
+                    continue
+            print(f'In TemporalDataSet, max_file_checks reached for prefix:
+{file_prefix}', file=sys.stderr)
             prefix_attempt += 1
-            index = (index + 1) % self.n_samples  # Rotate index if necessary
+            index = (index + 1) % self.n_samples
+        if _depth < 10:
+            print(f'[TemporalDataSet] WARN: skipping index after multiple failures;
+index={index}', file=sys.stderr)
+            self._fallback_depth = _depth + 1
+            try:
+                return self.__getitem__((index + 1) % self.n_samples)
+            finally:
+                self._fallback_depth = _depth
+        for _ in range(50):
+            j = int(self.rng.integers(0, self.n_samples))
+            try:
+                return self.__getitem__(j)
+            except Exception:
+                continue
+        raise RuntimeError('TemporalDataSet: unable to assemble any sample after global
+retries. Check npz_dir / CSV alignment or loosen selection rules.')
 
-        # Load NPZ files. Raise exceptions if file is not able to be loaded.
-        try:
-            # SOUMI: we dont end up using start_npz. So we dont need the try except here. We can move it to inside LabeledData maybe
-            start_npz = np.load(self.npz_dir + start_file)
+    def _probe_prefix_once(self, prefix: str):
+        """
+        Cheap probe: try a handful of time indices for this prefix.
+        Return a dict with 'present_fields' if something usable is found, else None.
+        """
+        candidates = [0, 10, 20, 40, 60, 80, 99]
+        rng = getattr(self, 'rng', np.random.default_rng(123))
+        rng.shuffle(candidates)
+        for start_idx in candidates[:5]:
+            end_idx = start_idx
+            start_file = prefix + f'_pvi_idx{start_idx:05d}.npz'
+            start_fp = Path(self.npz_dir + start_file)
+            if not start_fp.is_file():
+                continue
+            try:
+                with np.load(start_fp, allow_pickle=False) as z:
+                    ld = LabeledData(self.npz_dir + start_file, self.csv_filepath)
+                    active_fields = ld.get_active_npz_field_names()
+                    available = set(z.files)
+                    present_fields = [f for f in active_fields if f in available]
+                    if present_fields:
+                        return {'prefix': prefix, 'present_fields': present_fields}
+            except Exception:
+                continue
+        return None
 
-            # SOUMI: these following lines can go outside try except loop. They dont use start_npz
-            # These will change from simulation key to key:
-            self.active_npz_field_names = LabeledData(
-                self.npz_dir + start_file, self.csv_filepath
-            ).get_active_npz_field_names()
-            active_hydro_field_names = LabeledData(
-                self.npz_dir + start_file, self.csv_filepath
-            ).get_active_hydro_field_names()
-            channel_map = LabeledData(
-                self.npz_dir + start_file, self.csv_filepath
-            ).get_channel_map()
-
-        except Exception as e:
-            print(
-                f"Error loading start file: {self.npz_dir + start_file}",
-                file=sys.stderr,
-            )
-            raise e
-
-        try:
-            end_npz = np.load(self.npz_dir + end_file)
-
-            # For now, we assume that the start and end files have the same materials,
-            # etc. (it's hard to imagine a physical scenario in which Cu emerges from
-            # nothing, but hey, we're not comparing with experiment so anything goes!)
-
-        except Exception as e:
-            print(
-                f"Error loading end file: {self.npz_dir + end_file}",
-                file=sys.stderr,
-            )
-            start_npz.close()
-            raise e
-
-        start_img_list = []
-        end_img_list = []
-
-        for hfield in self.active_npz_field_names:
-
-            # start npz
-            #tmp_img = import_img_from_npz(start_npz, hfield)
-            # SOUMI added
-            tmp_img = import_img_from_npz(self.npz_dir + start_file, hfield)
-            if not self.half_image:
-                tmp_img = np.concatenate((np.fliplr(tmp_img), tmp_img), axis=1)
-            start_img_list.append(tmp_img)
-
-            # end_npz
-            
-            #tmp_img = import_img_from_npz(end_npz, hfield)
-            # SOUMI added
-            tmp_img = import_img_from_npz(self.npz_dir + end_file, hfield)
-            if not self.half_image:
-                tmp_img = np.concatenate((np.fliplr(tmp_img), tmp_img), axis=1)
-            end_img_list.append(tmp_img)
-
-        img_list_combined = np.array([start_img_list, end_img_list])
-        channel_map, img_list_combined, active_hydro_field_names = process_channel_data(
-            channel_map, img_list_combined, active_hydro_field_names
-        )
-        start_img_list = img_list_combined[0]
-        end_img_list = img_list_combined[1]
-        self.channel_map = channel_map
-        self.active_hydro_field_names = active_hydro_field_names
-
-        # Concatenate images channel first.
-        start_img = torch.tensor(np.stack(start_img_list, axis=0)).to(torch.float32)
-        end_img = torch.tensor(np.stack(end_img_list, axis=0)).to(torch.float32)
-
-        # Get the time offset
-        dt = torch.tensor(0.25 * (end_idx - start_idx), dtype=torch.float32)
-
-        # Close the npzs
-        start_npz.close()
-        end_npz.close()
-
-        #return start_img, torch.tensor(self.channel_map), end_img, torch.tensor(self.channel_map), dt
-        print("In TemporalDataset getitem: channel_map=",self.channel_map)
-        return start_img, self.channel_map, end_img, self.channel_map, dt
-
+    def _build_valid_prefixes(self) -> None:
+        """
+        Use _probe_prefix_once to pick prefixes that look usable.
+        Stay permissive (varied C handled later in __getitem__).
+        Never raise on empty; fall back to all prefixes.
+        """
+        prefixes = list(getattr(self, 'file_prefix_list', []))
+        if not prefixes:
+            files = glob.glob(os.path.join(self.npz_dir, '*_pvi_idx*.npz'))
+            rx = re.compile('_pvi_idx\\d+\\.npz$')
+            prefixes = sorted({rx.sub('', os.path.basename(f)) for f in files})
+            self.file_prefix_list = prefixes
+        total = len(prefixes)
+        hits = []
+        for p in prefixes:
+            h = self._probe_prefix_once(p)
+            if h is not None:
+                hits.append(h)
+        if hits:
+            self.valid_prefixes = np.array([h['prefix'] for h in hits])
+            self._probe_present_fields = {h['prefix']: h['present_fields'] for h in hits}
+            self.n_valid = len(self.valid_prefixes)
+            print(f'[TemporalDataSet] Indexed {self.n_valid}/{total} prefixes via
+probe.', file=sys.stderr)
+        else:
+            self.valid_prefixes = np.array(prefixes)
+            self.n_valid = len(self.valid_prefixes)
+            print(f'[TemporalDataSet] WARN: probe found 0 usable prefixes; falling back
+to all {self.n_valid} prefixes. Bad samples will be skipped in __getitem__.',
+file=sys.stderr)
 
 class SequentialDataSet(Dataset):
     """Returns a sequence of consecutive frames from a simulation.
@@ -744,135 +660,81 @@ class SequentialDataSet(Dataset):
 
     """
 
-    def __init__(
-        self,
-        npz_dir: str,
-        csv_filepath: str,
-        file_prefix_list: str,
-        max_file_checks: int,
-        seq_len: int,
-        half_image: bool = True,
-    ) -> None:
+    def __init__(self, npz_dir: str, csv_filepath: str, file_prefix_list: str,
+max_file_checks: int, seq_len: int, half_image: bool=True) -> None:
         """Initialization for sequential dataset."""
         dir_path = Path(npz_dir)
-        # Ensure the directory exists and is indeed a directory
         if not dir_path.is_dir():
-            raise FileNotFoundError(f"Directory not found: {npz_dir}")
-
+            raise FileNotFoundError(f'Directory not found: {npz_dir}')
         self.npz_dir = npz_dir
         self.csv_filepath = csv_filepath
         self.max_file_checks = max_file_checks
         self.seq_len = seq_len
         self.half_image = half_image
-
-        # Load the list of file prefixes
-        with open(file_prefix_list, encoding="utf-8") as f:
+        with open(file_prefix_list, encoding='utf-8') as f:
             self.file_prefix_list = [line.rstrip() for line in f]
-
-        # Shuffle the prefixes for randomness
         random.shuffle(self.file_prefix_list)
         self.n_samples = len(self.file_prefix_list)
-
-        # Random number generator
         self.rng = np.random.default_rng()
 
     def __len__(self) -> int:
         """Return the number of samples in the dataset."""
         return self.n_samples
 
-    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor,
+torch.Tensor]:
         """Return a sequence of consecutive frames."""
-        # Rotate index if necessary
         index = index % self.n_samples
         file_prefix = self.file_prefix_list[index]
-
-        # Try multiple attempts to find valid files
         prefix_attempt = 0
         while prefix_attempt < self.max_file_checks:
-            # Pick a random start index so that the sequence fits within the range
             start_idx = self.rng.integers(0, 100 - self.seq_len)
-
-            # Construct the sequence of file paths
             valid_sequence = True
             file_paths = []
             for offset in range(self.seq_len):
                 idx = start_idx + offset
-                file_name = f"{file_prefix}_pvi_idx{idx:05d}.npz"
+                file_name = f'{file_prefix}_pvi_idx{idx:05d}.npz'
                 file_path = Path(self.npz_dir, file_name)
-
                 if not file_path.is_file():
                     valid_sequence = False
                     break
-
                 file_paths.append(file_path)
-
             if valid_sequence:
                 break
-
-            # If no valid sequence found, try the next prefix
             prefix_attempt += 1
-            index = (index + 1) % self.n_samples  # Rotate index to try another prefix
-
+            index = (index + 1) % self.n_samples
         if prefix_attempt == self.max_file_checks:
-            err_msg = (
-                f"Failed to find valid sequence for prefix: {file_prefix} "
-                f"after {self.max_file_checks} attempts."
-            )
+            err_msg = f'Failed to find valid sequence for prefix: {file_prefix} after
+{self.max_file_checks} attempts.'
             raise RuntimeError(err_msg)
-
-        # Load and process the sequence of frames
         frames = []
         for file_path in file_paths:
             try:
                 data_npz = np.load(file_path)
-
-                # Fields to extract from the simulation
-                self.active_npz_field_names = LabeledData(
-                    file_path, self.csv_filepath
-                ).get_active_npz_field_names()
-                active_hydro_field_names = LabeledData(
-                    file_path, self.csv_filepath
-                ).get_active_hydro_field_names()
+                self.active_npz_field_names = LabeledData(file_path,
+self.csv_filepath).get_active_npz_field_names()
+                active_hydro_field_names = LabeledData(file_path,
+self.csv_filepath).get_active_hydro_field_names()
                 channel_map = LabeledData(file_path, self.csv_filepath).get_channel_map()
-
-            #except Exception as e:
-            #    raise RuntimeError(f"Error loading file: {file_path}") from e
-
                 field_imgs = []
                 for hfield in self.active_npz_field_names:
-                    #tmp_img = import_img_from_npz(data_npz, hfield)
-                    # SOUMI added
                     tmp_img = import_img_from_npz(file_path, hfield)
                     if not self.half_image:
                         tmp_img = np.concatenate((np.fliplr(tmp_img), tmp_img), axis=1)
                     field_imgs.append(tmp_img)
-
                 data_npz.close()
-
                 img_list_combined = np.array([field_imgs])
-                channel_map, img_list_combined, active_hydro_field_names = (
-                    process_channel_data(
-                        channel_map, img_list_combined, active_hydro_field_names
-                    )
-                )
+                channel_map, img_list_combined, active_hydro_field_names =
+process_channel_data(channel_map, img_list_combined, active_hydro_field_names)
                 field_imgs = img_list_combined[0]
-
-                # Stack the fields for this frame
-                field_tensor = torch.tensor(
-                    np.stack(field_imgs, axis=0), dtype=torch.float32
-                )
+                field_tensor = torch.tensor(np.stack(field_imgs, axis=0),
+dtype=torch.float32).contiguous().clone()
                 frames.append(field_tensor)
-
             except Exception as e:
-                raise RuntimeError(f"Error loading file: {file_path}") from e
-
+                raise RuntimeError(f'Error loading file: {file_path}') from e
         self.channel_map = channel_map
         self.active_hydro_field_names = active_hydro_field_names
-
-        # Combine frames into a single tensor of shape [seq_len, num_fields, H, W]
         img_seq = torch.stack(frames, dim=0)
-
-        # Fixed time offset
         dt = torch.tensor(0.25, dtype=torch.float32)
-
-        return img_seq, dt, self.channel_map
+        return (img_seq.contiguous().clone(), dt, torch.tensor(self.channel_map,
+dtype=torch.long).clone())
