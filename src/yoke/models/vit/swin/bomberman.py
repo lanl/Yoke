@@ -30,18 +30,25 @@ class BomberMan(nn.Module):
     """BomberMan neural network.
 
     Parallel-patch embedding with SWIN U-Net backbone and unpatchification. This module
-    will take in multiple timesteps of variable-channel image format and output the next
-    timestep of an equivalent variable-channel image format. This represents a
+    will take in multiple timesteps of variable-channel image format and output a single
+    next timestep of an equivalent variable-channel image format. This represents a
     time-dependent advancement on the LodeRunner architecture.
 
-    NOTE: The input size for a batch in LodeRunner is (B, V, H, W). Probably the most
-    natural way to add time-dependency is to expect (B, T, V, H, W) as input.
+    NOTE 1: The input size for a batch in LodeRunner is (B, C, H, W). Probably the most
+    natural way to add time-dependency is to expect (B, T, C, H, W) as input.
+
+    NOTE 2: LodeRunner encodes the time-step between the input and output images as an
+    input. This class will assume every image in the input and output sequences are
+    equally spaced in time.
+
+    NOTE 3: This first BomberMan version will just map to a single next timestep.
+    Subsequent iterations will allow multiple time-step outputs.
 
     Our approach will be as follows:
 
-    Start with x: (B, T, V, H, W)
+    Start with x: (B, T, C, H, W)
     Embed each frame with your existing patch-conv + channel-aggregate:
-    x = rearrange(x, 'b t v h w -> (b t) v h w')
+    x = rearrange(x, 'b t c h w -> (b t) c h w')
     x = your_patch_conv_and_channel_query(x)
     Now x is (B*T, L, d) so we map back to 4D: (B, T, L, d)
     x = rearrange(x, '(b t) L d -> b t L d')
@@ -50,7 +57,7 @@ class BomberMan(nn.Module):
 
     Spatial MSA over the L tokens in each frame:
     x_sp = rearrange(x, 'b t L d -> (b t) L d')
-    x_sp = x_sp + SpatialMSA(LN(x_sp))        # (B*T, L, d)
+    x_sp = x_sp + time-SWINencoder2(LN(x_sp))        # (B*T, L, d)
     x = rearrange(x_sp, '(b t) L d -> b t L d')
 
     Temporal MSA over the T tokens at each spatial location
@@ -69,7 +76,6 @@ class BomberMan(nn.Module):
     q_time  = q_time.expand(b*L, -1, -1)            # (B*L, 1, d)
     y_read, _ = MultiheadAttention(d, heads)(q_time, x_read, x_read)
     y = rearrange(y_read, '(b L) 1 d -> b L d')     # (B, L, d)
-
 
     Args:
         default_vars (list[str]): List of default variables to be used for training
@@ -96,20 +102,20 @@ class BomberMan(nn.Module):
         image_size: Iterable[int, int] = (1120, 800),
         patch_size: Iterable[int, int] = (10, 10),
         embed_dim: int = 128,
-        emb_factor: int = 2,
-        num_heads: int = 8,
-        block_structure: Iterable[int, int, int, int] = (1, 1, 3, 1),
-        window_sizes: Iterable[(int, int), (int, int), (int, int), (int, int)] = [
-            (8, 8),
-            (8, 8),
-            (4, 4),
-            (2, 2),
-        ],
-        patch_merge_scales: Iterable[(int, int), (int, int), (int, int)] = [
-            (2, 2),
-            (2, 2),
-            (2, 2),
-        ],
+        # emb_factor: int = 2,
+        # num_heads: int = 8,
+        # block_structure: Iterable[int, int, int, int] = (1, 1, 3, 1),
+        # window_sizes: Iterable[(int, int), (int, int), (int, int), (int, int)] = [
+        #     (8, 8),
+        #     (8, 8),
+        #     (4, 4),
+        #     (2, 2),
+        # ],
+        # patch_merge_scales: Iterable[(int, int), (int, int), (int, int)] = [
+        #     (2, 2),
+        #     (2, 2),
+        #     (2, 2),
+        # ],
         verbose: bool = False,
     ) -> None:
         """Initialization for class."""
@@ -120,23 +126,23 @@ class BomberMan(nn.Module):
         self.image_size = image_size
         self.patch_size = patch_size
         self.embed_dim = embed_dim
-        self.emb_factor = emb_factor
-        self.num_heads = num_heads
-        self.block_structure = block_structure
-        self.window_sizes = window_sizes
-        self.patch_merge_scales = patch_merge_scales
+        # self.emb_factor = emb_factor
+        # self.num_heads = num_heads
+        # self.block_structure = block_structure
+        # self.window_sizes = window_sizes
+        # self.patch_merge_scales = patch_merge_scales
 
-        # Validate patch_size, window_sizes, and patch_merge_scales before proceeding.
-        valid = validate_patch_and_window(
-            image_size=image_size,
-            patch_size=patch_size,
-            window_sizes=window_sizes,
-            patch_merge_scales=patch_merge_scales,
-        )
-        assert np.all(valid), (
-            "Invalid combination of image_size, patch_size, window_sizes, "
-            "and patch_merge_scales!"
-        )
+        # # Validate patch_size, window_sizes, and patch_merge_scales before proceeding.
+        # valid = validate_patch_and_window(
+        #     image_size=image_size,
+        #     patch_size=patch_size,
+        #     window_sizes=window_sizes,
+        #     patch_merge_scales=patch_merge_scales,
+        # )
+        # assert np.all(valid), (
+        #     "Invalid combination of image_size, patch_size, window_sizes, "
+        #     "and patch_merge_scales!"
+        # )
 
         # First embed the image as a sequence of tokenized patches. Each
         # channel is embedded independently.
@@ -164,58 +170,53 @@ class BomberMan(nn.Module):
             self.parallel_embed.num_patches,
         )
 
-        # Encode temporal-offset information using a linear mapping.
-        self.temporal_encoding = TimeEmbed(self.embed_dim)
+        # # Pass encoded patch tokens through a SWIN-Unet structure
+        # self.unet = SwinUnetBackbone(
+        #     emb_size=self.embed_dim,
+        #     emb_factor=self.emb_factor,
+        #     patch_grid_size=self.parallel_embed.grid_size,
+        #     block_structure=self.block_structure,
+        #     num_heads=self.num_heads,
+        #     window_sizes=self.window_sizes,
+        #     patch_merge_scales=self.patch_merge_scales,
+        #     verbose=verbose,
+        # )
 
-        # Pass encoded patch tokens through a SWIN-Unet structure
-        self.unet = SwinUnetBackbone(
-            emb_size=self.embed_dim,
-            emb_factor=self.emb_factor,
-            patch_grid_size=self.parallel_embed.grid_size,
-            block_structure=self.block_structure,
-            num_heads=self.num_heads,
-            window_sizes=self.window_sizes,
-            patch_merge_scales=self.patch_merge_scales,
-            verbose=verbose,
-        )
+        # # Linear embed the last dimension into V*p_h*p_w
+        # self.linear4unpatch = nn.Linear(
+        #     self.embed_dim, self.max_vars * self.patch_size[0] * self.patch_size[1]
+        # )
 
-        # Linear embed the last dimension into V*p_h*p_w
-        self.linear4unpatch = nn.Linear(
-            self.embed_dim, self.max_vars * self.patch_size[0] * self.patch_size[1]
-        )
-
-        # Unmap the tokenized embeddings to variables and images.
-        self.unpatch = Unpatchify(
-            total_num_vars=self.max_vars,
-            patch_grid_size=self.parallel_embed.grid_size,
-            patch_size=self.patch_size,
-        )
+        # # Unmap the tokenized embeddings to variables and images.
+        # self.unpatch = Unpatchify(
+        #     total_num_vars=self.max_vars,
+        #     patch_grid_size=self.parallel_embed.grid_size,
+        #     patch_size=self.patch_size,
+        # )
 
     def forward(
         self,
         x: torch.Tensor,
         in_vars: torch.Tensor,
         out_vars: torch.Tensor,
-        lead_times: torch.Tensor,  # Needs to be (B, T) tensor now.
     ) -> torch.Tensor:
         """Forward method for BomberMan."""
         # WARNING!: Most likely the `in_vars` and `out_vars` need to be tensors
         # of integers corresponding to variables in the `default_vars` list.
 
-        # x is expected to be of shape (B, T, V, H, W) where:
+        # x is expected to be of shape (B, T, C, H, W) where:
         #   B = batch size
         #   T = number of timesteps
-        #   V = number of variables
+        #   C = number of variables
         #   H = height of the image
         #   W = width of the image
 
-        # Reshape input to (B*T, V, H, W) for parallel embedding
+        # Reshape input to (B*T, C, H, W) for parallel embedding
         B = x.shape[0]  # Batch size
         T = x.shape[1]  # Number of timesteps
-        x = rearrange(x, 'b t v h w -> (b t) v h w')
+        x = rearrange(x, 'b t c h w -> (b t) c h w')
 
         # First embed input
-        # varIDXs = self.var_embed_layer.get_var_ids(tuple(in_vars), x.device)
         x = self.parallel_embed(x, in_vars)  # (B*T, V, L=Hw*Ww, D)
 
         # Encode variables
@@ -230,27 +231,24 @@ class BomberMan(nn.Module):
         # Reshape to (B, T, L, D) for temporal encoding
         x = rearrange(x, '(b t) L d -> b t L d', b=B, t=T)
 
-        # Encode temporal information
-        x = self.multistep_temporal_encoding(x, lead_times)  # (B, T, L, D)
+        # # Here we insert the tSWIN (time-dependent SWIN) structure of factorized
+        # # spatial-temporal SWIN-V2
+        # x = self.tSWIN(x)  # (B, T, L, D)
 
-        # Here we insert the SViT structure of factorized spatial-temporal MSA
-        x = self.svit(x)  # (B, T, L, D)
+        # # Aggregate the temporal dimension to get a single output using a learned query.
+        # x = self.agg_temporal(x)  # (B, L, D)
 
-        # Aggregate the temporal dimension to get a single output using a learned query.
-        x = self.agg_temporal(x)  # (B, L, D)
+        # # Pass through SWIN-V2 U-Net encoder
+        # x = self.unet(x)
 
-        # Pass through SWIN-V2 U-Net encoder
-        x = self.unet(x)
+        # # Use linear map to remap to correct variable and patchsize dimension
+        # x = self.linear4unpatch(x)
 
-        # Use linear map to remap to correct variable and patchsize dimension
-        x = self.linear4unpatch(x)
+        # # Unpatchify back to original shape
+        # x = self.unpatch(x)
 
-        # Unpatchify back to original shape
-        x = self.unpatch(x)
+        # # Select only entries corresponding to out_vars for loss
+        # preds = x[:, out_vars]
 
-        # Select only entries corresponding to out_vars for loss
-        # out_var_ids = self.var_embed_layer.get_var_ids(tuple(out_vars), x.device)
-        preds = x[:, out_vars]
-
-        return preds
+        return x
 
