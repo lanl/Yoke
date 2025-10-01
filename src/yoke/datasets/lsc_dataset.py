@@ -319,6 +319,7 @@ class LSC_cntr2hfield_DataSet(Dataset):
         filelist: str,
         design_file: str,
         half_image: bool = True,
+        include_time: bool = False,
         field_list: list[str] = ["density_throw"],
     ) -> None:
         """Initialization of class.
@@ -332,6 +333,7 @@ class LSC_cntr2hfield_DataSet(Dataset):
             filelist (str): Text file listing file names to read
             design_file (str): Full-path to .csv file with master design study parameters
             half_image (bool): If True then returned images are NOT reflected about axis
+            include_time (bool): If True then time information is included in the output
             field_list (List[str]): List of hydro-dynamic fields to include as channels
                                     in image.
 
@@ -341,6 +343,7 @@ class LSC_cntr2hfield_DataSet(Dataset):
         self.filelist = filelist
         self.design_file = design_file
         self.half_image = half_image
+        self.include_time = include_time
         self.hydro_fields = field_list
 
         # Create filelist
@@ -384,11 +387,46 @@ class LSC_cntr2hfield_DataSet(Dataset):
         # Get the contours and sim_time
         sim_key = LSCnpz2key(self.LSC_NPZ_DIR + filepath)
         Bspline_nodes = LSCcsv2bspline_pts(self.design_file, sim_key)
+        if self.include_time:
+            sim_time = npz["sim_time"]
+
+            sim_params = np.append(Bspline_nodes, sim_time)
+            geom_params = torch.from_numpy(sim_params).to(torch.float32)
+        else:
+            geom_params = torch.from_numpy(Bspline_nodes).to(torch.float32)
+
         npz.close()
 
-        geom_params = torch.from_numpy(Bspline_nodes).to(torch.float32)
-
         return geom_params, hfield
+
+
+class LSC_hfield2cntr_DataSet(LSC_cntr2hfield_DataSet):
+    """Inverse of contour to set of fields dataset."""
+
+    def __init__(
+        self,
+        LSC_NPZ_DIR: str,
+        filelist: str,
+        design_file: str,
+        half_image: bool = True,
+        include_time: bool = False,
+        field_list: list[str] = ["density_throw"],
+    ) -> None:
+        """Initialization of class."""
+        super().__init__(
+            LSC_NPZ_DIR=LSC_NPZ_DIR,
+            filelist=filelist,
+            design_file=design_file,
+            half_image=half_image,
+            include_time=include_time,
+            field_list=field_list,
+        )
+
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return a tuple of a batch's input and output data."""
+        geom_params, hfield = super().__getitem__(index)
+
+        return hfield, geom_params
 
 
 def neg_mse_loss(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:

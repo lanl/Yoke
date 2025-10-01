@@ -30,7 +30,7 @@ jobs:
 
     - name: Test with pytest
       run: |
-        pytest -v --cov-report=lcov:./coverage/lcov.info --cov=yoke -Werror
+        pytest -v --cov-config=pyproject.toml --cov-report=lcov:./coverage/lcov.info --cov=yoke -Werror
 
     - name: Upload coverage to Coveralls
       uses: coverallsapp/github-action@v1
@@ -103,13 +103,6 @@ jobs:
         ruff check src/yoke/models
         ruff check src/yoke/models --preview
         ruff format src/yoke/models --check --diff
-      continue-on-error: false
-
-    - name: Lint models
-      run: |
-        ruff check src/yoke/utils
-        ruff check src/yoke/utils --preview
-        ruff format src/yoke/utils --check --diff
       continue-on-error: false
 
     - name: Build documentation

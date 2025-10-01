@@ -116,9 +116,12 @@ def test_train_and_validation_loops_run_for_rank0(
 
     train_path = tmp_path / f"train_{epoch_idx:04d}.csv"
     train_lines = train_path.read_text().splitlines()
-    assert len(train_lines) == num_train_batches
-    assert train_lines[0].startswith(f"{epoch_idx}, 0, 0.12300000")
-    assert train_lines[1].startswith(f"{epoch_idx}, 1, 0.12300000")
+
+    # training file now has a header row
+    assert len(train_lines) == num_train_batches + 1
+    assert train_lines[0] == "epoch,batch,loss"
+    assert train_lines[1].startswith(f"{epoch_idx}, 0, 0.12300000")
+    assert train_lines[2].startswith(f"{epoch_idx}, 1, 0.12300000")
 
     captured = capsys.readouterr()
     assert f"Validating... {epoch_idx}" in captured.out
@@ -221,7 +224,10 @@ def test_validation_skipped_when_not_divisible(
     train_path = tmp_path / f"train_{epoch_idx:04d}.csv"
     assert train_path.exists()
     train_lines = train_path.read_text().splitlines()
-    assert len(train_lines) == 1
+
+    # one header row + one data row
+    assert len(train_lines) == 2
+    assert train_lines[0] == "epoch,batch,loss"
 
     captured = capsys.readouterr()
     assert captured.out == ""
@@ -436,7 +442,11 @@ def test_zero_batches_creates_empty_files(
 
     train_path = tmp_path / f"train_{epoch_idx:04d}.csv"
     val_path = tmp_path / f"val_{epoch_idx:04d}.csv"
+
+    # training file now contains only the header when there are zero train batches
     assert train_path.exists()
-    assert train_path.stat().st_size == 0
+    train_lines = train_path.read_text().splitlines()
+    assert train_lines == ["epoch,batch,loss"]
+
     assert val_path.exists()
     assert val_path.stat().st_size == 0

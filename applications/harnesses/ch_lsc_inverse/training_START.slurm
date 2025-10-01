@@ -10,7 +10,7 @@
 # The following are one set of SBATCH options for the Venado GPU
 # partition. There are optional other constraints.
 
-#SBATCH --job-name=lscpolicy_s<studyIDX>_e0001
+#SBATCH --job-name=inverse_s<studyIDX>_e0001
 #SBATCH --account=w25_artimis_g
 #PRODUCTION  #SBATCH --partition=gpu
 #PRODUCTION  #SBATCH --time=02:00:00
