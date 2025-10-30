@@ -49,7 +49,7 @@ classifiers = ["Private :: Do Not Upload",
 ]
 
 [project.urls]
-Source = "https://gitlab.lanl.gov/multiphysmultimatapps/yoke"
+Source = "https://github.com/lanl/Yoke"
 
 [tool.ruff]
 line-length = 89
