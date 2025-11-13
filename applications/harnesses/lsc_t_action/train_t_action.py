@@ -28,7 +28,7 @@ from yoke.lr_schedulers import CosineWithWarmupScheduler
 def mirror_transform(data):
     geom_params, hfield = data
     # Double the last dimension by concatenating its mirrored version
-    hfield = torch.cat((hfield, torch.flip(hfield, dims=[-1])), dim=-1)
+    hfield = torch.cat((torch.flip(hfield, dims=[-1]), hfield), dim=-1)
     return geom_params, hfield
 
 from torch.utils.data import Dataset
