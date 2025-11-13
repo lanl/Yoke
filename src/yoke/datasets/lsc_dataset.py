@@ -339,6 +339,78 @@ class LSC_cntr2hfield_DataSet(Dataset):
         geom_params = torch.from_numpy(Bspline_nodes).to(torch.float32)
 
         return geom_params, hfield
+        
+        
+class LSC_cntr2temphfield_DataSet(Dataset):
+    """Contour to set of fields dataset (temporal)."""
+
+    def __init__(
+        self,
+        LSC_NPZ_DIR: str,
+        filelist: str,
+        design_file: str,
+        field_list: list[str] = ["density_throw"],
+    ) -> None:
+        """Initialization of class.
+
+        The definition of a dataset object for the *Layered Shaped Charge* data
+        which produces B-spline contour-node vectors and a *hydro-dynamic
+        field* image consisting of channels specified in *field_list*.
+
+        Args:
+            LSC_NPZ_DIR (str): Location of LSC NPZ files. A YOKE env variable.
+            filelist (str): Text file listing file names to read
+            design_file (str): Full-path to .csv file with master design study parameters
+            field_list (List[str]): List of hydro-dynamic fields to include as channels
+                                    in image.
+
+        """
+        # Model Arguments
+        self.LSC_NPZ_DIR = LSC_NPZ_DIR
+        self.filelist = filelist
+        self.design_file = design_file
+        self.hydro_fields = field_list
+
+        # Create filelist
+        with open(filelist) as f:
+            self.filelist = [line.rstrip() for line in f]
+
+        # Shuffle the list of prefixes in-place
+        random.shuffle(self.filelist)
+
+        self.Nsamples = len(self.filelist)
+
+    def __len__(self) -> int:
+        """Return number of samples in dataset."""
+        return self.Nsamples
+
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return a tuple of a batch's input and output data."""
+        # Rotate index if necessary
+        index = index % self.Nsamples
+
+        # Get the input image
+        filepath = self.filelist[index]
+        npz = np.load(self.LSC_NPZ_DIR + filepath)
+
+        hfield_list = []
+        for hfield in self.hydro_fields:
+            tmp_img = LSCread_npz_NaN(npz, hfield)
+            hfield_list.append(tmp_img)
+
+        # Concatenate images channel first.
+        hfield = torch.tensor(np.stack(hfield_list, axis=0)).to(torch.float32)
+
+        # Get the contours and sim_time
+        sim_key = LSCnpz2key(self.LSC_NPZ_DIR + filepath)
+        Bspline_nodes = LSCcsv2bspline_pts(self.design_file, sim_key)
+        sim_time = npz["sim_time"]
+        npz.close()
+
+        params = np.append(Bspline_nodes, sim_time)
+        geom_params = torch.from_numpy(params).to(torch.float32)
+
+        return geom_params, hfield
 
 
 def neg_mse_loss(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
