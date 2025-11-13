@@ -9,4 +9,5 @@ studyIDX,YOKE_TORCH_ENV,LINEAR_F,F0,F1,F2,F3,F4,BATCH_SIZE,NTRN_BATCH,NVAL_BATCH
 #8,torch_gpu_241017,512,512,512,256,128,64,8,10000,1200,5.00E-03,10,0.5,train_lsc_surrogate_LRsched.py
 #9,torch_gpu_241017,512,512,512,256,128,64,8,10000,1200,5.00E-03,15,0.5,train_lsc_surrogate_LRsched.py
 #10,torch_gpu_241017,512,512,512,256,128,64,8,10000,1200,5.00E-03,20,0.5,train_lsc_surrogate_LRsched.py
-11,torch_gpu_241017,768,768,512,256,128,64,8,10000,1200,5.00E-03,20,0.5,train_t_action.py
+#11,torch_gpu_241017,768,768,512,256,128,64,8,10000,1200,5.00E-03,20,0.5,train_t_action.py
+12,torch_gpu_241017,768,768,512,256,128,64,8,10000,1200,5.00E-03,20,0.5,train_t_action.py
