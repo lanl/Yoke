@@ -1,0 +1,15 @@
+--FILELIST_DIR
+/usr/projects/artimis/mpmm/smyther/Yoke_RL/applications/filelists/
+--eval_filelist
+lsc240420_idx00100_test_10pct.txt
+--LSC_DESIGN_DIR
+/lustre/scratch5/exempt/artimis/data/
+--design_file
+design_lsc240420_MASTER.csv
+--LSC_NPZ_DIR
+/lustre/scratch5/exempt/artimis/data/lsc240420/
+--checkpoint
+/usr/projects/artimis/mpmm/smyther/Yoke_RL/applications/harnesses/lsc_t_action/runs/study_012/study012_modelState_epoch0100.hdf5
+--sampIDX
+89
+-S

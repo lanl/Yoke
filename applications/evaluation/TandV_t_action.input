@@ -1,0 +1,14 @@
+--basedir
+/usr/projects/artimis/mpmm/smyther/Yoke_RL/applications/harnesses/lsc_t_action/runs
+--IDX
+12
+--Nsamps_per_trn_pt
+200
+--Nsamps_per_val_pt
+100
+--ylim
+0.4
+--savedir
+./
+--savefig
+-P
