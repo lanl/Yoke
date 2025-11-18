@@ -26,6 +26,7 @@ from yoke.datasets.lsc_dataset import (
     LSC_cntr2rho_DataSet,
     LSCnorm_cntr2rho_DataSet,
     volfrac_density,
+    LSCDataModule,
 )
 
 
@@ -332,7 +333,8 @@ def test_reward_len(mock_reward_dataset: LSC_hfield_reward_DataSet) -> None:
     return_value=np.array([0.5, 0.6, 0.7]),
 )
 @patch(
-    "numpy.load", side_effect=lambda _: MockNpzFile({"density_throw": np.ones((10, 10))})
+    "numpy.load",
+    side_effect=lambda _: MockNpzFile({"density_throw": np.ones((10, 10))}),
 )
 @patch("pathlib.Path.is_file", return_value=True)
 def test_reward_getitem(
@@ -360,7 +362,8 @@ def test_reward_getitem(
     return_value=np.array([0.5, 0.6, 0.7]),
 )
 @patch(
-    "numpy.load", side_effect=lambda _: MockNpzFile({"density_throw": np.ones((10, 10))})
+    "numpy.load",
+    side_effect=lambda _: MockNpzFile({"density_throw": np.ones((10, 10))}),
 )
 @patch("pathlib.Path.is_file", return_value=True)
 def test_reward_function_invocation(
@@ -427,7 +430,8 @@ def test_policy_len(mock_policy_dataset: LSC_hfield_policy_DataSet) -> None:
     return_value=np.array([0.5, 0.6, 0.7]),
 )
 @patch(
-    "numpy.load", side_effect=lambda _: MockNpzFile({"density_throw": np.ones((10, 10))})
+    "numpy.load",
+    side_effect=lambda _: MockNpzFile({"density_throw": np.ones((10, 10))}),
 )
 @patch("pathlib.Path.is_file", return_value=True)
 def test_policy_getitem(
@@ -583,3 +587,16 @@ def test_volfrac_density_variants(tmp_path: Path) -> None:
     out3 = volfrac_density(base, None, "density_bar")
     assert np.allclose(out3, base * 2.0)
     mod.LSCread_npz_NaN = orig
+
+
+# Tests for LSCDataModule (a LightningDataModule).
+def test_lscdatamodule() -> None:
+    """Test basic functionality of the LSCDataModule."""
+    # Verify that initializer runs.
+    LSCDataModule(
+        ds_name="LSC_rho2rho_sequential_DataSet",
+        ds_params_train={},
+        ds_params_val={},
+        dl_params_train={},
+        dl_params_val={},
+    )
