@@ -174,8 +174,7 @@ for tIDX, Tcsv in enumerate(trn_csv_list):
         trn_epoch_loss = trn_DF.loc[:, "Loss"].values.reshape((Nsamps_per_trn_pt, -1))
 
     except ValueError:
-        print("# of loss samples from training not \
-              divisible by Nsamps_per_trn_pt")
+        print("# of loss samples from training not divisible by Nsamps_per_trn_pt")
         print("Remainder of loss samples at the end will be excluded")
         trn_DF = trn_DF[:-(len(trn_DF)%Nsamps_per_trn_pt)]
         trn_epoch_loss = trn_DF.loc[:, "Loss"].values.reshape((Nsamps_per_trn_pt, -1))
@@ -223,7 +222,8 @@ for tIDX, Tcsv in enumerate(trn_csv_list):
                 )
 
             except ValueError:
-                print("# of loss samples from validation not divisible by Nsamps_per_val_pt")
+                print("# of loss samples from validation not \
+                      divisible by Nsamps_per_val_pt")
                 print("Remainder of loss samples at the end will be excluded")
                 val_DF = val_DF[:-(len(val_DF)%Nsamps_per_val_pt)]
                 val_epoch_loss = val_DF.loc[:, "Loss"].values.reshape(
