@@ -172,6 +172,7 @@ for tIDX, Tcsv in enumerate(trn_csv_list):
     # print('Train IDX:', trn_file_epochs[tIDX])
     try:
         trn_epoch_loss = trn_DF.loc[:, "Loss"].values.reshape((Nsamps_per_trn_pt, -1))
+
     except ValueError:
         print("# of loss samples from training not \
               divisible by Nsamps_per_trn_pt")
@@ -220,12 +221,15 @@ for tIDX, Tcsv in enumerate(trn_csv_list):
                 val_epoch_loss = val_DF.loc[:, "Loss"].values.reshape(
                     (Nsamps_per_val_pt, -1)
                 )
+
             except ValueError:
                 print("# of loss samples from validation not divisible by Nsamps_per_val_pt")
                 print("Remainder of loss samples at the end will be excluded")
                 val_DF = val_DF[:-(len(val_DF)%Nsamps_per_val_pt)]
-                val_epoch_loss = val_DF.loc[:, "Loss"]\
-                    .values.reshape((Nsamps_per_val_pt, -1))
+                val_epoch_loss = val_DF.loc[:, "Loss"].values.reshape(
+                    (Nsamps_per_val_pt, -1)
+                )
+
             # print('Loss array shape:', val_epoch_loss.shape)
             val_positions = np.arange(val_epoch_loss.shape[1])
             val_qnts = np.quantile(val_epoch_loss, [0.025, 0.5, 0.975], axis=0)
