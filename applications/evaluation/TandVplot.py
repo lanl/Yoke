@@ -176,7 +176,7 @@ for tIDX, Tcsv in enumerate(trn_csv_list):
     except ValueError:
         print("# of loss samples from training not divisible by Nsamps_per_trn_pt")
         print("Remainder of loss samples at the end will be excluded")
-        trn_DF = trn_DF[:-(len(trn_DF) % Nsamps_per_trn_pt)]
+        trn_DF = trn_DF[: -(len(trn_DF) % Nsamps_per_trn_pt)]
         trn_epoch_loss = trn_DF.loc[:, "Loss"].values.reshape((Nsamps_per_trn_pt, -1))
 
     # print('Loss array shape:', trn_epoch_loss.shape)
@@ -186,7 +186,7 @@ for tIDX, Tcsv in enumerate(trn_csv_list):
 
     if tIDX == 0:
         if scatter:
-            plt.scatter(scaled_trn_idxs, all_losses, alpha=.2)
+            plt.scatter(scaled_trn_idxs, all_losses, alpha=0.2)
         plt.plot(startIDX + trn_positions, trn_qnts[0, :], ":b")
         plt.plot(startIDX + trn_positions, trn_qnts[1, :], "-b", label="Training")
         plt.plot(startIDX + trn_positions, trn_qnts[2, :], ":b")
@@ -213,8 +213,9 @@ for tIDX, Tcsv in enumerate(trn_csv_list):
             # print('Validation IDX:', val_file_epochs[vIDX])
             all_val_losses = val_DF.loc[:, "Loss"].values
             all_val_idxs = np.array(val_DF.loc[:, "Batch"].values)
-            scaled_val_idxs = all_val_idxs / Nsamps_per_val_pt\
-                  + np.array(scaled_trn_idxs[-1])
+            scaled_val_idxs = all_val_idxs / Nsamps_per_val_pt + np.array(
+                scaled_trn_idxs[-1]
+            )
 
             try:
                 val_epoch_loss = val_DF.loc[:, "Loss"].values.reshape(
@@ -222,10 +223,12 @@ for tIDX, Tcsv in enumerate(trn_csv_list):
                 )
 
             except ValueError:
-                print("# of loss samples from validation not \
-                      divisible by Nsamps_per_val_pt")
+                print(
+                    "# of loss samples from validation not \
+                      divisible by Nsamps_per_val_pt"
+                )
                 print("Remainder of loss samples at the end will be excluded")
-                val_DF = val_DF[:-(len(val_DF) % Nsamps_per_val_pt)]
+                val_DF = val_DF[: -(len(val_DF) % Nsamps_per_val_pt)]
                 val_epoch_loss = val_DF.loc[:, "Loss"].values.reshape(
                     (Nsamps_per_val_pt, -1)
                 )
@@ -237,7 +240,7 @@ for tIDX, Tcsv in enumerate(trn_csv_list):
 
             if vIDX == 0:
                 if scatter:
-                    plt.scatter(scaled_val_idxs, all_val_losses, alpha=.2)
+                    plt.scatter(scaled_val_idxs, all_val_losses, alpha=0.2)
                 plt.plot(startIDX + val_positions, val_qnts[0, :], ":r")
                 plt.plot(
                     startIDX + val_positions, val_qnts[1, :], "-r", label="Validation"
