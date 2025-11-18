@@ -167,7 +167,7 @@ for tIDX, Tcsv in enumerate(trn_csv_list):
     )
     all_losses = trn_DF.loc[:, "Loss"].values
     all_idxs = trn_DF.loc[:, "Batch"].values
-    scaled_trn_idxs = np.array(all_idxs)/Nsamps_per_trn_pt
+    scaled_trn_idxs = np.array(all_idxs) / Nsamps_per_trn_pt
 
     # print('Train IDX:', trn_file_epochs[tIDX])
     try:
@@ -176,7 +176,7 @@ for tIDX, Tcsv in enumerate(trn_csv_list):
     except ValueError:
         print("# of loss samples from training not divisible by Nsamps_per_trn_pt")
         print("Remainder of loss samples at the end will be excluded")
-        trn_DF = trn_DF[:-(len(trn_DF)%Nsamps_per_trn_pt)]
+        trn_DF = trn_DF[:-(len(trn_DF) % Nsamps_per_trn_pt)]
         trn_epoch_loss = trn_DF.loc[:, "Loss"].values.reshape((Nsamps_per_trn_pt, -1))
 
     # print('Loss array shape:', trn_epoch_loss.shape)
@@ -213,7 +213,7 @@ for tIDX, Tcsv in enumerate(trn_csv_list):
             # print('Validation IDX:', val_file_epochs[vIDX])
             all_val_losses = val_DF.loc[:, "Loss"].values
             all_val_idxs = np.array(val_DF.loc[:, "Batch"].values)
-            scaled_val_idxs = all_val_idxs/Nsamps_per_val_pt\
+            scaled_val_idxs = all_val_idxs / Nsamps_per_val_pt\
                   + np.array(scaled_trn_idxs[-1])
 
             try:
@@ -225,7 +225,7 @@ for tIDX, Tcsv in enumerate(trn_csv_list):
                 print("# of loss samples from validation not \
                       divisible by Nsamps_per_val_pt")
                 print("Remainder of loss samples at the end will be excluded")
-                val_DF = val_DF[:-(len(val_DF)%Nsamps_per_val_pt)]
+                val_DF = val_DF[:-(len(val_DF) % Nsamps_per_val_pt)]
                 val_epoch_loss = val_DF.loc[:, "Loss"].values.reshape(
                     (Nsamps_per_val_pt, -1)
                 )
