@@ -11,4 +11,5 @@ RUN pip3 install torch torchvision # --resume-retries 2 --index-url https://down
 
 RUN FLIT_ROOT_INSTALL=1 flit install
 
+SHELL ["/bin/bash", "-c"]
 # docker run -it yoke /bin/bash
