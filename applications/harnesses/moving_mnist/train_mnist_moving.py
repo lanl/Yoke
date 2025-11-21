@@ -1,7 +1,6 @@
 # python applications/harnesses/moving_mnist/train.py
 # python applications/harnesses/moving_mnist/train.py --continuation
 # python applications/evaluation/TandVplot.py -S --basedir . -I 0 -Y 2 -Nt 2 -Nv 250
-import os
 import torch
 import logging
 import argparse
@@ -12,16 +11,20 @@ import matplotlib.pyplot as plt
 from numpy.lib.stride_tricks import sliding_window_view
 from torchvision.datasets import MovingMNIST
 from torch.utils.data import Dataset
+from collections.abc import Iterator
 
-from yoke.models.vit.swin.bomberman import LodeRunner
-import yoke.torch_training_utils as tr
 import yoke.helpers.logger as yl
-
+import yoke.utils.training as tr
+import yoke.utils.dataload as dl
+import yoke.utils.checkpointing as ch
+from yoke.models.vit.swin.bomberman import LodeRunner
+from yoke.utils.training.epoch.loderunner import train_simple_loderunner_epoch
 
 class mmnist_dataSet(Dataset):
     """Moving MNIST dataset."""
 
-    def __init__(self, fraction=1, fraction_side="left") -> None:
+    def __init__(self, fraction: float = 1, fraction_side: str = "left") -> None:
+        """Setup the data."""
         self.mmnist = MovingMNIST(".", download=True)
         total_len = 1000
         seq_len = 20
@@ -42,9 +45,7 @@ class mmnist_dataSet(Dataset):
         """Return effectively infinite number of samples in dataset."""
         return len(self.seq_id)
 
-    def __getitem__(
-        self, index: int
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Return a tuple of a batch's input and output data."""
         img_pair = self.mmnist[self.seq_id[index]][self.pairs_local[index]]
         start_img = (
@@ -104,7 +105,7 @@ if __name__ == "__main__":
 
     if CONTINUATION:
         available_models = {"LodeRunner": LodeRunner}
-        model, starting_epoch = tr.load_model_and_optimizer(
+        model, starting_epoch = ch.load_model_and_optimizer(
             checkpoint,
             optimizer,
             available_models,
@@ -119,14 +120,14 @@ if __name__ == "__main__":
     train_dataset = mmnist_dataSet(0.75, "left")
     val_dataset = mmnist_dataSet(0.25, "right")
 
-    train_dataloader = tr.make_dataloader(
+    train_dataloader = dl.make_dataloader(
         dataset=train_dataset,
         batch_size=2,
         num_batches=250,
         num_workers=1,
         prefetch_factor=2,
     )
-    val_dataloader = tr.make_dataloader(
+    val_dataloader = dl.make_dataloader(
         dataset=val_dataset,
         batch_size=2,
         num_batches=25,
@@ -139,7 +140,7 @@ if __name__ == "__main__":
 
     channel_map = [0]
     for epoch_idx in tqdm(range(starting_epoch, starting_epoch + num_epochs)):
-        tr.train_simple_loderunner_epoch(
+        train_simple_loderunner_epoch(
             channel_map=channel_map,
             training_data=train_dataloader,
             validation_data=val_dataloader,
@@ -157,7 +158,8 @@ if __name__ == "__main__":
 
         if epoch_idx % 10 == 0:
 
-            def last_row(path_file="train.csv"):
+            def last_row(path_file: str = "train.csv") -> Iterator[str]:
+                """Get last row of file."""
                 with open(path_file) as f:
                     for line in f:
                         pass
@@ -180,7 +182,7 @@ if __name__ == "__main__":
             ax3.imshow(pred_img[1, 0, ...].detach().cpu())
             plt.savefig(
                 "pred-img_epoch-{}_train-loss-{}_val-loss-{}.pdf".format(
-                    str(epoch_idx), str(train_loss), str("placeholder")
+                    str(epoch_idx), str(train_loss), "placeholder"
                 )
             )
 
@@ -192,7 +194,7 @@ if __name__ == "__main__":
                 state[k] = v.to("cpu")
 
     # Save model and optimizer state
-    tr.save_model_and_optimizer(
+    ch.save_model_and_optimizer(
         model,
         optimizer,
         epoch_idx,
