@@ -231,10 +231,6 @@ for k, study in enumerate(studylist):
             f"cd {studydirname}; ./{START_shell_name}; "
             f"cd {os.path.dirname(__file__)}"
         )
-        breakpoint()
-        import glob
-        glob.glob("*")
-        os.system('cd ./runs/study_001; ./study001_START.sh; cd /mnt/workspace/applications/harnesses/moving_mnist')
         os.system(shell_cmd)
 
     elif args.submissionType.lower() == "batch":
