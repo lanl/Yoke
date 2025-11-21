@@ -92,8 +92,9 @@ def volfrac_density(tmp_img: np.ndarray, npz_filename: str, hfield: str) -> np.n
         return tmp_img
     suffix = extract_after_density(hfield)
     if not suffix:
-        print(f"\n [load_npz_dataset.py] Could not extractsuffix from hfield:
-'{hfield}'")
+        print(
+            f"\n [load_npz_dataset.py] Could not extract suffix from hfield: '{hfield}'"
+        )
         return tmp_img
     vofm_hfield = 'vofm_' + suffix
     vofm = read_npz_nan(npz_filename, vofm_hfield)
@@ -138,8 +139,9 @@ list[str]) -> tuple[np.ndarray, np.ndarray, list[str]]:
         combined_array: Array of shape (n_unique, x, z).
         unique_labels: Corresponding hydrofield labels for unique channels.
     """
-    assert len(number_list) == array.shape[0] == len(label_list), 'Mismatched input
-lengths.'
+    assert len(number_list) == array.shape[0] == len(label_list), (
+    "Mismatched input lengths."
+    )
     number_to_index = {}
     for idx, num in enumerate(number_list):
         if num not in number_to_index:
@@ -175,13 +177,15 @@ def read_npz_nan(npz: typing.Union[str, np.lib.npyio.NpzFile], field: str) -> np
     if isinstance(npz, str):
         with np.load(npz, allow_pickle=False) as data:
             if field not in data.files:
-                raise KeyError(f"Field '{field}' not found in {npz}. Available fields:
-{data.files}")
+                raise KeyError(
+                    f"Field '{field}' not found in {npz}. Available fields: {data.files}"
+                )
             arr = data[field]
     elif isinstance(npz, np.lib.npyio.NpzFile):
         if field not in npz.files:
-            raise KeyError(f"Field '{field}' not found in npz object. Available fields:
-{npz.files}")
+            raise KeyError(
+                f"Field '{field}' not found in npz object. Available fields: {npz.files}"
+            )
         arr = npz[field]
     else:
         raise TypeError(f'npz must be str or NpzFile, not {type(npz)}')
@@ -221,9 +225,10 @@ str='velocity', thermodynamic_variables: str='density') -> None:
             self.channel_map = np.arange(0, len(self.all_hydro_field_names))
             self.cylex_data_loader()
         else:
-            print('\n ERROR: hydro_field information unavailablefor specified dataset. ->
-See load_npz_dataset.py\n')
-
+            print(
+                "\n ERROR: hydro_field information unavailable for specified dataset.-> "
+                "See load_npz_dataset.py\n"
+            )
     def get_active_hydro_indices(self) -> list:
         """Returns the indices of active_hydro_field_names within hydro_field_names."""
         return [self.all_hydro_field_names.index(field) for field in
@@ -255,8 +260,10 @@ engine='python')
 'Wvelocity']
             self.active_npz_field_names = self.active_hydro_field_names
         else:
-            raise ValueError("\n ERROR: Failure to load data. Incorrectly specified
-kinematic variables: Choose from 'velocity'(default), 'position', or 'both'.")
+            raise ValueError(
+                "\n ERROR: Failure to load data. Incorrectly specified kinematic "
+                "variables: Choose from 'velocity' (default), 'position', or 'both'."
+            )
         self.active_npz_field_names = np.append(self.active_npz_field_names,
 ['density_wall', 'density_' + non_he_mats[1]])
         self.active_hydro_field_names = np.append(self.active_hydro_field_names,
@@ -296,9 +303,11 @@ kinematic variables: Choose from 'velocity'(default), 'position', or 'both'.")
             self.active_hydro_field_names = np.append(self.active_hydro_field_names,
 ['energy_booster'])
         elif self.thermodynamic_variables != 'density':
-            raise ValueError("\n ERROR: Failure to load data. Incorrectly specified
-thermodynamic variables: Choose from 'density'(default), 'density and pressure', 'density
-and energy', or 'all'.")
+            raise ValueError(
+                "\n ERROR: Failure to load data. Incorrectly specified "
+                "thermodynamic variables: Choose from 'density' (default), "
+                "'density and pressure', 'density and energy', or 'all'."
+            )
         self.channel_map = self.get_active_hydro_indices()
 
     def extract_letters(self, s: str) -> str:
@@ -510,8 +519,15 @@ keep]
                             tmp = np.concatenate((np.fliplr(tmp), tmp), axis=1)
                         end_img_list.append(tmp)
                     img_list_combined = np.array([start_img_list, end_img_list])
-                    channel_map, img_list_combined, active_hydro_field_names =
-process_channel_data(self.channel_map, img_list_combined, self.active_hydro_field_names)
+                    (
+                        channel_map,
+                        img_list_combined,
+                        active_hydro_field_names,
+                    ) = process_channel_data(
+                        self.channel_map,
+                        img_list_combined,
+                        self.active_hydro_field_names,
+                    )
                     self.channel_map = channel_map
                     self.active_hydro_field_names = active_hydro_field_names
                     start_img = torch.tensor(np.stack(img_list_combined[0], axis=0),
@@ -523,10 +539,16 @@ dtype=torch.float32).contiguous().clone()
                     self._dbg_cnt = getattr(self, '_dbg_cnt', 0)
                     if self._dbg_cnt < 10 and _current_rank() == 0:
                         tag = rank_worker_tag(index)
-                        print(f'{tag} start_img: shape={tuple(start_img.shape)}
-dtype={start_img.dtype}', flush=True)
-                        print(f'{tag} channel_map: shape={tuple(cm_tensor.shape)}
-dtype={cm_tensor.dtype}', flush=True)
+                        print(
+                            f"{tag} start_img: shape={tuple(start_img.shape)} "
+                            f"dtype={start_img.dtype}",
+                            flush=True
+                        )
+                        print(
+                            f"{tag} channel_map: shape={tuple(cm_tensor.shape)} "
+                            f"dtype={cm_tensor.dtype}",
+                            flush=True
+                        )
                         print(f'{tag} channel_map values:\n{cm_tensor}', flush=True)
 
                         def _legend_line(idxs):
@@ -540,15 +562,23 @@ dtype={cm_tensor.dtype}', flush=True)
                                     names.append(f'idx{i}')
                             return ', '.join(names)
                         if cm_tensor.ndim == 1:
-                            print(f'{tag} legend: {_legend_line(cm_tensor.tolist())}',
-flush=True)
+                            print(
+                                f'{tag} legend: {_legend_line(cm_tensor.tolist())}',
+                                flush=True
+                            )
                         elif cm_tensor.ndim == 2:
                             rows_to_show = min(5, cm_tensor.shape[0])
                             for r in range(rows_to_show):
-                                print(f'{tag} legend row {r}:
-{_legend_line(cm_tensor[r].tolist())}', flush=True)
-                        print(f'{tag} end_img:   shape={tuple(end_img.shape)}
-dtype={end_img.dtype}', flush=True)
+                                print(
+                                    f"{tag} legend row {r}: "
+                                    f"{_legend_line(cm_tensor[r].tolist())}",
+                                    flush=True
+                                )
+                        print(
+                            f'{tag} end_img: shape={tuple(end_img.shape)}'
+                            f'dtype={end_img.dtype}',
+                            flush=True
+                        )
                         print(f'{tag} dt: {dt}', flush=True)
                         self._dbg_cnt += 1
                     start_npz.close()
@@ -565,13 +595,19 @@ dtype={end_img.dtype}', flush=True)
                         pass
                     attempt += 1
                     continue
-            print(f'In TemporalDataSet, max_file_checks reached for prefix:
-{file_prefix}', file=sys.stderr)
+            print(
+                "In TemporalDataSet, max_file_checks reached for prefix: "
+                f"{file_prefix}",
+                file=sys.stderr
+            )
             prefix_attempt += 1
             index = (index + 1) % self.n_samples
         if _depth < 10:
-            print(f'[TemporalDataSet] WARN: skipping index after multiple failures;
-index={index}', file=sys.stderr)
+            print(
+                f"[TemporalDataSet] WARN: skipping index after multiple failures; "
+                f"index={index}",
+                file=sys.stderr
+            )
             self._fallback_depth = _depth + 1
             try:
                 return self.__getitem__((index + 1) % self.n_samples)
@@ -583,8 +619,11 @@ index={index}', file=sys.stderr)
                 return self.__getitem__(j)
             except Exception:
                 continue
-        raise RuntimeError('TemporalDataSet: unable to assemble any sample after global
-retries. Check npz_dir / CSV alignment or loosen selection rules.')
+        raise RuntimeError(
+            "TemporalDataSet: unable to assemble any sample after global retries. "
+            "Check npz_dir / CSV alignment or loosen selection rules."
+        )
+
 
     def _probe_prefix_once(self, prefix: str):
         """
@@ -634,14 +673,20 @@ retries. Check npz_dir / CSV alignment or loosen selection rules.')
             self.valid_prefixes = np.array([h['prefix'] for h in hits])
             self._probe_present_fields = {h['prefix']: h['present_fields'] for h in hits}
             self.n_valid = len(self.valid_prefixes)
-            print(f'[TemporalDataSet] Indexed {self.n_valid}/{total} prefixes via
-probe.', file=sys.stderr)
+            print(
+                f"[TemporalDataSet] Indexed {self.n_valid}/{total} prefixes via probe.",
+                file=sys.stderr
+            )
         else:
             self.valid_prefixes = np.array(prefixes)
             self.n_valid = len(self.valid_prefixes)
-            print(f'[TemporalDataSet] WARN: probe found 0 usable prefixes; falling back
-to all {self.n_valid} prefixes. Bad samples will be skipped in __getitem__.',
-file=sys.stderr)
+            print(
+                f"[TemporalDataSet] WARN: probe found 0 usable prefixes; "
+                f"falling back to all {self.n_valid} prefixes. Bad samples will be "
+                f"skipped in __getitem__.",
+                file=sys.stderr
+            )
+
 
 class SequentialDataSet(Dataset):
     """Returns a sequence of consecutive frames from a simulation.
@@ -704,9 +749,12 @@ torch.Tensor]:
             prefix_attempt += 1
             index = (index + 1) % self.n_samples
         if prefix_attempt == self.max_file_checks:
-            err_msg = f'Failed to find valid sequence for prefix: {file_prefix} after
-{self.max_file_checks} attempts.'
+            err_msg = (
+                f"Failed to find valid sequence for prefix: {file_prefix} after "
+                f"{self.max_file_checks} attempts."
+            )
             raise RuntimeError(err_msg)
+
         frames = []
         for file_path in file_paths:
             try:
@@ -724,8 +772,15 @@ self.csv_filepath).get_active_hydro_field_names()
                     field_imgs.append(tmp_img)
                 data_npz.close()
                 img_list_combined = np.array([field_imgs])
-                channel_map, img_list_combined, active_hydro_field_names =
-process_channel_data(channel_map, img_list_combined, active_hydro_field_names)
+                (
+                    channel_map,
+                    img_list_combined,
+                    active_hydro_field_names,
+                ) = process_channel_data(
+                    channel_map,
+                    img_list_combined,
+                    active_hydro_field_names,
+                )
                 field_imgs = img_list_combined[0]
                 field_tensor = torch.tensor(np.stack(field_imgs, axis=0),
 dtype=torch.float32).contiguous().clone()

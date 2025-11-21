@@ -1197,18 +1197,26 @@ def eval_DDP_loderunner_datastep(
         world_size (int): Total number of DDP processes
 
     """
+    print("starting in eval_DDP_loderunner_datastep")
     # Set model to evaluation mode
     model.eval()
 
     # Extract data
-    start_img, end_img, Dt = data
+    #start_img, end_img, Dt = data  ## SD commented
+    start_img, channel_map, end_img, channel_map, Dt = data
+    print("start_img, eval_DDP_loderunner_datastep",start_img.size())
+    print("end_img, eval_DDP_loderunner_datastep",end_img.size())
+    print("Dt, eval_DDP_loderunner_datastep",Dt.size())
     start_img = start_img.to(device, non_blocking=True)
     Dt = Dt.to(device, non_blocking=True)
     end_img = end_img.to(device, non_blocking=True)
 
     # Fixed input and output variable indices
-    in_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7]).to(device, non_blocking=True)
-    out_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7]).to(device, non_blocking=True)
+    #in_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7]).to(device, non_blocking=True)
+    #out_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7]).to(device, non_blocking=True)  ## SD commented
+
+    in_vars = torch.tensor(channel_map).flatten().to(device, non_blocking=True)
+    out_vars = torch.tensor(channel_map).flatten().to(device, non_blocking=True)
 
     # Forward pass
     with torch.no_grad():
@@ -1217,6 +1225,8 @@ def eval_DDP_loderunner_datastep(
     # Compute loss
     loss = loss_fn(pred_img, end_img)
     per_sample_loss = loss.mean(dim=[1, 2, 3])  # Per-sample loss
+    print("per_sample_loss, eval_DDP_loderunner_datastep=",per_sample_loss)
+    print("pred_img, eval_DDP_loderunner_datastep",pred_img.size())
 
     # Gather per-sample losses from all processes
     gathered_losses = [torch.zeros_like(per_sample_loss) for _ in range(world_size)]
@@ -1232,6 +1242,7 @@ def eval_DDP_loderunner_datastep(
     del in_vars, out_vars
     torch.cuda.empty_cache()
 
+    print("ending in eval_DDP_loderunner_datastep")
     return end_img, pred_img, all_losses
 
 
@@ -1276,7 +1287,7 @@ def eval_loderunner_fabric_datastep(
     #            'density_throw',
     #            'Uvelocity',
     #            'Wvelocity']
-    in_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7])
+    #in_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7])
     in_vars = fabric.to_device(in_vars)
     out_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7])
     out_vars = fabric.to_device(out_vars)
@@ -1947,8 +1958,6 @@ def train_DDP_loderunner_epoch(
     with open(train_rcrd_filename, "a") if rank == 0 else nullcontext() as train_rcrd_file:
         for trainbatch_ID, traindata in enumerate(training_data):
             # SOUMI added
-        #    print("traindata_type =", type(traindata))
-        #    print("traindata = ", traindata)
             # Stop when number of training batches is reached
             if trainbatch_ID >= num_train_batches:
                 break
@@ -1986,9 +1995,11 @@ def train_DDP_loderunner_epoch(
                     if valbatch_ID >= num_val_batches:
                         break
 
+                    print("Starting to call eval_DDP_loderunner_datastep")
                     end_img, pred_img, val_losses = eval_DDP_loderunner_datastep(
                         valdata, model, loss_fn, device, rank, world_size,
                     )
+                    print("Ended eval_DDP_loderunner_datastep")
 
                     # Save validation record (rank 0 only)
                     if rank == 0:
