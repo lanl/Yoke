@@ -13,12 +13,13 @@ from torchvision.datasets import MovingMNIST
 from torch.utils.data import Dataset
 from collections.abc import Iterator
 
+from yoke.helpers import cli
 import yoke.helpers.logger as yl
-import yoke.utils.training as tr
 import yoke.utils.dataload as dl
 import yoke.utils.checkpointing as ch
 from yoke.models.vit.swin.bomberman import LodeRunner
 from yoke.utils.training.epoch.loderunner import train_simple_loderunner_epoch
+
 
 class mmnist_dataSet(Dataset):
     """Moving MNIST dataset."""
@@ -60,11 +61,26 @@ class mmnist_dataSet(Dataset):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--continuation", action="store_true", default=False)
-    parser.add_argument("--checkpoint", nargs=1, type=str, default=["checkpoint.ckpt"])
+
+    # standard flags (gives you --studyIDX, --csv, --rundir, --cpFile)
+    parser = cli.add_default_args(parser)
+    # GPU/worker flags (e.g. --multigpu, --Ngpus, --num_workers)
+    parser = cli.add_computing_args(parser)
+    parser = cli.add_training_args(parser)
+
+    parser.add_argument("--lr", type=float, default=1e-3, help="learning rate")
+    parser.add_argument(
+        "--epochs", type=int, default=20, help="number of epochs to train"
+    )
+    parser.add_argument(
+        "--data_dir",
+        type=str,
+        default="../../data/MovingMNIST",
+        help="path to MNIST data",
+    )
 
     args = parser.parse_args()
-    checkpoint = args.checkpoint[0]
+    checkpoint = args.checkpoint
     CONTINUATION = args.continuation
 
     yl.configure_logger("yoke_logger", level=logging.INFO)
@@ -94,7 +110,7 @@ if __name__ == "__main__":
 
     optimizer = torch.optim.AdamW(
         model.parameters(),
-        lr=1e-3,
+        lr=args.lr,
         betas=(0.9, 0.999),
         eps=1e-08,
         weight_decay=0.01,
@@ -122,24 +138,21 @@ if __name__ == "__main__":
 
     train_dataloader = dl.make_dataloader(
         dataset=train_dataset,
-        batch_size=2,
+        batch_size=args.batch_size,
         num_batches=250,
         num_workers=1,
         prefetch_factor=2,
     )
     val_dataloader = dl.make_dataloader(
         dataset=val_dataset,
-        batch_size=2,
+        batch_size=args.batch_size,
         num_batches=25,
         num_workers=1,
         prefetch_factor=2,
     )
 
-    # num_epochs = 1
-    num_epochs = 20
-
     channel_map = [0]
-    for epoch_idx in tqdm(range(starting_epoch, starting_epoch + num_epochs)):
+    for epoch_idx in tqdm(range(starting_epoch, starting_epoch + args.epochs)):
         train_simple_loderunner_epoch(
             channel_map=channel_map,
             training_data=train_dataloader,
