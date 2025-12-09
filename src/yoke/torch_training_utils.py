@@ -1904,7 +1904,7 @@ def train_LRsched_loderunner_epoch(
 
 def train_DDP_loderunner_epoch(
     training_data,
-    validation_data,
+    #validation_data,
     num_train_batches,
     num_val_batches,
     model,
@@ -1914,7 +1914,7 @@ def train_DDP_loderunner_epoch(
     epochIDX,
     train_per_val,
     train_rcrd_filename: str,
-    val_rcrd_filename: str,
+    #val_rcrd_filename: str, # SOUMI commented: no val
     device: torch.device,
     rank: int,
     world_size: int,
@@ -1946,7 +1946,7 @@ def train_DDP_loderunner_epoch(
     """
     # Initialize things to save
     trainbatch_ID = 0
-    valbatch_ID = 0
+    #valbatch_ID = 0  #SOUMI commented: no val
 
     # Training loop
     model.train()
@@ -1985,66 +1985,67 @@ def train_DDP_loderunner_epoch(
             del truth, pred, train_losses
             torch.cuda.empty_cache()
 
+    # SOUMI commented: no val
     # Validation loop
-    if epochIDX % train_per_val == 0:
-        print("Validating...", epochIDX)
-        val_rcrd_filename = val_rcrd_filename.replace("<epochIDX>", f"{epochIDX:04d}")
-        print("val_rcrd_filename =",val_rcrd_filename)
-        model.eval()
-        print("finished model.eval()")
-        print("rank val_rcrd=",rank)
-        with open(val_rcrd_filename, "a") if rank == 0 else nullcontext() as val_rcrd_file:
-            print("opened val_rcrd_filename")
-            with torch.no_grad():
-                print("completed torch.no_grad")
-                print("validation_data=",validation_data)
-                print(f"Length of the underlying dataset: {len(validation_data.dataset)}")
+    #if epochIDX % train_per_val == 0:
+    #    print("Validating...", epochIDX)
+    #    val_rcrd_filename = val_rcrd_filename.replace("<epochIDX>", f"{epochIDX:04d}")
+    #    print("val_rcrd_filename =",val_rcrd_filename)
+    #    model.eval()
+    #    print("finished model.eval()")
+    #    print("rank val_rcrd=",rank)
+    #    with open(val_rcrd_filename, "a") if rank == 0 else nullcontext() as val_rcrd_file:
+    #        print("opened val_rcrd_filename")
+    #        with torch.no_grad():
+    #            print("completed torch.no_grad")
+    #            print("validation_data=",validation_data)
+    #            print(f"Length of the underlying dataset: {len(validation_data.dataset)}")
 
-                # debugging val dataloader
-                print("DataLoader repr:", validation_data)
-                try:
-                    bs = getattr(validation_data, 'batch_size', None)
-                    dl_len = len(validation_data) if hasattr(validation_data, '__len__') else 'NA'
-                    ds_len = len(validation_data.dataset)
-                    print(f"batch_size={bs}, len(DataLoader)={dl_len}, len(dataset)={ds_len}, drop_last={getattr(validation_data, 'drop_last', 'NA')}")
-                    print("sampler:", type(validation_data.sampler).__name__)
-                except Exception as e:
-                    print("Introspection error:", e)
+    #            # debugging val dataloader
+    #            print("DataLoader repr:", validation_data)
+    #            try:
+    #                bs = getattr(validation_data, 'batch_size', None)
+    #                dl_len = len(validation_data) if hasattr(validation_data, '__len__') else 'NA'
+    #                ds_len = len(validation_data.dataset)
+    #                print(f"batch_size={bs}, len(DataLoader)={dl_len}, len(dataset)={ds_len}, drop_last={getattr(validation_data, 'drop_last', 'NA')}")
+    #                print("sampler:", type(validation_data.sampler).__name__)
+    #            except Exception as e:
+    #                print("Introspection error:", e)
 
-                # Peek at the first batch safely
-                it = iter(validation_data)
-                try:
-                    first = next(it)
-                    print("Got first validation batch OK")
-                except StopIteration:
-                    print("Validation DataLoader produced 0 batches (StopIteration immediately)")
-                
-                # ended debugging
+    #            # Peek at the first batch safely
+    #            it = iter(validation_data)
+    #            try:
+    #                first = next(it)
+    #                print("Got first validation batch OK")
+    #            except StopIteration:
+    #                print("Validation DataLoader produced 0 batches (StopIteration immediately)")
+    #            
+    #            # ended debugging
 
-                for valbatch_ID, valdata in enumerate(validation_data):
-                    # Stop when number of training batches is reached
-                    print("valbatch_ID,num_val_batches",valbatch_ID,num_val_batches)
-                    if valbatch_ID >= num_val_batches:
-                        break
+    #            for valbatch_ID, valdata in enumerate(validation_data):
+    #                # Stop when number of training batches is reached
+    #                print("valbatch_ID,num_val_batches",valbatch_ID,num_val_batches)
+    #                if valbatch_ID >= num_val_batches:
+    #                    break
+    
+    #                print("Starting to call eval_DDP_loderunner_datastep")
+    #                end_img, pred_img, val_losses = eval_DDP_loderunner_datastep(
+    #                    valdata, model, loss_fn, device, rank, world_size,
+    #                )
+    #                print("Ended eval_DDP_loderunner_datastep")
 
-                    print("Starting to call eval_DDP_loderunner_datastep")
-                    end_img, pred_img, val_losses = eval_DDP_loderunner_datastep(
-                        valdata, model, loss_fn, device, rank, world_size,
-                    )
-                    print("Ended eval_DDP_loderunner_datastep")
+    #                # Save validation record (rank 0 only)
+    #                if rank == 0:
+    #                    batch_records = np.column_stack([
+    #                        np.full(len(val_losses), epochIDX),
+    #                        np.full(len(val_losses), valbatch_ID),
+    #                        val_losses.cpu().numpy().flatten()
+    #                    ])
+    #                    np.savetxt(val_rcrd_file, batch_records, fmt="%d, %d, %.8f")
 
-                    # Save validation record (rank 0 only)
-                    if rank == 0:
-                        batch_records = np.column_stack([
-                            np.full(len(val_losses), epochIDX),
-                            np.full(len(val_losses), valbatch_ID),
-                            val_losses.cpu().numpy().flatten()
-                        ])
-                        np.savetxt(val_rcrd_file, batch_records, fmt="%d, %d, %.8f")
-
-                    # Free memory
-                    del end_img, pred_img, val_losses
-                    torch.cuda.empty_cache()
+    #                # Free memory
+    #                del end_img, pred_img, val_losses
+    #                torch.cuda.empty_cache()
 
 
 def train_fabric_loderunner_epoch(
