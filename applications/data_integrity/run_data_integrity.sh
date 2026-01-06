@@ -1,6 +1,6 @@
 #!/bin/bash -v
 
-# B. Kaiser, 9/3/2025
+# B. Kaiser
 
 # This will run a data integrity verification script if that script requires:
 # a) a csv that lists material properties / catalogs all simulations
