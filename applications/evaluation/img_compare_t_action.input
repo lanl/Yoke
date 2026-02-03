@@ -9,7 +9,7 @@ design_lsc240420_MASTER.csv
 --LSC_NPZ_DIR
 /lustre/scratch5/exempt/artimis/data/lsc240420/
 --checkpoint
-/usr/projects/artimis/mpmm/smyther/Yoke_RL/applications/harnesses/lsc_t_action/runs/study_012/study012_modelState_epoch0100.hdf5
+/users/smyther/lsc_t_action_result/study012_modelState_epoch0100.hdf5
 --sampIDX
-89
+21
 -S

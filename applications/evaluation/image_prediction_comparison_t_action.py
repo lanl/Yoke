@@ -10,6 +10,8 @@ import argparse
 import numpy as np
 import torch
 import torch.nn as nn
+import random
+random.seed(0)
 
 from yoke.models.surrogateCNNmodules import tCNNsurrogate
 from yoke.datasets.lsc_dataset import LSCnpz2key, LSC_cntr2temphfield_DataSet
@@ -186,6 +188,15 @@ checkpoint_epoch = tr.load_model_and_optimizer_hdf5(model, optimizer, checkpoint
 ################
 eval_dataset = LSC_cntr2temphfield_DataSet(args.LSC_NPZ_DIR, eval_filelist, design_file)
 
+idx = sampIDX % len(eval_dataset)
+rel_path = eval_dataset.filelist[idx]          # THIS is what __getitem__ will load
+full_path = os.path.join(args.LSC_NPZ_DIR, rel_path)
+
+print(f"[PLOTTING] sampIDX={sampIDX} -> file='{rel_path}'")
+print(f"[PLOTTING] key={LSCnpz2key(full_path)}")
+with np.load(full_path) as npz:
+    print(f"[PLOTTING] sim_time={npz['sim_time']}")
+
 # Load single image and parameters pair
 sim_params, true_image = eval_dataset.__getitem__(sampIDX)
 
@@ -214,10 +225,26 @@ pred_image = np.squeeze(pred_image.detach().numpy())
 
 # —————————————————————————————————————————
 # If pred_image is “butterflied” (double width), chop it in half
-if pred_image.ndim == 2 and pred_image.shape[1] == 2 * true_image.shape[1]:
-    half_w = pred_image.shape[1] // 2
-    pred_image = pred_image[:, :half_w]
+# if pred_image.ndim == 2 and pred_image.shape[1] == 2 * true_image.shape[1]:
+    # half_w = pred_image.shape[1] // 2
+    # pred_image = pred_image[:, :half_w]
 # —————————————————————————————————————————
+
+
+# if SAVEFIG:
+    # os.makedirs(savedir, exist_ok=True)
+    # plt.figure(figsize=(6, 5))
+    # plt.imshow(pred_image, origin="lower", aspect="equal", cmap="jet")
+    # plt.title("Predicted")
+    # plt.xlabel("R-axis")
+    # plt.ylabel("Z-axis")
+    # cbar = plt.colorbar()
+    # cbar.set_label("Density (g/cc)")
+    # plt.tight_layout()
+    # plt.savefig(os.path.join(savedir, f"{eval_key}_pred.png"), dpi=200)
+    # plt.close()
+    
+pred_image = pred_image[:, -true_image.shape[1]:]
 
 # Plot Truth/Prediction/Discrepancy panel.
 fig1, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(16, 6))
