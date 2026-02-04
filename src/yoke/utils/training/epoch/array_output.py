@@ -2,7 +2,6 @@
 
 import torch
 import numpy as np
-import math
 from contextlib import nullcontext
 
 from yoke.utils.training.datastep.array_output import (

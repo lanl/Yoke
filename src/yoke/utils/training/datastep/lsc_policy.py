@@ -1,6 +1,5 @@
 """Single-step training and evaluation functions for lsc240420 policy networks."""
 
-import math
 
 import torch
 import torch.nn as nn
