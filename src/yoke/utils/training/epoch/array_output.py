@@ -152,7 +152,13 @@ def train_DDP_array_epoch(
 
             # Perform a single training step
             truth, pred, train_losses = train_DDP_array_datastep(
-                traindata, model, optimizer, loss_fn, device, rank, world_size,
+                traindata,
+                model,
+                optimizer,
+                loss_fn,
+                device,
+                rank,
+                world_size,
             )
 
             # Increment the learning-rate scheduler
