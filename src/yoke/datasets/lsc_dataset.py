@@ -16,8 +16,7 @@ from pathlib import Path
 import random
 import re
 import sys
-import typing
-from typing import Callable, Union
+from collections.abc import Callable
 
 import lightning.pytorch as L
 import numpy as np
@@ -26,7 +25,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 
 
-NoneStr = typing.Union[None, str]
+NoneStr = None | str
 
 
 ################################################
@@ -911,7 +910,7 @@ class LSC_rho2rho_sequential_DataSet(Dataset):
         LSC_NPZ_DIR: str,
         file_prefix_list: str,
         seq_len: int = 2,
-        timeIDX_offset: Union[int, list[int], tuple[int]] = 1,
+        timeIDX_offset: int | list[int] | tuple[int] = 1,
         half_image: bool = True,
         hydro_fields: np.array = np.array(
             [
