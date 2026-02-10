@@ -13,7 +13,7 @@
 #SBATCH --job-name=ddp_s<studyIDX>_e0001
 #SBATCH --account=y26_artimis-fmod_g
 #SBATCH --partition=standard
-#SBATCH --time=0:30:00
+#SBATCH --time=1:30:00
 #SBATCH --nodes=<KNODES>
 #SBATCH --ntasks-per-node=<NGPUS>
 #SBATCH --gpus-per-node=<NGPUS>
@@ -29,9 +29,12 @@ MASTER_PORT=$(shuf -i 1024-65535 -n 1)  # Choose a random port
 export MASTER_ADDR
 export MASTER_PORT
 
+# Enable shell debugging
+set -xv
+
 # Check available GPUs
 sinfo  -o "%P %.24G %N"
-srun /usr/bin/echo $CUDA_AVAILABLE_DEVICES
+srun -vv --cpu-bind=verbose /usr/bin/echo $CUDA_AVAILABLE_DEVICES
 nvidia-smi
 
 # Specify NCCL communication
@@ -44,6 +47,9 @@ export NCCL_IB_GID_INDEX=3  # sometimes 0 or 3 depending on subnet manager confi
 # Debugging distributed data parallel
 # export NCCL_DEBUG=INFO
 # export NCCL_DEBUG_SUBSYS=INIT
+
+# Debugging selene slurm
+export SLURM_CPU_BIND=verbose
 
 # Load correct conda environment
 module load anaconda/2024.10
@@ -58,7 +64,7 @@ export date00=`date`
 
 # Start the Code
 # Explicitly set TCP environment for the following...
-srun python -u <train_script> @study<studyIDX>_START.input
+srun -vv --cpu-bind=verbose python -u <train_script> @study<studyIDX>_START.input
 
 # Get end time and print to stdout
 export date01=`date`
