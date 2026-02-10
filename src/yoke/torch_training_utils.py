@@ -836,6 +836,70 @@ def train_DDP_loderunner_datastep(
         world_size (int): Number of total DDP processes
     """
     # Extract data
+    start_img, end_img, Dt = data
+
+    start_img = start_img.to(device, non_blocking=True)
+    Dt = Dt.to(device, non_blocking=True)
+    end_img = end_img.to(device, non_blocking=True)
+
+    # Set model to train mode
+    model.train()
+
+    # Fixed input and output variable indices
+    in_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7]).to(device, non_blocking=True)
+    out_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7]).to(device, non_blocking=True)
+
+    # Forward pass
+    pred_img = model(start_img, in_vars, out_vars, Dt)
+
+    # Compute loss
+    loss = loss_fn(pred_img, end_img)
+    per_sample_loss = loss.mean(dim=[1, 2, 3])  # Per-sample loss
+
+    # Backward pass and optimization
+    optimizer.zero_grad(set_to_none=True)
+    loss.mean().backward()
+    optimizer.step()
+
+    # Gather per-sample losses from all processes
+    gathered_losses = [torch.zeros_like(per_sample_loss) for _ in range(world_size)]
+    dist.all_gather(gathered_losses, per_sample_loss)
+
+    # Rank 0 concatenates and saves or returns all losses
+    if rank == 0:
+        all_losses = torch.cat(gathered_losses, dim=0)  # Shape: (total_batch_size,)
+    else:
+        all_losses = None
+
+    # Free memory
+    del in_vars, out_vars
+    torch.cuda.empty_cache()
+
+    return end_img, pred_img, all_losses
+
+
+def train_DDP_loderunner_datastep_cylex(
+    data: tuple,
+    model,
+    optimizer,
+    loss_fn,
+    device: torch.device,
+    rank: int,
+    world_size: int,
+):
+
+    """A DDP-compatible training step for multi-input, multi-output data.
+
+        Args:
+        data (tuple): tuple of model input, corresponding ground truth, and lead time
+        model (loaded pytorch model): model to train
+        optimizer (torch.optim): optimizer for training set
+        loss_fn (torch.nn Loss Function): loss function for training set
+        device (torch.device): device index to select
+        rank (int): Rank of device
+        world_size (int): Number of total DDP processes
+    """
+    # Extract data
     #start_img, end_img, Dt = data
     # SOUMI added
     #print("data_type =", type(data))
@@ -1179,6 +1243,63 @@ def eval_scheduled_loderunner_datastep(
 
 
 def eval_DDP_loderunner_datastep(
+    data: tuple,
+    model,
+    loss_fn,
+    device: torch.device,
+    rank: int,
+    world_size: int,
+):
+    """A DDP-compatible evaluation step.
+
+    Args:
+        data (tuple): tuple of model input, corresponding ground truth, and lead time
+        model (loaded pytorch model): model to train
+        loss_fn (torch.nn Loss Function): loss function for training set
+        device (torch.device): device index to select
+        rank (int): Rank of device
+        world_size (int): Total number of DDP processes
+
+    """
+    # Set model to evaluation mode
+    model.eval()
+
+    # Extract data
+    start_img, end_img, Dt = data
+    start_img = start_img.to(device, non_blocking=True)
+    Dt = Dt.to(device, non_blocking=True)
+    end_img = end_img.to(device, non_blocking=True)
+
+    # Fixed input and output variable indices
+    in_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7]).to(device, non_blocking=True)
+    out_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7]).to(device, non_blocking=True)
+
+    # Forward pass
+    with torch.no_grad():
+        pred_img = model(start_img, in_vars, out_vars, Dt)
+
+    # Compute loss
+    loss = loss_fn(pred_img, end_img)
+    per_sample_loss = loss.mean(dim=[1, 2, 3])  # Per-sample loss
+
+    # Gather per-sample losses from all processes
+    gathered_losses = [torch.zeros_like(per_sample_loss) for _ in range(world_size)]
+    dist.all_gather(gathered_losses, per_sample_loss)
+
+    # Rank 0 concatenates and saves or returns all losses
+    if rank == 0:
+        all_losses = torch.cat(gathered_losses, dim=0)  # Shape: (total_batch_size,)
+    else:
+        all_losses = None
+
+    # Free memory
+    del in_vars, out_vars
+    torch.cuda.empty_cache()
+
+    return end_img, pred_img, all_losses
+
+
+def eval_DDP_loderunner_datastep_cylex(
     data: tuple,
     model,
     loss_fn,
@@ -1904,7 +2025,8 @@ def train_LRsched_loderunner_epoch(
 
 def train_DDP_loderunner_epoch(
     training_data,
-    #validation_data,
+    #validation_data,  # SOUMI: comment out if no validation
+    dataset,
     num_train_batches,
     num_val_batches,
     model,
@@ -1914,7 +2036,7 @@ def train_DDP_loderunner_epoch(
     epochIDX,
     train_per_val,
     train_rcrd_filename: str,
-    #val_rcrd_filename: str, # SOUMI commented: no val
+    #val_rcrd_filename: str, # SOUMI: comment out is no validation
     device: torch.device,
     rank: int,
     world_size: int,
@@ -1965,9 +2087,14 @@ def train_DDP_loderunner_epoch(
                 break
 
             # Perform a single training step
-            truth, pred, train_losses = train_DDP_loderunner_datastep(
-                traindata, model, optimizer, loss_fn, device, rank, world_size
-            )
+            if dataset == 'pli':
+                truth, pred, train_losses = train_DDP_loderunner_datastep(
+                    traindata, model, optimizer, loss_fn, device, rank, world_size
+                )
+            elif dataset == 'cylex':
+                truth, pred, train_losses = train_DDP_loderunner_datastep_cylex(
+                    traindata, model, optimizer, loss_fn, device, rank, world_size
+                )
 
             # Increment the learning-rate scheduler
             LRsched.step()
@@ -2019,7 +2146,7 @@ def train_DDP_loderunner_epoch(
     #                print("Got first validation batch OK")
     #            except StopIteration:
     #                print("Validation DataLoader produced 0 batches (StopIteration immediately)")
-    #            
+                
     #            # ended debugging
 
     #            for valbatch_ID, valdata in enumerate(validation_data):
