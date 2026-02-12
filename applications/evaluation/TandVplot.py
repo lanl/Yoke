@@ -79,6 +79,13 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    "--scatter",
+    "-s",
+    action="store_true",
+    help="Plot each loss value as a scatter",
+)
+
+parser.add_argument(
     "--ylim",
     "-Y",
     action="store",
@@ -109,6 +116,7 @@ args_ns = parser.parse_args()
 basedir = args_ns.basedir
 IDX = args_ns.IDX
 YLIM = args_ns.ylim
+scatter = args_ns.scatter
 INPROGRESS = args_ns.inprogress
 savedir = args_ns.savedir
 SAVEFIG = args_ns.savefig
@@ -157,15 +165,28 @@ for tIDX, Tcsv in enumerate(trn_csv_list):
     trn_DF = pd.read_csv(
         Tcsv, sep=", ", header=None, names=["Epoch", "Batch", "Loss"], engine="python"
     )
-    # print('Train IDX:', trn_file_epochs[tIDX])
+    all_losses = trn_DF.loc[:, "Loss"].values
+    all_idxs = trn_DF.loc[:, "Batch"].values
+    scaled_trn_idxs = np.array(all_idxs) / Nsamps_per_trn_pt
 
-    trn_epoch_loss = trn_DF.loc[:, "Loss"].values.reshape((Nsamps_per_trn_pt, -1))
+    # print('Train IDX:', trn_file_epochs[tIDX])
+    try:
+        trn_epoch_loss = trn_DF.loc[:, "Loss"].values.reshape((Nsamps_per_trn_pt, -1))
+
+    except ValueError:
+        print("# of loss samples from training not divisible by Nsamps_per_trn_pt")
+        print("Remainder of loss samples at the end will be excluded")
+        trn_DF = trn_DF[: -(len(trn_DF) % Nsamps_per_trn_pt)]
+        trn_epoch_loss = trn_DF.loc[:, "Loss"].values.reshape((Nsamps_per_trn_pt, -1))
+
     # print('Loss array shape:', trn_epoch_loss.shape)
     trn_positions = np.arange(trn_epoch_loss.shape[1])
     trn_qnts = np.quantile(trn_epoch_loss, [0.025, 0.5, 0.975], axis=0)
     # print('Quantiles shape:', trn_qnts.shape)
 
     if tIDX == 0:
+        if scatter:
+            plt.scatter(scaled_trn_idxs, all_losses, alpha=0.2)
         plt.plot(startIDX + trn_positions, trn_qnts[0, :], ":b")
         plt.plot(startIDX + trn_positions, trn_qnts[1, :], "-b", label="Training")
         plt.plot(startIDX + trn_positions, trn_qnts[2, :], ":b")
@@ -190,16 +211,36 @@ for tIDX, Tcsv in enumerate(trn_csv_list):
                 engine="python",
             )
             # print('Validation IDX:', val_file_epochs[vIDX])
-
-            val_epoch_loss = val_DF.loc[:, "Loss"].values.reshape(
-                (Nsamps_per_val_pt, -1)
+            all_val_losses = val_DF.loc[:, "Loss"].values
+            all_val_idxs = np.array(val_DF.loc[:, "Batch"].values)
+            scaled_val_idxs = all_val_idxs / Nsamps_per_val_pt + np.array(
+                scaled_trn_idxs[-1]
             )
+
+            try:
+                val_epoch_loss = val_DF.loc[:, "Loss"].values.reshape(
+                    (Nsamps_per_val_pt, -1)
+                )
+
+            except ValueError:
+                print(
+                    "# of loss samples from validation not \
+                      divisible by Nsamps_per_val_pt"
+                )
+                print("Remainder of loss samples at the end will be excluded")
+                val_DF = val_DF[: -(len(val_DF) % Nsamps_per_val_pt)]
+                val_epoch_loss = val_DF.loc[:, "Loss"].values.reshape(
+                    (Nsamps_per_val_pt, -1)
+                )
+
             # print('Loss array shape:', val_epoch_loss.shape)
             val_positions = np.arange(val_epoch_loss.shape[1])
             val_qnts = np.quantile(val_epoch_loss, [0.025, 0.5, 0.975], axis=0)
             # print('Quantiles shape:', val_qnts.shape)
 
             if vIDX == 0:
+                if scatter:
+                    plt.scatter(scaled_val_idxs, all_val_losses, alpha=0.2)
                 plt.plot(startIDX + val_positions, val_qnts[0, :], ":r")
                 plt.plot(
                     startIDX + val_positions, val_qnts[1, :], "-r", label="Validation"

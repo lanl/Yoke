@@ -2,6 +2,7 @@
 
 import argparse
 import torch
+import numpy as np
 import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets, transforms
@@ -42,6 +43,13 @@ if __name__ == "__main__":
     parser.add_argument("--dry_run", action="store_true", help="run only one batch")
     parser.add_argument(
         "--log_interval", type=int, default=10, help="batches between logs"
+    )
+    parser.add_argument(
+        "--train_per_val",
+        action="store",
+        type=int,
+        default=3,
+        help="Number of training epochs between each validation epoch",
     )
     parser.add_argument(
         "--save_model",
@@ -95,28 +103,78 @@ if __name__ == "__main__":
         print("Resuming from", args.checkpoint)
         # (You could parse the epoch number out of the filename here.)
 
-    # Training loop
-    for epoch in range(start_epoch, args.epochs + 1):
-        model.train()
-        for batch_idx, (data, target) in enumerate(train_loader):
-            data, target = data.to(device), target.to(device)
-            optimizer.zero_grad()
-            output = model(data)
-            loss = F.nll_loss(output, target)
-            loss.backward()
-            optimizer.step()
 
-            if batch_idx % args.log_interval == 0:
-                print(
-                    f"Train Epoch {epoch} [{batch_idx * len(data)}/"
-                    f"{len(train_loader.dataset)}]\tLoss: {loss.item():.4f}"
+    # Initialize things to save
+    trainbatch_ID = 0
+    valbatch_ID = 0
+
+    train_batchsize = train_loader.batch_size
+    val_batchsize = test_loader.batch_size
+
+    # mnist_study{args.studyIDX:03d}_epoch{args.epochs:03d}.pt"
+    train_rcrd_filename = f"training_study{args.studyIDX:03d}_epoch{args.epochs:03d}.csv"
+    #train_rcrd_filename.replace("<epochIDX>", f"{epochIDX:04d}")
+
+    # Train on all training samples
+    with open(train_rcrd_filename, "w") as train_rcrd_file:
+        # Training loop
+        for epoch in range(start_epoch, args.epochs + 1):
+            model.train()
+            for batch_idx, (data, target) in enumerate(train_loader):
+                trainbatch_ID += 1
+                data, target = data.to(device), target.to(device)
+                optimizer.zero_grad()
+                output = model(data)
+                loss = F.nll_loss(output, target)
+                loss.backward()
+                optimizer.step()
+
+                # Stack loss record and write using numpy
+                batch_records = np.column_stack(
+                    [
+                        epoch,  #np.full(train_batchsize, epoch),
+                        trainbatch_ID,  #np.full(train_batchsize, trainbatch_ID),
+                        loss.detach().cpu().numpy().flatten()
+                    ]
                 )
-                if args.dry_run:
-                    break
 
-        # (You can add a test() call here if you like, mirroring the original.)
+                np.savetxt(train_rcrd_file, batch_records, fmt="%d, %d, %.8f")
 
-        scheduler.step()
+                if batch_idx % args.log_interval == 0:
+                    print(
+                        f"Train Epoch {epoch} [{batch_idx * len(data)}/"
+                        f"{len(train_loader.dataset)}]\tLoss: {loss.item():.4f}"
+                    )
+                    if args.dry_run:
+                        break
+
+            # Evaluate on all validation samples
+            if epoch % args.train_per_val == 0:
+                print("Validating...", epoch)
+                val_rcrd_filename = f"validation_study{args.studyIDX:03d}_epoch{args.epochs:03d}.csv"
+                with open(val_rcrd_filename, "w") as val_rcrd_file:
+                    with torch.no_grad():
+                        # Validation loop
+                        for batch_idx, (data, target) in enumerate(test_loader):
+                            valbatch_ID += 1
+                            data, target = data.to(device), target.to(device)
+                            output = model(data)
+                            loss = F.nll_loss(output, target)
+
+                            # Stack loss record and write using numpy
+                            batch_records = np.column_stack(
+                                [
+                                    epoch,  #np.full(train_batchsize, epoch),
+                                    valbatch_ID,  #np.full(train_batchsize, trainbatch_ID),
+                                    loss.detach().cpu().numpy().flatten()
+                                ]
+                            )
+                            
+                            np.savetxt(val_rcrd_file, batch_records, fmt="%d, %d, %.8f")
+
+            # (You can add a test() call here if you like, mirroring the original.)
+
+            scheduler.step()
 
     # Save
     if args.save_model:
