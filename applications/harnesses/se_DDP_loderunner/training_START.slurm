@@ -52,7 +52,7 @@ export NCCL_IB_GID_INDEX=3  # sometimes 0 or 3 depending on subnet manager confi
 export SLURM_CPU_BIND=verbose
 
 # Load correct conda environment
-module load anaconda/2024.10
+module load anaconda/3.12
 source activate
 conda activate <YOKE_TORCH_ENV>
 
