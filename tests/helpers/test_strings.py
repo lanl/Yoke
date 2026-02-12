@@ -11,7 +11,7 @@ from yoke.helpers import strings
         # Case 1: integer studyIDX
         ({"studyIDX": 1}, "<studyIDX>", "001"),
         # Case 2: float values
-        ({"float_test": 1.23}, "<float_test>", "1.2300"),
+        ({"float_test": 1.23e-6}, "<float_test>", "1.23e-6"),
         # Case 3: int values
         ({"int_test": 12}, "<int_test>", "12"),
         # Case 4: str values
