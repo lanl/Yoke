@@ -4,7 +4,6 @@ Plot dimensions are to scale.
 """
 
 from pathlib import Path
-from typing import Union
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -14,7 +13,7 @@ import matplotlib.pyplot as plt
 # ==============================================================================
 
 
-def load_sim_data(npz_path: Union[str, Path]) -> dict[str, np.ndarray]:
+def load_sim_data(npz_path: str | Path) -> dict[str, np.ndarray]:
     """Load .npz data and return a dictionary of variable arrays."""
     with np.load(npz_path) as dataset:
         return {key: np.asarray(dataset[key]) for key in dataset}
@@ -30,7 +29,7 @@ def extract_densities(
 def generate_contour_plot(
     dataset: dict[str, np.ndarray],
     extent: tuple[int, int, int, int],
-    output_file: Union[str, Path],
+    output_file: str | Path,
     variable_map: list[str],
 ) -> None:
     """Generate and save a contour plot for a set of variable arrays."""
