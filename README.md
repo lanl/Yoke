@@ -46,7 +46,7 @@ specified through command-line arguments passed to the programs in
 Installation:
 -------------
 
-The python environment is specified through the `pyproject.toml`
+The Python environment is specified through the `pyproject.toml`
 file. YOKE is meant to be installed using `flit` in a minimal python
 environment.
 
@@ -65,6 +65,25 @@ Setup your base environment and activate it (we use conda):
 > utilize your GPUs. If you want to ensure that PyTorch is installed to
 > make optimal use of your hardware we suggest manually installing
 > `torch` prior to installing `YOKE` with `flit`.
+
+An alternative to building your Python environment for a particular computing 
+environment is to use containerization. This allows for portability and some 
+degree of isolation from the host system. You can then develop a Yoke
+application on one system and easily move it to another for larger training
+runs etc.
+
+Using the Docker runtime, build the container (this could be done as part of a 
+CI pipeline) and drop in to an interative shell:
+
+```
+>> cd <yoke_repo_clone_directory>
+>> docker buildx build -f Dockerfile . -t yoke
+>> docker run -it yoke /bin/bash
+```
+
+When you want to push your application to a different machine or deploy to a 
+service like Kubernetes, RunAI etc., you can run `docker push` or 
+`docker export` along with any transfers of necessary training data.
 
 Testing:
 --------
