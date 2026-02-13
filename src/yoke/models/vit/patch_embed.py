@@ -7,7 +7,6 @@ image as a series of tokenized patches.
 
 import math
 
-from typing import Optional
 
 import torch
 import torch.nn.functional as F
@@ -55,10 +54,10 @@ class ParallelVarPatchEmbed(nn.Module):
     def __init__(
         self,
         max_vars: int = 5,
-        img_size: (int, int) = (128, 128),
-        patch_size: (int, int) = (16, 16),
+        img_size: tuple[int, int] = (128, 128),
+        patch_size: tuple[int, int] = (16, 16),
         embed_dim: int = 64,
-        norm_layer: Optional[nn.Module] = None,
+        norm_layer: nn.Module | None = None,
     ) -> None:
         """Initialization for parallel embedding."""
         super().__init__()
@@ -203,7 +202,7 @@ class SwinEmbedding(nn.Module):
         img_size: (int, int) = (128, 128),
         patch_size: (int, int) = (16, 16),
         embed_dim: int = 64,
-        norm_layer: Optional[nn.Module] = None,
+        norm_layer: nn.Module | None = None,
     ) -> None:
         """Initialization for SWIN patch embedding."""
         super().__init__()

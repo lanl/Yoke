@@ -26,21 +26,15 @@ dependencies = [
     "torch",
     "torchvision",
     "torchaudio",
-    "pytest-cov",
-    "coveralls",
     "scikit-image",
-    "matplotlib",
+    "matplotlib>=3.10.7",
+    "pyparsing<3.3",
     "h5py",
     "pandas",
-    "pytest",
-    "ruff",
     "einops",
     "lightning",
-    "sphinx",
-    "coverage",
-    "furo"
     ]
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 readme = "README.md"
 license = {file = "LICENSE.txt"}
 classifiers = ["Private :: Do Not Upload",
@@ -48,8 +42,14 @@ classifiers = ["Private :: Do Not Upload",
     "Programming Language :: Python :: 3",
 ]
 
+[project.optional-dependencies]
+test = ["pytest", "pytest-cov", "coverage"]
+dev = ["ruff"]
+docs = ["sphinx", "furo"]
+ci = ["coveralls"]
+
 [project.urls]
-Source = "https://gitlab.lanl.gov/multiphysmultimatapps/yoke"
+Source = "https://github.com/lanl/Yoke"
 
 [tool.ruff]
 line-length = 89
@@ -70,7 +70,17 @@ select = [
     "W",
     "ANN"]
 
-ignore = ["ANN101"]  # Wants a `type` defined for `self` argument!
+# ignore = ["ANN101"]  # Wants a `type` defined for `self` argument!
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
+
+# Allow exclusion of specific lines in coverage report
+[tool.coverage.run]
+source = ["src"]
+
+[tool.coverage.report]
+exclude_lines = [
+  "pragma: no cover",
+  "if __name__ == .__main__.:",   
+]

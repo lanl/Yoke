@@ -1,29 +1,24 @@
-"""Training script for reward/value network using hybrid2vectorCNN.
+"""Train a Reward network using DDP."""
 
-This script loads the LSC_hfield_reward_DataSet and trains a reward prediction network 
-using the hybrid2vectorCNN architecture.
-
-Includes learning rate scheduling and support for normalized inputs.
-
-"""
-
-#############################################
-# Packages
-#############################################
 import os
 import time
 import argparse
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
-
+import numpy as np
 from yoke.models.hybridCNNmodules import hybrid2vectorCNN
 from yoke.datasets.lsc_dataset import LSC_hfield_reward_DataSet
-import yoke.torch_training_utils as tr  # Assuming this exists
+
+from yoke.utils.training.epoch.lsc_reward import train_lsc_reward_epoch
+from yoke.utils.restart import continuation_setup
+from yoke.utils.dataload import make_distributed_dataloader
+from yoke.utils.checkpointing import load_model_and_optimizer
+from yoke.utils.checkpointing import save_model_and_optimizer
 from yoke.lr_schedulers import CosineWithWarmupScheduler
-from yoke.helpers import cli  # Assuming this exists
+from yoke.helpers import cli
+
 
 #############################################
 # Inputs
@@ -38,7 +33,6 @@ parser = cli.add_default_args(parser=parser)
 parser = cli.add_filepath_args(parser=parser)
 parser = cli.add_training_args(parser=parser)
 parser = cli.add_cosine_lr_scheduler_args(parser=parser)
-
 
 # Change some default filepaths.
 parser.set_defaults(design_file="design_lsc240420_MASTER.csv")
@@ -83,8 +77,6 @@ def cleanup_distributed() -> None:
     dist.destroy_process_group()
 
 
-#############################################
-#############################################
 def main(
         args: argparse.Namespace,
         rank: int,
@@ -92,11 +84,11 @@ def main(
         local_rank: int,
         device: torch.device
         ) -> None:
-
-    #device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    #args = parser.parse_args()
-
-    # Study IDX
+    """Main function for training a reward network using DDP."""
+    #############################################
+    # Process Inputs
+    #############################################
+    # Study ID
     studyIDX = args.studyIDX
 
     # Data Paths
@@ -126,81 +118,76 @@ def main(
     trn_rcrd_filename = args.trn_rcrd_filename
     val_rcrd_filename = args.val_rcrd_filename
     CONTINUATION = args.continuation
-    START = not CONTINUATION
     checkpoint = args.checkpoint
-
-    #############################################
-    # Check Devices
-    #############################################
-    print("\n")
-    print("Slurm & Device Information")
-    print("=========================================")
-    print("Slurm Job ID:", os.environ["SLURM_JOB_ID"])
-    print("Pytorch Cuda Available:", torch.cuda.is_available())
-    print("GPU ID:", os.environ["SLURM_JOB_GPUS"])
-    print("Number of System CPUs:", os.cpu_count())
-    print("Number of CPUs per GPU:", os.environ["SLURM_JOB_CPUS_PER_NODE"])
 
     # Dictionary of available models.
     available_models = {
         "hybrid2vectorCNN": hybrid2vectorCNN
     }
-    
+
     #############################################
-    # Model arguments
+    # Model Arguments for Dynamic Reconstruction
     #############################################
     model_args = {
         "img_size": (1, 1120, 800),
         "input_vector_size": 28,
         "output_dim": 1,
         "features": 12,
-        "depth": 12,
+        "depth": 4,
         "kernel": 3,
         "img_embed_dim": 32,
         "vector_embed_dim": 32,
-        "size_reduce_threshold": (8, 8),
-        "vector_feature_list": (32, 32, 64, 64),
-        "output_feature_list": (64, 128, 128, 64),
+        "size_reduce_threshold": (16, 16),
+        "vector_feature_list": (4, 4, 4, 4),
+        "output_feature_list": (4, 4, 4, 4),
         "act_layer": nn.GELU,
         "norm_layer": nn.LayerNorm
         }
 
-    model = hybrid2vectorCNN(**model_args)
-
-    #############################################
-    # Initialize optimizer
-    #############################################
-    loss_fn = nn.MSELoss(reduction="none")
-    optimizer = torch.optim.AdamW(
-        model.parameters(),
-        lr=1e-6,
-        betas=(0.9, 0.999),
-        eps=1e-08,
-        weight_decay=0.01
-    )
-    print("Model initialized.")
-
-    #############################################
-    # Initialize Loss
-    #############################################
-    loss_fn = nn.MSELoss(reduction="none")
-    
     #############################################
     # Load Model for Continuation (Rank 0 only)
     #############################################
     # Wait to move model to GPU until after the checkpoint load. Then
     # explicitly move model and optimizer state to GPU.
     if CONTINUATION:
-        model, starting_epoch = tr.load_model_and_optimizer(
+        model, optimizer, starting_epoch = load_model_and_optimizer(
             checkpoint,
-            optimizer,
-            available_models,
-            device=device
+            optimizer_class=torch.optim.AdamW,
+            optimizer_kwargs={
+                "lr": 1e-6,
+                "betas": (0.9, 0.999),
+                "eps": 1e-08,
+                "weight_decay": 0.01,
+            },
+            available_models=available_models,
+            device=device,
         )
-        print("Model state loaded for continuation.")
+
     else:
-        model.to(device)
         starting_epoch = 0
+        model = hybrid2vectorCNN(**model_args)
+        # Move model to GPU before instantiating optimizer and DDP.
+        model.to(device)
+
+        # Instantiate optimizer and move state to GPU.
+        optimizer = torch.optim.AdamW(
+            model.parameters(),
+            lr=1e-6,
+            betas=(0.9, 0.999),
+            eps=1e-08,
+            weight_decay=0.01
+        )
+
+        for state in optimizer.state.values():
+            for key, value in state.items():
+                if isinstance(value, torch.Tensor):
+                    state[key] = value.to(device)
+
+    #############################################
+    # Initialize Loss
+    #############################################
+    # Use `reduction='none'` so loss on each sample in batch can be recorded.
+    loss_fn = nn.MSELoss(reduction="none")
 
     #############################################
     # Move Model to DistributedDataParallel
@@ -237,9 +224,8 @@ def main(
 
     #############################################
     # Data Initialization (Distributed Dataloader)
-    #############################################
     train_dataset = LSC_hfield_reward_DataSet(
-        args.LSC_NPZ_DIR, 
+        args.LSC_NPZ_DIR,
         filelist=train_filelist,
         design_file=design_file,
         half_image=False,
@@ -253,10 +239,8 @@ def main(
         field_list=["density_throw"]
     )
 
-    print("Datasets initialized.")
-
     # NOTE: For DDP the batch_size is the per-GPU batch_size!!!
-    train_dataloader = tr.make_distributed_dataloader(
+    train_dataloader = make_distributed_dataloader(
         train_dataset,
         batch_size,
         shuffle=True,
@@ -264,7 +248,7 @@ def main(
         rank=rank,
         world_size=world_size,
     )
-    val_dataloader = tr.make_distributed_dataloader(
+    val_dataloader = make_distributed_dataloader(
         val_dataset,
         batch_size,
         shuffle=False,
@@ -277,7 +261,6 @@ def main(
     # Training Loop (Modified for DDP)
     #############################################
     # Train Model
-    print("Training Model . . .")
     starting_epoch += 1
     ending_epoch = min(starting_epoch + cycle_epochs, total_epochs + 1)
 
@@ -295,7 +278,7 @@ def main(
             startTime = time.time()
 
         # Train and Validate
-        tr.train_lsc_reward_epoch(
+        train_lsc_reward_epoch(
             training_data=train_dataloader,
             validation_data=val_dataloader,
             num_train_batches=train_batches,
@@ -327,11 +310,11 @@ def main(
             print(f"Completed epoch {epochIDX}...", flush=True)
             print(f"Epoch time (minutes): {epoch_time:.2f}", flush=True)
 
-    # Save model and optimizer state in hdf5
-    chkpt_name_str = "study{0:03d}_modelState_epoch{1:04d}.pth"
-    new_chkpt_path = os.path.join("./", chkpt_name_str.format(studyIDX, epochIDX))
+    # Save model and optimizer
+    chkpt_name_str = f'study{studyIDX:03d}_modelState_epoch{epochIDX:04d}.pth'
+    new_chkpt_path = os.path.join("./", chkpt_name_str)
 
-    tr.save_model_and_optimizer(
+    save_model_and_optimizer(
         model,
         optimizer,
         epochIDX,
@@ -346,7 +329,7 @@ def main(
         #############################################
         FINISHED_TRAINING = epochIDX + 1 > total_epochs
         if not FINISHED_TRAINING:
-            new_slurm_file = tr.continuation_setup(
+            new_slurm_file = continuation_setup(
                 new_chkpt_path, studyIDX, last_epoch=epochIDX
             )
             os.system(f"sbatch {new_slurm_file}")

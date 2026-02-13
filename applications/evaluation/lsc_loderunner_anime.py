@@ -19,7 +19,7 @@ import numpy as np
 import torch
 
 from yoke.models.vit.swin.bomberman import LodeRunner
-import yoke.torch_training_utils as tr
+from yoke.utils.checkpointing import load_model_and_optimizer_hdf5
 
 # Imports for plotting
 # To view possible matplotlib backends use
@@ -43,6 +43,9 @@ matplotlib.rcParams["ps.fonttype"] = 42
 font = {"family": "serif"}
 plt.rc("font", **font)
 plt.rcParams["figure.figsize"] = (6, 6)
+
+TIMESTEP_DELTA = 0.25  # us, constant timestep for inference
+DT_CONST = torch.tensor([TIMESTEP_DELTA])  # Constant timestep for inference
 
 
 ###################################################################
@@ -109,6 +112,20 @@ parser.add_argument(
     "--verbose", "-V", action="store_true", help="Flag to turn on debugging output."
 )
 
+parser.add_argument(
+    "--mode",
+    action="store",
+    type=str,
+    choices=["single", "chained", "timestep"],
+    default="single",
+    help=(
+        "Determines the mode of how to do the prediction. "
+        "Single mode does not propagate outputs. "
+        "Chained mode propagates outputs. "
+        "Timestep uses the initial image and just varies the timestep delta. "
+    ),
+)
+
 
 def print_NPZ_keys(npzfile: str = "./lsc240420_id00201_pvi_idx00100.npz") -> None:
     """Print keys of NPZ file."""
@@ -119,12 +136,10 @@ def print_NPZ_keys(npzfile: str = "./lsc240420_id00201_pvi_idx00100.npz") -> Non
 
     NPZ.close()
 
-    return
-
 
 def singlePVIarray(
     npzfile: str = "./lsc240420_id00201_pvi_idx00100.npz", FIELD: str = "av_density"
-) -> np.array:
+) -> np.ndarray:
     """Function to grab single array from NPZ.
 
     Args:
@@ -132,7 +147,7 @@ def singlePVIarray(
        FIELD (str): Field to return array for.
 
     Returns:
-       field (np.array): Array of hydro-dynamic field for plotting
+       field (np.ndarray): Array of hydro-dynamic field for plotting
 
     """
     NPZ = np.load(npzfile)
@@ -143,6 +158,61 @@ def singlePVIarray(
     NPZ.close()
 
     return arrays_dict[FIELD]
+
+
+def loderunner_inference(
+    model: torch.nn.Module,
+    input_img: torch.Tensor,
+    in_vars: torch.Tensor,
+    out_vars: torch.Tensor,
+    delta_t: torch.Tensor,
+) -> tuple[torch.Tensor, np.ndarray]:
+    """Function to run prediction on a Yoke model and generate the density field.
+
+    The input tensor is either the true state (from an NPZ file),
+    or a predicted state (output from a previous prediction from the model).
+
+    Args:
+        model (torch.nn.Module): The model used for inferencing.
+        input_img (torch.Tensor): The input tensor.
+        in_vars (torch.Tensor): The list of input channels.
+        out_vars (torch.Tensor): The list of channels the model should output.
+        delta_t (torch.Tensor): The amount of time forward the model should predict.
+
+    Returns:
+        output (tuple[torch.Tensor, np.ndarray]): The predicted output and density field.
+    """
+    pred_img = model(torch.unsqueeze(input_img, 0), in_vars, out_vars, delta_t)
+    pred_rho = np.squeeze(pred_img.detach().numpy())
+    pred_rho = pred_rho[0:6, :, :].sum(0)
+
+    return pred_img, pred_rho
+
+
+def prepare_input_images(npzfile: str, default_vars: list[str]) -> torch.Tensor:
+    """Prepare input images from NPZ file.
+
+    An NPZ file is similar to a dictionary, in that it has keys and values.
+    The keys are stored in default_vars,
+    and the values are the tensors containing material information.
+
+    Args:
+        npzfile (str): The name of the NPZ file to use.
+        default_vars (list[str]): The keys for the NPZ file.
+
+    Returns:
+        output (torch.Tensor): The combined tensor of all the data from the NPZ file.
+    """
+    input_img_list = []
+    for hfield in default_vars:
+        tmp_img = singlePVIarray(npzfile=npzfile, FIELD=hfield)
+
+        # Remember to replace all NaNs with 0.0
+        tmp_img = np.nan_to_num(tmp_img, nan=0.0)
+        input_img_list.append(tmp_img)
+
+    # Concatenate images channel first.
+    return torch.tensor(np.stack(input_img_list, axis=0)).to(torch.float32)
 
 
 if __name__ == "__main__":
@@ -156,6 +226,7 @@ if __name__ == "__main__":
     runID = args_ns.runID
     embed_dim = args_ns.embed_dim
     VERBOSE = args_ns.verbose
+    mode = args_ns.mode
 
     if not os.path.exists(outdir):
         os.makedirs(outdir)
@@ -215,19 +286,17 @@ if __name__ == "__main__":
         weight_decay=0.01,
     )
 
-    checkpoint_epoch = tr.load_model_and_optimizer_hdf5(model, optimizer, checkpoint)
+    checkpoint_epoch = load_model_and_optimizer_hdf5(model, optimizer, checkpoint)
     model.eval()
 
     # Build input data
     in_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7])
     out_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7])
 
-    # Time offset
-    Dt = torch.tensor([0.25])
-
     # Loop through images
     for k, npzfile in enumerate(npz_list):
         # Get index
+        Dt = DT_CONST if mode != "timestep" else torch.tensor([k * TIMESTEP_DELTA])
         pviIDX = npzfile.split("idx")[1]
         pviIDX = int(pviIDX.split(".")[0])
 
@@ -237,72 +306,55 @@ if __name__ == "__main__":
         Zcoord = singlePVIarray(npzfile=npzfile, FIELD="Zcoord")
 
         # Step prediction
-        input_img_list = []
-        for hfield in default_vars:
-            tmp_img = singlePVIarray(npzfile=npzfile, FIELD=hfield)
-
-            # Remember to replace all NaNs with 0.0
-            tmp_img = np.nan_to_num(tmp_img, nan=0.0)
-            input_img_list.append(tmp_img)
-
-        # Concatenate images channel first.
-        input_img = torch.tensor(np.stack(input_img_list, axis=0)).to(torch.float32)
+        temp_img = prepare_input_images(npzfile, default_vars)
+        if k == 0:
+            initial_input = temp_img.clone()
+        input_img = initial_input if mode == "timestep" else temp_img
 
         # Sum for true average density
-        true_rho = input_img.detach().numpy()
+        true_rho = temp_img.detach().numpy()
         true_rho = true_rho[0:6, :, :].sum(0)
 
         # Make a prediction
-        pred_img = model(torch.unsqueeze(input_img, 0), in_vars, out_vars, Dt)
-        pred_rho = np.squeeze(pred_img.detach().numpy())
-        pred_rho = pred_rho[0:6, :, :].sum(0)
+        if mode == "single" or mode == "timestep":
+            pred_img, pred_rho = loderunner_inference(
+                model, input_img, in_vars, out_vars, Dt
+            )
+        else:
+            if k == 0:
+                input_img = prepare_input_images(npzfile, default_vars)
 
-        # Chained prediction
-        # if k == 0:
-        #     input_img_list = []
-        #     for hfield in default_vars:
-        #         tmp_img = singlePVIarray(npzfile=npzfile, FIELD=hfield)
+                # Sum for true average density
+                true_rho = input_img.detach().numpy()
+                true_rho = true_rho[0:6, :, :].sum(0)
 
-        #         # Remember to replace all NaNs with 0.0
-        #         tmp_img = np.nan_to_num(tmp_img, nan=0.0)
-        #         input_img_list.append(tmp_img)
+                # Make a prediction
+                pred_img, pred_rho = loderunner_inference(
+                    model, input_img, in_vars, out_vars, Dt
+                )
+                pred_img = torch.squeeze(pred_img, 0)  # removing the batch dimension.
 
-        #     # Concatenate images channel first.
-        #     input_img = torch.tensor(
-        #          np.stack(
-        #              input_img_list,
-        #              axis=0)
-        #          ).to(torch.float32)
+            else:
+                # Get ground-truth average density
+                true_img_list = []
+                for hfield in default_vars:
+                    tmp_img = singlePVIarray(npzfile=npzfile, FIELD=hfield)
 
-        #     # Sum for true average density
-        #     true_rho = input_img.detach().numpy()
-        #     true_rho = true_rho[0:6, :, :].sum(0)
+                    # Remember to replace all NaNs with 0.0
+                    tmp_img = np.nan_to_num(tmp_img, nan=0.0)
+                    true_img_list.append(tmp_img)
 
-        #     # Make a prediction
-        #     pred_img = model(torch.unsqueeze(input_img, 0), in_vars, out_vars, Dt)
-        #     pred_rho = np.squeeze(pred_img.detach().numpy())
-        #     pred_rho = pred_rho[0:6, :, :].sum(0)
+                # Concatenate images channel and sum
+                true_img = np.stack(true_img_list, axis=0)
 
-        # else:
-        #     # Get ground-truth average density
-        #     true_img_list = []
-        #     for hfield in default_vars:
-        #         tmp_img = singlePVIarray(npzfile=npzfile, FIELD=hfield)
+                # Sum for true average density
+                true_rho = true_img[0:6, :, :].sum(0)
 
-        #         # Remember to replace all NaNs with 0.0
-        #         tmp_img = np.nan_to_num(tmp_img, nan=0.0)
-        #         true_img_list.append(tmp_img)
-
-        #     # Concatenate images channel and sum
-        #     true_img = np.stack(true_img_list, axis=0)
-
-        #     # Sum for true average density
-        #     true_rho = true_img[0:6, :, :].sum(0)
-
-        #     # Evaluate LodeRunner from last prediction
-        #     pred_img = model(pred_img, in_vars, out_vars, Dt)
-        #     pred_rho = np.squeeze(pred_img.detach().numpy())
-        #     pred_rho = pred_rho[0:6, :, :].sum(0)
+                # Evaluate LodeRunner from last prediction
+                pred_img, pred_rho = loderunner_inference(
+                    model, pred_img, in_vars, out_vars, Dt
+                )
+                pred_img = torch.squeeze(pred_img, 0)  # removing the batch dimension.
 
         # Plot Truth/Prediction/Discrepancy panel.
         fig1, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(16, 6))

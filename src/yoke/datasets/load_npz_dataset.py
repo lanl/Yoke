@@ -15,7 +15,6 @@ Bryan Kaiser
 """
 import sys
 from pathlib import Path
-import typing
 import random
 import re
 import glob
@@ -23,6 +22,7 @@ import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
+<<<<<<< HEAD
 from torch.utils.data import get_worker_info
 import os
 NoneStr = typing.Union[None, str]
@@ -31,6 +31,11 @@ try:
     import torch.distributed as dist
 except Exception:
     dist = None
+=======
+
+
+NoneStr = None | str
+>>>>>>> upstream/main
 
 def _current_rank():
     try:

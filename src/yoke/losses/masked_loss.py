@@ -1,7 +1,6 @@
 """Modules that define masked losses."""
 
-from collections.abc import Iterable
-from typing import Callable
+from collections.abc import Iterable, Callable
 
 import torch
 import torchvision.transforms.functional as tforms

@@ -1,0 +1,10 @@
+--studyIDX
+<studyIDX>
+--epochs
+<epochs>
+--batch_size
+<batch_size>
+--lr
+<lr>
+--data_dir
+<data_dir>
