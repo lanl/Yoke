@@ -129,12 +129,6 @@ class LodeRunner(nn.Module):
         # Encode each patch with position information. Position encoding is
         # only index-aware and does not take into account actual spatial
         # information.
-        # SOUMI: printing
-        #print("In bomberman: self.embed_dim=",self.embed_dim)
-        #print("In bomberman: self.patch_size=",self.patch_size)
-        #print("In bomberman: self.image_size=",self.image_size)
-        #print("In bomberman: self.parallel_embed.num_patches=",self.parallel_embed.num_patches)
-        #print("length default_vars=",len(self.default_vars))
         self.pos_embed = PosEmbed(
             self.embed_dim,
             self.patch_size,
@@ -191,13 +185,7 @@ class LodeRunner(nn.Module):
         x = self.agg_vars(x)
 
         # Encode patch positions, spatial information
-        #print("In bomberman size x=",x.size())
-        print("In bomberman in_vars=",in_vars)
-        print("In bomberman size in_vars=",in_vars.size())
-        #print("In bomberman size out_vars=",out_vars.size())
-        #print("In bomberman size in_times=",lead_times.size())
         x = self.pos_embed(x)
-        #print("In bomberman size pos_embed x=",x.size())
 
         # Encode temporal information
         x = self.temporal_encoding(x, lead_times)
@@ -415,10 +403,10 @@ if __name__ == "__main__":
     # NOTE: For half-image `image_size = (1120, 400)` can just halve the second
     # patch_size dimension.
     emb_factor = 2
-    patch_size = (10, 5) #(10, 10)
-    image_size = (560, 200) #(1120, 800)
+    patch_size = (10, 10)
+    image_size = (1120, 800)
     num_heads = 8
-    window_sizes = [(8, 8), (4, 4), (2, 2), (7, 5)] #[(8, 8), (8, 8), (4, 4), (2, 2)]
+    window_sizes = [(8, 8), (8, 8), (4, 4), (2, 2)]
     patch_merge_scales = [(2, 2), (2, 2), (2, 2)]
 
     # Tiny size

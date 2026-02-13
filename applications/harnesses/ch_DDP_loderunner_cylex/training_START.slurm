@@ -1,23 +1,18 @@
 #!/bin/bash
 
-# This is a setup for GPU training on Venado. Find out how much
+# This is a setup for GPU training on Chicoma. Find out how much
 # memory per node, number of CPUs/node.
 
 # NOTE: Number of CPUs per GPU must be an even number since there are
 # 2 threads per core. If an odd number is requested the next higher
 # even number gets used. 
 
-# The following are one set of SBATCH options for the Venado GPU
+# The following are one set of SBATCH options for the Chicoma GPU
 # partition. There are optional other constraints.
 
-#SBATCH --job-name=ddp_s<studyIDX>_e0001
-#SBATCH --account=w25_artimis_g
-#PRODUCTION  #SBATCH --partition=gpu
-#PRODUCTION  #SBATCH --time=16:00:00
-#SBATCH --time=0:30:00
-#SBATCH --qos=debug
-#SBATCH --reservation=gpu_debug
-#SBATCH --partition=gpu_debug
+#SBATCH --job-name=lr5e-4_s<studyIDX>_e0001
+#SBATCH --time=1:20:00
+#SBATCH --partition=gpu
 #SBATCH --nodes=<KNODES>
 #SBATCH --ntasks-per-node=<NGPUS>
 #SBATCH --gpus-per-node=<NGPUS>
@@ -45,7 +40,7 @@ export NCCL_SOCKET_IFNAME=hsn0  # Check possible interfaces with `ip link show`
 # export NCCL_DEBUG_SUBSYS=INIT
 
 # Load correct conda environment
-module load python/3.11-anaconda-2023.07
+module load anaconda/3.11
 source activate
 conda activate <YOKE_TORCH_ENV>
 

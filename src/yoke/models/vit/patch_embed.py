@@ -144,17 +144,9 @@ class ParallelVarPatchEmbed(nn.Module):
         #
         # For embedding dimension E and patch size p=(p1, p2),
         # (B, V, H, W) -> (B, VxE, H', W') with H'=H/p1, W'=W/p2
-        #print("In patch_embed, in_vars=",in_vars)
-        #print("In patch_embed, biases=",biases)
-        #print("In patch_embed, weights=",weights)
         groups = in_vars.shape[0]
         
-        #print("In patch_embed: patch_size passed to stride is=", self.patch_size)
-        #print("In PatchEmbed x.shape =", x.shape)
-        print("weights.shape =",weights.shape)
-        print(f"type of stride: {type(self.patch_size)}")
-        #proj = F.conv2d(x, weights, biases, groups=groups, stride=self.patch_size)
-        proj = F.conv2d(input=x, weight=weights, bias=biases, stride=self.patch_size, groups=groups)
+        proj = F.conv2d(x, weights, biases, groups=groups, stride=self.patch_size)
 
         # Flatten the patch arrays and separate the variables and embeddings.
         proj = rearrange(

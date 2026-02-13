@@ -209,7 +209,6 @@ str='velocity', thermodynamic_variables: str='density') -> None:
         self.csv_filepath = csv_filepath
         self.kinematic_variables = kinematic_variables
         self.thermodynamic_variables = thermodynamic_variables
-        print('In LabeledData: npz_filepath=', self.npz_filepath)
         self.get_study_and_key(self.npz_filepath)
         if self.study == 'cx':
             self.all_hydro_field_names = ['Rcoord', 'Zcoord', 'Uvelocity', 'Wvelocity',
