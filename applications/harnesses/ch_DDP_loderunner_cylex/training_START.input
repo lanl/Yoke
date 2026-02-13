@@ -42,9 +42,9 @@ cx241203_prefixes_test_10pct_noBe_noVoid_truncated.txt
 --Knodes
 <KNODES>
 --total_epochs
-4
+100
 --cycle_epochs
-2
+1
 --train_batches
 <NTRN_BATCH>
 --val_batches
