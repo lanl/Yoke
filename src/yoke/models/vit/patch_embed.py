@@ -81,6 +81,9 @@ class ParallelVarPatchEmbed(nn.Module):
         self.max_vars = max_vars
         self.img_size = img_size
         self.patch_size = patch_size
+        #print("In patch_embed, max_vars=",max_vars)
+        #print("In patch_embed, img_size=",img_size)
+        #print("In patch_embed, patch_size=",patch_size)
         self.grid_size = (
             img_size[0] // self.patch_size[0],
             img_size[1] // self.patch_size[1],
@@ -129,6 +132,8 @@ class ParallelVarPatchEmbed(nn.Module):
         must correspond to the same variables.
 
         """
+        print("In patch_embed forward, in_vars=", in_vars)
+        print("In patch_embed forward, in_vars size=", in_vars.size())
         weights = self.proj_weights[in_vars].flatten(0, 1)
         biases = self.proj_biases[in_vars].flatten(0, 1)
 
@@ -139,6 +144,7 @@ class ParallelVarPatchEmbed(nn.Module):
         # For embedding dimension E and patch size p=(p1, p2),
         # (B, V, H, W) -> (B, VxE, H', W') with H'=H/p1, W'=W/p2
         groups = in_vars.shape[0]
+        
         proj = F.conv2d(x, weights, biases, groups=groups, stride=self.patch_size)
 
         # Flatten the patch arrays and separate the variables and embeddings.

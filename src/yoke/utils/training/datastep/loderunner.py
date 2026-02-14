@@ -224,6 +224,73 @@ def train_DDP_loderunner_datastep(
     return end_img, pred_img, all_losses
 
 
+def train_DDP_loderunner_datastep_cylex(
+    data: tuple,
+    model,
+    optimizer,
+    loss_fn,
+    device: torch.device,
+    rank: int,
+    world_size: int,
+):
+
+    """A DDP-compatible training step for multi-input, multi-output data.
+
+        Args:
+        data (tuple): tuple of model input, corresponding ground truth, and lead time
+        model (loaded pytorch model): model to train
+        optimizer (torch.optim): optimizer for training set
+        loss_fn (torch.nn Loss Function): loss function for training set
+        device (torch.device): device index to select
+        rank (int): Rank of device
+        world_size (int): Number of total DDP processes
+    """
+    # Extract data
+    start_img, channel_map, end_img, channel_map, Dt = data
+    print("In train_DDP_loderunner_datastep: channel_map =", channel_map)
+
+    start_img = start_img.to(device, non_blocking=True)
+    Dt = Dt.to(device, non_blocking=True)
+    end_img = end_img.to(device, non_blocking=True)
+
+    # Set model to train mode
+    model.train()
+
+    # Map input and output variable indices according to channel map
+    in_vars = torch.tensor(channel_map).flatten().to(device, non_blocking=True)
+    out_vars = torch.tensor(channel_map).flatten().to(device, non_blocking=True)
+
+    # Forward pass
+    #print("In torch_training_utils, start_img size=",start_img.size())
+    pred_img = model(start_img, in_vars, out_vars, Dt)
+
+    # Compute loss
+    loss = loss_fn(pred_img, end_img)
+    per_sample_loss = loss.mean(dim=[1, 2, 3])  # Per-sample loss
+
+    # Backward pass and optimization
+    optimizer.zero_grad(set_to_none=True)
+    loss.mean().backward()
+    optimizer.step()
+
+    # Gather per-sample losses from all processes
+    gathered_losses = [torch.zeros_like(per_sample_loss) for _ in range(world_size)]
+    dist.all_gather(gathered_losses, per_sample_loss)
+
+    # Rank 0 concatenates and saves or returns all losses
+    if rank == 0:
+        all_losses = torch.cat(gathered_losses, dim=0)  # Shape: (total_batch_size,)
+
+    else:
+        all_losses = None
+
+    # Free memory
+    del in_vars, out_vars
+    torch.cuda.empty_cache()
+
+    return end_img, pred_img, all_losses
+
+
 ####################################
 # Evaluating on a Datastep
 ####################################
@@ -417,5 +484,63 @@ def eval_DDP_loderunner_datastep(
         all_losses = torch.cat(gathered_losses, dim=0)  # Shape: (total_batch_size,)
     else:
         all_losses = None
+
+    return end_img, pred_img, all_losses
+
+
+def eval_DDP_loderunner_datastep_cylex(
+    data: tuple,
+    model,
+    loss_fn,
+    device: torch.device,
+    rank: int,
+    world_size: int,
+):
+    """A DDP-compatible evaluation step.
+
+    Args:
+        data (tuple): tuple of model input, corresponding ground truth, and lead time
+        model (loaded pytorch model): model to train
+        loss_fn (torch.nn Loss Function): loss function for training set
+        device (torch.device): device index to select
+        rank (int): Rank of device
+        world_size (int): Total number of DDP processes
+
+    """
+    print("starting in eval_DDP_loderunner_datastep")
+    # Set model to evaluation mode
+    model.eval()
+
+    # Extract data
+    start_img, channel_map, end_img, channel_map, Dt = data
+    start_img = start_img.to(device, non_blocking=True)
+    Dt = Dt.to(device, non_blocking=True)
+    end_img = end_img.to(device, non_blocking=True)
+
+    # Map input and output variable indices according to channel map
+    in_vars = torch.tensor(channel_map).flatten().to(device, non_blocking=True)
+    out_vars = torch.tensor(channel_map).flatten().to(device, non_blocking=True)
+
+    # Forward pass
+    with torch.no_grad():
+        pred_img = model(start_img, in_vars, out_vars, Dt)
+
+    # Compute loss
+    loss = loss_fn(pred_img, end_img)
+    per_sample_loss = loss.mean(dim=[1, 2, 3])  # Per-sample loss
+
+    # Gather per-sample losses from all processes
+    gathered_losses = [torch.zeros_like(per_sample_loss) for _ in range(world_size)]
+    dist.all_gather(gathered_losses, per_sample_loss)
+
+    # Rank 0 concatenates and saves or returns all losses
+    if rank == 0:
+        all_losses = torch.cat(gathered_losses, dim=0)  # Shape: (total_batch_size,)
+    else:
+        all_losses = None
+
+    # Free memory
+    del in_vars, out_vars
+    torch.cuda.empty_cache()
 
     return end_img, pred_img, all_losses
