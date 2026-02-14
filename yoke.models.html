@@ -1,0 +1,959 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="./">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="yoke.models.vit package" href="yoke.models.vit.html"><link rel="prev" title="yoke.metrics package" href="yoke.metrics.html">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>yoke.models package - Get Yoked!</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=acfd86a5" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="index.html"><div class="brand">Get Yoked!</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
+  
+  <span class="sidebar-brand-text">Get Yoked!</span>
+  
+</a><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Concepts</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="harnesses.html">Yoke Harnesses</a></li>
+<li class="toctree-l1"><a class="reference internal" href="start_study.html">Using START_study.py</a></li>
+<li class="toctree-l1"><a class="reference internal" href="loderunner_animate.html">Lode Runner Animation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="prediction_modes.html">Prediction Modes Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference:</span></p>
+<ul class="current">
+<li class="toctree-l1 current has-children"><a class="reference internal" href="modules.html">yoke</a><input aria-label="Toggle navigation of yoke" checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l2 current has-children"><a class="reference internal" href="yoke.html">yoke package</a><input aria-label="Toggle navigation of yoke package" checked="" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="yoke.datasets.html">yoke.datasets package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="yoke.helpers.html">yoke.helpers package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="yoke.losses.html">yoke.losses package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="yoke.metrics.html">yoke.metrics package</a></li>
+<li class="toctree-l3 current has-children current-page"><a class="current reference internal" href="#">yoke.models package</a><input aria-label="Toggle navigation of yoke.models package" checked="" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4 has-children"><a class="reference internal" href="yoke.models.vit.html">yoke.models.vit package</a><input aria-label="Toggle navigation of yoke.models.vit package" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l5"><a class="reference internal" href="yoke.models.vit.swin.html">yoke.models.vit.swin package</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="yoke.utils.html">yoke.utils package</a><input aria-label="Toggle navigation of yoke.utils package" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4 has-children"><a class="reference internal" href="yoke.utils.training.html">yoke.utils.training package</a><input aria-label="Toggle navigation of yoke.utils.training package" class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l5"><a class="reference internal" href="yoke.utils.training.datastep.html">yoke.utils.training.datastep package</a></li>
+<li class="toctree-l5"><a class="reference internal" href="yoke.utils.training.epoch.html">yoke.utils.training.epoch package</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+</div>
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="_sources/yoke.models.rst.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div>
+<div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="yoke-models-package">
+<h1>yoke.models package<a class="headerlink" href="#yoke-models-package" title="Link to this heading">¶</a></h1>
+<section id="subpackages">
+<h2>Subpackages<a class="headerlink" href="#subpackages" title="Link to this heading">¶</a></h2>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="yoke.models.vit.html">yoke.models.vit package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="yoke.models.vit.html#subpackages">Subpackages</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="yoke.models.vit.swin.html">yoke.models.vit.swin package</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.swin.html#submodules">Submodules</a></li>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.swin.html#module-yoke.models.vit.swin.bomberman">yoke.models.vit.swin.bomberman module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.swin.html#module-yoke.models.vit.swin.encoder">yoke.models.vit.swin.encoder module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.swin.html#module-yoke.models.vit.swin.transformer">yoke.models.vit.swin.transformer module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.swin.html#module-yoke.models.vit.swin.unet">yoke.models.vit.swin.unet module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.swin.html#module-yoke.models.vit.swin.windowed_msa">yoke.models.vit.swin.windowed_msa module</a></li>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.swin.html#module-yoke.models.vit.swin">Module contents</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="yoke.models.vit.html#submodules">Submodules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="yoke.models.vit.html#module-yoke.models.vit.aggregate_variables">yoke.models.vit.aggregate_variables module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="yoke.models.vit.html#yoke.models.vit.aggregate_variables.AggVars"><code class="docutils literal notranslate"><span class="pre">AggVars</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.html#yoke.models.vit.aggregate_variables.AggVars.forward"><code class="docutils literal notranslate"><span class="pre">AggVars.forward()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="yoke.models.vit.html#module-yoke.models.vit.embedding_encoders">yoke.models.vit.embedding_encoders module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="yoke.models.vit.html#yoke.models.vit.embedding_encoders.PosEmbed"><code class="docutils literal notranslate"><span class="pre">PosEmbed</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.html#yoke.models.vit.embedding_encoders.PosEmbed.forward"><code class="docutils literal notranslate"><span class="pre">PosEmbed.forward()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.html#yoke.models.vit.embedding_encoders.PosEmbed.initialize_weights"><code class="docutils literal notranslate"><span class="pre">PosEmbed.initialize_weights()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="yoke.models.vit.html#yoke.models.vit.embedding_encoders.RelativePositionEmbed"><code class="docutils literal notranslate"><span class="pre">RelativePositionEmbed</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.html#yoke.models.vit.embedding_encoders.RelativePositionEmbed.forward"><code class="docutils literal notranslate"><span class="pre">RelativePositionEmbed.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="yoke.models.vit.html#yoke.models.vit.embedding_encoders.TimeEmbed"><code class="docutils literal notranslate"><span class="pre">TimeEmbed</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.html#yoke.models.vit.embedding_encoders.TimeEmbed.forward"><code class="docutils literal notranslate"><span class="pre">TimeEmbed.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="yoke.models.vit.html#yoke.models.vit.embedding_encoders.VarEmbed"><code class="docutils literal notranslate"><span class="pre">VarEmbed</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.html#yoke.models.vit.embedding_encoders.VarEmbed.create_var_embedding"><code class="docutils literal notranslate"><span class="pre">VarEmbed.create_var_embedding()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.html#yoke.models.vit.embedding_encoders.VarEmbed.forward"><code class="docutils literal notranslate"><span class="pre">VarEmbed.forward()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.html#yoke.models.vit.embedding_encoders.VarEmbed.initialize_weights"><code class="docutils literal notranslate"><span class="pre">VarEmbed.initialize_weights()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="yoke.models.vit.html#yoke.models.vit.embedding_encoders.get_1d_sincos_pos_embed_from_grid"><code class="docutils literal notranslate"><span class="pre">get_1d_sincos_pos_embed_from_grid()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="yoke.models.vit.html#yoke.models.vit.embedding_encoders.get_2d_sincos_pos_embed"><code class="docutils literal notranslate"><span class="pre">get_2d_sincos_pos_embed()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="yoke.models.vit.html#yoke.models.vit.embedding_encoders.get_2d_sincos_pos_embed_from_grid"><code class="docutils literal notranslate"><span class="pre">get_2d_sincos_pos_embed_from_grid()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="yoke.models.vit.html#module-yoke.models.vit.patch_embed">yoke.models.vit.patch_embed module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="yoke.models.vit.html#yoke.models.vit.patch_embed.ParallelVarPatchEmbed"><code class="docutils literal notranslate"><span class="pre">ParallelVarPatchEmbed</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.html#yoke.models.vit.patch_embed.ParallelVarPatchEmbed.forward"><code class="docutils literal notranslate"><span class="pre">ParallelVarPatchEmbed.forward()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.html#yoke.models.vit.patch_embed.ParallelVarPatchEmbed.reset_parameters"><code class="docutils literal notranslate"><span class="pre">ParallelVarPatchEmbed.reset_parameters()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="yoke.models.vit.html#yoke.models.vit.patch_embed.SwinEmbedding"><code class="docutils literal notranslate"><span class="pre">SwinEmbedding</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.html#yoke.models.vit.patch_embed.SwinEmbedding.forward"><code class="docutils literal notranslate"><span class="pre">SwinEmbedding.forward()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="yoke.models.vit.html#module-yoke.models.vit.patch_manipulation">yoke.models.vit.patch_manipulation module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="yoke.models.vit.html#yoke.models.vit.patch_manipulation.PatchExpand"><code class="docutils literal notranslate"><span class="pre">PatchExpand</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.html#yoke.models.vit.patch_manipulation.PatchExpand.forward"><code class="docutils literal notranslate"><span class="pre">PatchExpand.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="yoke.models.vit.html#yoke.models.vit.patch_manipulation.PatchMerge"><code class="docutils literal notranslate"><span class="pre">PatchMerge</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.html#yoke.models.vit.patch_manipulation.PatchMerge.forward"><code class="docutils literal notranslate"><span class="pre">PatchMerge.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="yoke.models.vit.html#yoke.models.vit.patch_manipulation.Unpatchify"><code class="docutils literal notranslate"><span class="pre">Unpatchify</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.html#yoke.models.vit.patch_manipulation.Unpatchify.forward"><code class="docutils literal notranslate"><span class="pre">Unpatchify.forward()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="yoke.models.vit.html#module-yoke.models.vit">Module contents</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</section>
+<section id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Link to this heading">¶</a></h2>
+</section>
+<section id="module-yoke.models.CNNmodules">
+<span id="yoke-models-cnnmodules-module"></span><h2>yoke.models.CNNmodules module<a class="headerlink" href="#module-yoke.models.CNNmodules" title="Link to this heading">¶</a></h2>
+<p>Image to vector CNN modules.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="yoke.models.CNNmodules.CNN_Interpretability_Module">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">yoke.models.CNNmodules.</span></span><span class="sig-name descname"><span class="pre">CNN_Interpretability_Module</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">img_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple[int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">int]</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">1700</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">500)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kernel</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">features</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">12</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">depth</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">12</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">conv_onlyweights</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batchnorm_onlybias</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">act_layer</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">&lt;class</span> <span class="pre">'torch.nn.modules.activation.GELU'&gt;</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/yoke/models/CNNmodules.html#CNN_Interpretability_Module"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.CNNmodules.CNN_Interpretability_Module" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></p>
+<p>Interpretability module.</p>
+<p>Convolutional Neural Network Module that creates the “interpretability
+layers” Sequence of Conv2D, Batch Normalization, and Activation. The key
+idea is to keep the size of the image approximately equal throughout the
+network.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>img_size</strong> (<em>tuple</em><em>[</em><em>int</em><em>, </em><em>int</em><em>, </em><em>int</em><em>]</em>) – size of input (channels, height, width)</p></li>
+<li><p><strong>kernel</strong> (<em>int</em>) – size of square convolutional kernel</p></li>
+<li><p><strong>features</strong> (<em>int</em>) – number of features in the convolutional layers</p></li>
+<li><p><strong>depth</strong> (<em>int</em>) – number of interpretability blocks</p></li>
+<li><p><strong>conv_onlyweights</strong> (<em>bool</em>) – determines if convolutional layers learn
+only weights or weights and bias</p></li>
+<li><p><strong>batchnorm_onlybias</strong> (<em>bool</em>) – determines if the batch normalization
+layers learn only bias or weights and bias</p></li>
+<li><p><strong>act_layer</strong> (<em>nn.modules.activation</em>) – torch neural network layer class
+to use as activation</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="yoke.models.CNNmodules.CNN_Interpretability_Module.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="_modules/yoke/models/CNNmodules.html#CNN_Interpretability_Module.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.CNNmodules.CNN_Interpretability_Module.forward" title="Link to this definition">¶</a></dt>
+<dd><p>Forward method for interpretable CNN.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="yoke.models.CNNmodules.CNN_Reduction_Module">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">yoke.models.CNNmodules.</span></span><span class="sig-name descname"><span class="pre">CNN_Reduction_Module</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">img_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple[int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">int]</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">1700</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">500)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">size_threshold</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple[int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">int]</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(8</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">8)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kernel</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stride</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">features</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">12</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">conv_onlyweights</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batchnorm_onlybias</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">act_layer</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">&lt;class</span> <span class="pre">'torch.nn.modules.activation.GELU'&gt;</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/yoke/models/CNNmodules.html#CNN_Reduction_Module"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.CNNmodules.CNN_Reduction_Module" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></p>
+<p>Reduction CNN.</p>
+<p>Convolutional Neural Network Module that creates the “reduction layers”
+Sequence of Conv2D, Batch Normalization, and Activation. Key idea is to
+halve the image size at each layer using double-strided convolutions.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>img_size</strong> (<em>tuple</em><em>[</em><em>int</em><em>, </em><em>int</em><em>, </em><em>int</em><em>]</em>) – size of input
+(channels, height, width)</p></li>
+<li><p><strong>size_threshold</strong> (<em>tuple</em><em>[</em><em>int</em><em>, </em><em>int</em><em>]</em>) – (approximate) size of final,
+reduced image (height, width)</p></li>
+<li><p><strong>kernel</strong> (<em>int</em>) – size of square convolutional kernel</p></li>
+<li><p><strong>stride</strong> (<em>int</em>) – size of base stride for convolutional kernel</p></li>
+<li><p><strong>features</strong> (<em>int</em>) – number of features in the convolutional layers</p></li>
+<li><p><strong>conv_onlyweights</strong> (<em>bool</em>) – determines if convolutional layers learn
+only weights or weights and bias</p></li>
+<li><p><strong>batchnorm_onlybias</strong> (<em>bool</em>) – determines if the batch normalization layers
+learn only bias or weights and bias</p></li>
+<li><p><strong>act_layer</strong> (<em>nn.modules.activation</em>) – torch neural network layer class to
+use as activation</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="yoke.models.CNNmodules.CNN_Reduction_Module.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="_modules/yoke/models/CNNmodules.html#CNN_Reduction_Module.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.CNNmodules.CNN_Reduction_Module.forward" title="Link to this definition">¶</a></dt>
+<dd><p>Forward method for reduction CNN.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="yoke.models.CNNmodules.Image2ScalarCNN">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">yoke.models.CNNmodules.</span></span><span class="sig-name descname"><span class="pre">Image2ScalarCNN</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">img_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple[int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">int]</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">1700</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">500)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">size_threshold</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple[int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">int]</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(8</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">8)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kernel</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">features</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">12</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">interp_depth</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">12</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">conv_onlyweights</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batchnorm_onlybias</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">act_layer</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">&lt;class</span> <span class="pre">'torch.nn.modules.activation.GELU'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hidden_features</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">20</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/yoke/models/CNNmodules.html#Image2ScalarCNN"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.CNNmodules.Image2ScalarCNN" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></p>
+<p>Image to scalar CNN.</p>
+<p>Convolutional Neural Network Model that maps a single image to a scalar. Constructed
+using both an interpretability block, defined above, and a reduction block.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>img_size</strong> (<em>tuple</em><em>[</em><em>int</em><em>, </em><em>int</em><em>, </em><em>int</em><em>]</em>) – size of input (channels, height, width)</p></li>
+<li><p><strong>size_threshold</strong> (<em>tuple</em><em>[</em><em>int</em><em>, </em><em>int</em><em>]</em>) – (approximate) size of reduced image
+(height, width)</p></li>
+<li><p><strong>kernel</strong> (<em>int</em>) – size of square convolutional kernel</p></li>
+<li><p><strong>features</strong> (<em>int</em>) – number of features in the convolutional layers</p></li>
+<li><p><strong>interp_depth</strong> (<em>int</em>) – number of interpretability blocks</p></li>
+<li><p><strong>conv_onlyweights</strong> (<em>bool</em>) – determines if convolutional layers learn only
+weights or weights and bias</p></li>
+<li><p><strong>batchnorm_onlybias</strong> (<em>bool</em>) – determines if the batch normalization layers
+learn only bias or weights and bias</p></li>
+<li><p><strong>act_layer</strong> (<em>nn.modules.activation</em>) – torch neural network layer class to
+use as activation</p></li>
+<li><p><strong>hidden_features</strong> (<em>int</em>) – number of hidden features in the fully connected
+dense layer</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="yoke.models.CNNmodules.Image2ScalarCNN.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="_modules/yoke/models/CNNmodules.html#Image2ScalarCNN.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.CNNmodules.Image2ScalarCNN.forward" title="Link to this definition">¶</a></dt>
+<dd><p>Forward method for image-to-scalar CNN.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="yoke.models.CNNmodules.Image2VectorCNN">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">yoke.models.CNNmodules.</span></span><span class="sig-name descname"><span class="pre">Image2VectorCNN</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">img_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple[int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">int]</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">1120</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">400)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">29</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">size_threshold</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple[int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">int]</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(12</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">12)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kernel</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">features</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">16</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">interp_depth</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">12</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">conv_onlyweights</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batchnorm_onlybias</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">act_layer</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">&lt;class</span> <span class="pre">'torch.nn.modules.activation.GELU'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">norm_layer</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">&lt;class</span> <span class="pre">'torch.nn.modules.normalization.LayerNorm'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hidden_features</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">32</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/yoke/models/CNNmodules.html#Image2VectorCNN"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.CNNmodules.Image2VectorCNN" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></p>
+<p>Image to vector CNN.</p>
+<p>Convolutional Neural Network Model that maps an image to a vector. Constructed using
+both an interpretability block, defined above, and a reduction block.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>img_size</strong> (<em>tuple</em><em>[</em><em>int</em><em>, </em><em>int</em><em>, </em><em>int</em><em>]</em>) – size of input (channels, height, width)</p></li>
+<li><p><strong>output_dim</strong> (<em>int</em>) – size of output vector</p></li>
+<li><p><strong>size_threshold</strong> (<em>tuple</em><em>[</em><em>int</em><em>, </em><em>int</em><em>]</em>) – (approximate) size of reduced image
+(height, width)</p></li>
+<li><p><strong>kernel</strong> (<em>int</em>) – size of square convolutional kernel</p></li>
+<li><p><strong>features</strong> (<em>int</em>) – number of features in the convolutional layers</p></li>
+<li><p><strong>interp_depth</strong> (<em>int</em>) – number of interpretability blocks</p></li>
+<li><p><strong>conv_onlyweights</strong> (<em>bool</em>) – determines if convolutional layers learn only
+weights or weights and bias</p></li>
+<li><p><strong>batchnorm_onlybias</strong> (<em>bool</em>) – determines if the batch normalization layers
+learn only bias or weights and bias</p></li>
+<li><p><strong>act_layer</strong> (<em>nn.modules.activation</em>) – torch neural network layer class to
+use as activation</p></li>
+<li><p><strong>norm_layer</strong> (<em>nn.modules.normalization</em>) – torch neural network layer class</p></li>
+<li><p><strong>hidden_features</strong> (<em>int</em>) – number of hidden features in the fully connected
+dense layer</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="yoke.models.CNNmodules.Image2VectorCNN.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="_modules/yoke/models/CNNmodules.html#Image2VectorCNN.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.CNNmodules.Image2VectorCNN.forward" title="Link to this definition">¶</a></dt>
+<dd><p>Forward method for image-to-scalar CNN.</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-yoke.models.cnn_utils">
+<span id="yoke-models-cnn-utils-module"></span><h2>yoke.models.cnn_utils module<a class="headerlink" href="#module-yoke.models.cnn_utils" title="Link to this heading">¶</a></h2>
+<p>Collection of helper functions to facilitate constructing CNN modules.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="yoke.models.cnn_utils.conv2d_shape">
+<span class="sig-prename descclassname"><span class="pre">yoke.models.cnn_utils.</span></span><span class="sig-name descname"><span class="pre">conv2d_shape</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">w</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">h</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">s_w</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">s_h</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p_w</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p_h</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="_modules/yoke/models/cnn_utils.html#conv2d_shape"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.cnn_utils.conv2d_shape" title="Link to this definition">¶</a></dt>
+<dd><p>Function to calculate the new dimension of an image after a nn.Conv2d.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>w</strong> (<em>int</em>) – starting width</p></li>
+<li><p><strong>h</strong> (<em>int</em>) – starting height</p></li>
+<li><p><strong>k</strong> (<em>int</em>) – kernel size</p></li>
+<li><p><strong>s_w</strong> (<em>int</em>) – stride size along the width</p></li>
+<li><p><strong>s_h</strong> (<em>int</em>) – stride size along the height</p></li>
+<li><p><strong>p_w</strong> (<em>int</em>) – padding size along the width</p></li>
+<li><p><strong>p_h</strong> (<em>int</em>) – padding size along the height</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>number of pixels along the width
+new_h (int): number of pixels along the height
+total (int): total number of pixels in new image</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>new_w (int)</p>
+</dd>
+</dl>
+<p>See Also:
+Formula taken from
+<a class="reference external" href="https://pytorch.org/docs/stable/generated/torch.nn.Conv2d.html">https://pytorch.org/docs/stable/generated/torch.nn.Conv2d.html</a>
+Assuming a 2D input and dilation = 1</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="yoke.models.cnn_utils.convtranspose2d_shape">
+<span class="sig-prename descclassname"><span class="pre">yoke.models.cnn_utils.</span></span><span class="sig-name descname"><span class="pre">convtranspose2d_shape</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">w</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">h</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k_w</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k_h</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">s_w</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">s_h</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p_w</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">p_h</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">op_w</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">op_h</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">d_w</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">d_h</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="_modules/yoke/models/cnn_utils.html#convtranspose2d_shape"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.cnn_utils.convtranspose2d_shape" title="Link to this definition">¶</a></dt>
+<dd><p>Calculate the dimension of an image after a nn.ConvTranspose2d.</p>
+<p>This assumes <em>groups</em>, <em>dilation</em>, and <em>ouput_padding</em> are all default
+values.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>w</strong> (<em>int</em>) – starting width</p></li>
+<li><p><strong>h</strong> (<em>int</em>) – starting height</p></li>
+<li><p><strong>k_w</strong> (<em>int</em>) – kernel width size</p></li>
+<li><p><strong>k_h</strong> (<em>int</em>) – kernel height size</p></li>
+<li><p><strong>s_w</strong> (<em>int</em>) – stride size along the width</p></li>
+<li><p><strong>s_h</strong> (<em>int</em>) – stride size along the height</p></li>
+<li><p><strong>p_w</strong> (<em>int</em>) – padding size along the width</p></li>
+<li><p><strong>p_h</strong> (<em>int</em>) – padding size along the height</p></li>
+<li><p><strong>op_w</strong> (<em>int</em>) – output padding size along the width</p></li>
+<li><p><strong>op_h</strong> (<em>int</em>) – output padding size along the height</p></li>
+<li><p><strong>d_w</strong> (<em>int</em>) – dilation size along the width</p></li>
+<li><p><strong>d_h</strong> (<em>int</em>) – dilation size along the height</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>number of pixels along the width
+new_h (int): number of pixels along the height
+total (int): total number of pixels in new image</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>new_w (int)</p>
+</dd>
+</dl>
+<p>See Also:
+Formula taken from
+<a class="reference external" href="https://pytorch.org/docs/stable/generated/torch.nn.ConvTranspose2d.html">https://pytorch.org/docs/stable/generated/torch.nn.ConvTranspose2d.html</a></p>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="yoke.models.cnn_utils.generalMLP">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">yoke.models.cnn_utils.</span></span><span class="sig-name descname"><span class="pre">generalMLP</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">64</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">16</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hidden_feature_list</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple[int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">...]</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(16</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">32</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">32</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">16)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">act_layer</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">&lt;class</span> <span class="pre">'torch.nn.modules.activation.GELU'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">norm_layer</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">&lt;class</span> <span class="pre">'torch.nn.modules.normalization.LayerNorm'&gt;</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/yoke/models/cnn_utils.html#generalMLP"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.cnn_utils.generalMLP" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></p>
+<p>A general multi-layer perceptron structure.</p>
+<p>Consists of stacked linear layers, normalizing layers, and
+activations. This is meant to be reused as a highly customizeable, but
+standardized, MLP structure.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>input_dim</strong> (<em>int</em>) – Dimension of input</p></li>
+<li><p><strong>output_dim</strong> (<em>int</em>) – Dimension of output</p></li>
+<li><p><strong>hidden_feature_list</strong> (<em>tuple</em><em>[</em><em>int</em><em>, </em><em>...</em><em>]</em>) – List of number of features in each layer.
+Length determines number of layers.</p></li>
+<li><p><strong>act_layer</strong> (<em>nn.modules.activation</em>) – torch neural network layer class to
+use as activation</p></li>
+<li><p><strong>norm_layer</strong> (<em>nn.Module</em>) – Normalization layer.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="yoke.models.cnn_utils.generalMLP.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="_modules/yoke/models/cnn_utils.html#generalMLP.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.cnn_utils.generalMLP.forward" title="Link to this definition">¶</a></dt>
+<dd><p>Forward method for MLP.</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-yoke.models.hybridCNNmodules">
+<span id="yoke-models-hybridcnnmodules-module"></span><h2>yoke.models.hybridCNNmodules module<a class="headerlink" href="#module-yoke.models.hybridCNNmodules" title="Link to this heading">¶</a></h2>
+<p>Vector-and-Image to Vector-and-Image CNNs.</p>
+<p>PyTorch nn.Module classes forming CNNs mapping vectors and images to vectors
+and images.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="yoke.models.hybridCNNmodules.hybrid2vectorCNN">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">yoke.models.hybridCNNmodules.</span></span><span class="sig-name descname"><span class="pre">hybrid2vectorCNN</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">img_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple[int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">int]</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">1120</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">400)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input_vector_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">28</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">features</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">12</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">depth</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">12</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kernel</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">img_embed_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">32</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vector_embed_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">32</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">size_reduce_threshold</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple[int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">int]</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(8</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">8)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vector_feature_list</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple[int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">...]</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(32</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">32</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">64</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">64)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_feature_list</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple[int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">...]</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(64</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">128</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">128</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">64)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">act_layer</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">&lt;class</span> <span class="pre">'torch.nn.modules.activation.GELU'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">norm_layer</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">&lt;class</span> <span class="pre">'torch.nn.modules.normalization.LayerNorm'&gt;</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/yoke/models/hybridCNNmodules.html#hybrid2vectorCNN"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.hybridCNNmodules.hybrid2vectorCNN" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></p>
+<p>Vector-and-Image to Vector-and-Image CNNs.</p>
+<p>Convolutional Neural Network Module that maps a triple (y, H1, H2) to a
+vector, R. Here, y is a 1D-tensor, H1 and H2 are 2D-tensors, and R is a
+1D-tensor. Each input is first processed through an independent branch
+before concatenation to a dense network.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>img_size</strong> (<em>tuple</em><em>[</em><em>int</em><em>, </em><em>int</em><em>, </em><em>int</em><em>]</em>) – (C, H, W) dimensions of H1 and H2.</p></li>
+<li><p><strong>input_vector_size</strong> (<em>int</em>) – Size of input vector</p></li>
+<li><p><strong>output_dim</strong> (<em>int</em>) – Dimension of vector output.</p></li>
+<li><p><strong>features</strong> (<em>int</em>) – Number of output channels/features for each convolutional layer.</p></li>
+<li><p><strong>depth</strong> (<em>int</em>) – Number of convolutional layers in each image processing branch.</p></li>
+<li><p><strong>kernel</strong> (<em>int</em>) – Size of symmetric convolutional kernels</p></li>
+<li><p><strong>img_embed_dim</strong> (<em>int</em>) – Number of features in MLP output from image embeddings.</p></li>
+<li><p><strong>vector_embed_dim</strong> (<em>int</em>) – Number of features in MLP output from image embeddings.</p></li>
+<li><p><strong>vector_feature_list</strong> (<em>tuple</em><em>[</em><em>int</em><em>, </em><em>...</em><em>]</em>) – Number of features in each hidden layer
+of vector-MLP.</p></li>
+<li><p><strong>output_feature_list</strong> (<em>tuple</em><em>[</em><em>int</em><em>, </em><em>...</em><em>]</em>) – Number of features in each hidden layer
+of final/output-MLP.</p></li>
+<li><p><strong>act_layer</strong> (<em>nn.Module</em>) – torch neural network layer class to use as activation</p></li>
+<li><p><strong>norm_layer</strong> (<em>nn.Module</em>) – torch neural network layer class to use as normalization
+between MLP layers.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="yoke.models.hybridCNNmodules.hybrid2vectorCNN.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">h1</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">h2</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="_modules/yoke/models/hybridCNNmodules.html#hybrid2vectorCNN.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.hybridCNNmodules.hybrid2vectorCNN.forward" title="Link to this definition">¶</a></dt>
+<dd><p>Forward method for hybrid CNN.</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-yoke.models.mnist_model">
+<span id="yoke-models-mnist-model-module"></span><h2>yoke.models.mnist_model module<a class="headerlink" href="#module-yoke.models.mnist_model" title="Link to this heading">¶</a></h2>
+<p>Defines neural network architecture for MNIST digit classification.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="yoke.models.mnist_model.mnist_CNN">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">yoke.models.mnist_model.</span></span><span class="sig-name descname"><span class="pre">mnist_CNN</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">conv1_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">32</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">conv2_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">64</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">conv3_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">128</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">conv4_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">128</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/yoke/models/mnist_model.html#mnist_CNN"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.mnist_model.mnist_CNN" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></p>
+<p>CNN for classifying MNIST digits.</p>
+<p>Maps a 1x28x28 MNIST image to a log-probability distribution over digits 0-9.</p>
+<p>Convolutional Neural Network module that takes a single-channel 28x28 input
+image and produces a 10-dimensional log-probability vector via a series of
+four convolutional blocks (conv → ReLU → optional pooling), a dropout, and
+two fully connected layers.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>conv1_size</strong> (<em>int</em>) – Number of output channels for the first conv layer.</p></li>
+<li><p><strong>conv2_size</strong> (<em>int</em>) – Number of output channels for the second conv layer.</p></li>
+<li><p><strong>conv3_size</strong> (<em>int</em>) – Number of output channels for the third conv layer.</p></li>
+<li><p><strong>conv4_size</strong> (<em>int</em>) – Number of output channels for the fourth conv layer.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="simple">
+<dt>Input:</dt><dd><p>x (torch.Tensor):   Float tensor of shape (N, 1, 28, 28), where N is batch size.</p>
+</dd>
+<dt>Output:</dt><dd><dl class="simple">
+<dt>torch.Tensor:       Float tensor of shape (N, 10) containing log-probabilities</dt><dd><p>for each digit class.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="yoke.models.mnist_model.mnist_CNN.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="_modules/yoke/models/mnist_model.html#mnist_CNN.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.mnist_model.mnist_CNN.forward" title="Link to this definition">¶</a></dt>
+<dd><p>Defines the forward pass of the network.</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-yoke.models.policyCNNmodules">
+<span id="yoke-models-policycnnmodules-module"></span><h2>yoke.models.policyCNNmodules module<a class="headerlink" href="#module-yoke.models.policyCNNmodules" title="Link to this heading">¶</a></h2>
+<p>Probabilistic CNN modules for RL policy networks.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="yoke.models.policyCNNmodules.gaussian_policyCNN">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">yoke.models.policyCNNmodules.</span></span><span class="sig-name descname"><span class="pre">gaussian_policyCNN</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">img_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple[int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">int]</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">1120</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">400)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input_vector_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">28</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">28</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_variance</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1e-06</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">features</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">12</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">depth</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">12</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kernel</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">img_embed_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">32</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vector_embed_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">32</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">size_reduce_threshold</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple[int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">int]</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(8</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">8)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vector_feature_list</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple[int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">...]</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(32</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">32</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">64</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">64)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_feature_list</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple[int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">...]</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(64</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">128</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">128</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">64)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">act_layer</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">&lt;class</span> <span class="pre">'torch.nn.modules.activation.GELU'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">norm_layer</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">&lt;class</span> <span class="pre">'torch.nn.modules.normalization.LayerNorm'&gt;</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/yoke/models/policyCNNmodules.html#gaussian_policyCNN"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.policyCNNmodules.gaussian_policyCNN" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></p>
+<p>Vector-and-Image to Gaussian distribution.</p>
+<p>Convolutional Neural Network Module that maps a triple (y, H1, H2) to a
+Gaussian distribution, N(x, C). Here, y is a 1D-tensor, H1 and H2 are
+2D-tensors. The mean x is a 1D-tensor and C is a 2D-tensor satisfying the
+symmetry and positive-definite properties of a covariance.</p>
+<p>Each input is first processed through an independent branch before
+concatenation to two forks of dense networks to estimate the mean and
+covariance.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>img_size</strong> (<em>tuple</em><em>[</em><em>int</em><em>, </em><em>int</em><em>, </em><em>int</em><em>]</em>) – (C, H, W) dimensions of H1 and H2.</p></li>
+<li><p><strong>input_vector_size</strong> (<em>int</em>) – Size of input vector</p></li>
+<li><p><strong>output_dim</strong> (<em>int</em>) – Dimension of Guassian mean.</p></li>
+<li><p><strong>min_variance</strong> (<em>float</em>) – Minimum variance in diagonal covariance entries.</p></li>
+<li><p><strong>features</strong> (<em>int</em>) – Number of output channels/features for each convolutional layer.</p></li>
+<li><p><strong>depth</strong> (<em>int</em>) – Number of convolutional layers in each image processing branch.</p></li>
+<li><p><strong>kernel</strong> (<em>int</em>) – Size of symmetric convolutional kernels</p></li>
+<li><p><strong>img_embed_dim</strong> (<em>int</em>) – Number of features in MLP output from image embeddings.</p></li>
+<li><p><strong>vector_embed_dim</strong> (<em>int</em>) – Number of features in MLP output from image embeddings.</p></li>
+<li><p><strong>vector_feature_list</strong> (<em>tuple</em><em>[</em><em>int</em><em>, </em><em>...</em><em>]</em>) – Number of features in each hidden layer
+of vector-MLP.</p></li>
+<li><p><strong>output_feature_list</strong> (<em>tuple</em><em>[</em><em>int</em><em>, </em><em>...</em><em>]</em>) – Number of features in each hidden layer
+of final/output-MLP.</p></li>
+<li><p><strong>act_layer</strong> (<em>nn.Module</em>) – torch neural network layer class to use as activation</p></li>
+<li><p><strong>norm_layer</strong> (<em>nn.Module</em>) – torch neural network layer class to use as normalization
+between MLP layers.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="yoke.models.policyCNNmodules.gaussian_policyCNN.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">h1</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">h2</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="_modules/yoke/models/policyCNNmodules.html#gaussian_policyCNN.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.policyCNNmodules.gaussian_policyCNN.forward" title="Link to this definition">¶</a></dt>
+<dd><p>Forward method for hybrid CNN.</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-yoke.models.surrogateCNNmodules">
+<span id="yoke-models-surrogatecnnmodules-module"></span><h2>yoke.models.surrogateCNNmodules module<a class="headerlink" href="#module-yoke.models.surrogateCNNmodules" title="Link to this heading">¶</a></h2>
+<p>Vector to Image CNN nn.Modules.</p>
+<p>PyTorch nn.Module classes forming CNNs mapping vectors of scalar inputs to
+images.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="yoke.models.surrogateCNNmodules.jekelCNNsurrogate">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">yoke.models.surrogateCNNmodules.</span></span><span class="sig-name descname"><span class="pre">jekelCNNsurrogate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">input_size:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">29,</span> <span class="pre">linear_features:</span> <span class="pre">tuple[int,</span> <span class="pre">int]</span> <span class="pre">=</span> <span class="pre">(4,</span> <span class="pre">4),</span> <span class="pre">kernel:</span> <span class="pre">tuple[int,</span> <span class="pre">int]</span> <span class="pre">=</span> <span class="pre">(3,</span> <span class="pre">3),</span> <span class="pre">nfeature_list:</span> <span class="pre">list[int]</span> <span class="pre">=</span> <span class="pre">[512,</span> <span class="pre">512,</span> <span class="pre">512,</span> <span class="pre">512,</span> <span class="pre">256,</span> <span class="pre">128,</span> <span class="pre">64,</span> <span class="pre">32],</span> <span class="pre">output_image_size:</span> <span class="pre">tuple[int,</span> <span class="pre">int]</span> <span class="pre">=</span> <span class="pre">(1120,</span> <span class="pre">800),</span> <span class="pre">act_layer:</span> <span class="pre">~torch.nn.modules.module.Module</span> <span class="pre">=</span> <span class="pre">&lt;class</span> <span class="pre">'torch.nn.modules.activation.GELU'&gt;</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/yoke/models/surrogateCNNmodules.html#jekelCNNsurrogate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.surrogateCNNmodules.jekelCNNsurrogate" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></p>
+<p>Vector-to-image CNN.</p>
+<p>Convolutional Neural Network Module that creates a scalar-to-image
+surrogate using a sequence of ConvTranspose2D, Batch Normalization, and
+Activation layers.</p>
+<p>This architecture is meant to reproduce the architecture described in
+Jekel et. al. 2022 <em>Using conservation laws to infer deep learning
+model accuracy of Richtmyer-Meshkov instabilities.</em></p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>input_size</strong> (<em>int</em>) – Size of input</p></li>
+<li><p><strong>linear_features</strong> (<em>tuple</em><em>[</em><em>int</em><em>, </em><em>int</em><em>]</em>) – Window size scalar parameters are
+originally mapped into</p></li>
+<li><p><strong>kernel</strong> (<em>tuple</em><em>[</em><em>int</em><em>, </em><em>int</em><em>]</em>) – Size of transpose-convolutional kernel</p></li>
+<li><p><strong>nfeature_list</strong> (<em>list</em><em>[</em><em>int</em><em>]</em>) – List of number of features in each
+T-convolutional layer</p></li>
+<li><p><strong>output_image_size</strong> (<em>tuple</em><em>[</em><em>int</em><em>, </em><em>int</em><em>]</em>) – Image size to output, (H, W).
+Channels are automatically inherited.</p></li>
+<li><p><strong>act_layer</strong> (<em>nn.modules.activation</em>) – torch neural network layer class
+to use as activation</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="yoke.models.surrogateCNNmodules.jekelCNNsurrogate.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="_modules/yoke/models/surrogateCNNmodules.html#jekelCNNsurrogate.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.surrogateCNNmodules.jekelCNNsurrogate.forward" title="Link to this definition">¶</a></dt>
+<dd><p>Forward method for Jekel t-CNN.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="yoke.models.surrogateCNNmodules.tCNNsurrogate">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">yoke.models.surrogateCNNmodules.</span></span><span class="sig-name descname"><span class="pre">tCNNsurrogate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">input_size:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">29,</span> <span class="pre">linear_features:</span> <span class="pre">tuple[int,</span> <span class="pre">int]</span> <span class="pre">=</span> <span class="pre">(7,</span> <span class="pre">5,</span> <span class="pre">256),</span> <span class="pre">initial_tconv_kernel:</span> <span class="pre">tuple[int,</span> <span class="pre">int]</span> <span class="pre">=</span> <span class="pre">(5,</span> <span class="pre">5),</span> <span class="pre">initial_tconv_stride:</span> <span class="pre">tuple[int,</span> <span class="pre">int]</span> <span class="pre">=</span> <span class="pre">(5,</span> <span class="pre">5),</span> <span class="pre">initial_tconv_padding:</span> <span class="pre">tuple[int,</span> <span class="pre">int]</span> <span class="pre">=</span> <span class="pre">(0,</span> <span class="pre">0),</span> <span class="pre">initial_tconv_outpadding:</span> <span class="pre">tuple[int,</span> <span class="pre">int]</span> <span class="pre">=</span> <span class="pre">(0,</span> <span class="pre">0),</span> <span class="pre">initial_tconv_dilation:</span> <span class="pre">tuple[int,</span> <span class="pre">int]</span> <span class="pre">=</span> <span class="pre">(1,</span> <span class="pre">1),</span> <span class="pre">kernel:</span> <span class="pre">tuple[int,</span> <span class="pre">int]</span> <span class="pre">=</span> <span class="pre">(3,</span> <span class="pre">3),</span> <span class="pre">nfeature_list:</span> <span class="pre">list[int]</span> <span class="pre">=</span> <span class="pre">[256,</span> <span class="pre">128,</span> <span class="pre">64,</span> <span class="pre">32,</span> <span class="pre">16],</span> <span class="pre">output_image_size:</span> <span class="pre">tuple[int,</span> <span class="pre">int]</span> <span class="pre">=</span> <span class="pre">(1120,</span> <span class="pre">800),</span> <span class="pre">output_image_channels:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">1,</span> <span class="pre">act_layer:</span> <span class="pre">~torch.nn.modules.module.Module</span> <span class="pre">=</span> <span class="pre">&lt;class</span> <span class="pre">'torch.nn.modules.activation.GELU'&gt;</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/yoke/models/surrogateCNNmodules.html#tCNNsurrogate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.surrogateCNNmodules.tCNNsurrogate" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></p>
+<p>Vector-to-Image CNN.</p>
+<p>Convolutional Neural Network Module that creates a scalar-to-image
+surrogate using a sequence of ConvTranspose2D, Batch Normalization, and
+Activation layers.</p>
+<p>This architecture is meant to reproduce the architecture described in
+Jekel et. al. 2022 <em>Using conservation laws to infer deep learning
+model accuracy of Richtmyer-Meshkov instabilities.</em></p>
+<p>However, image sizes are not always square powers of 2. Therefore, we
+allow a transpose convolution with specified parameters to resize the
+initial image stack to something that can be upsized to the output
+image size by multiplying by a power of 2. Unlike the jekelCNNsurrogate
+class which dealt with resizing by interpolation in the last layer. It
+is confusing because it is…</p>
+<p>WARNING!!!</p>
+<p>If the linear_features, intial convolution parameters, and feature list are
+not set up carefully then the output will be different than the expected
+output image size. A helper function should be constructed to aid in
+checking consistency but is not available now.</p>
+<p>WARNING!!!</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>input_size</strong> (<em>int</em>) – Size of input</p></li>
+<li><p><strong>linear_features</strong> (<em>tuple</em><em>[</em><em>int</em><em>, </em><em>int</em><em>, </em><em>int</em><em>]</em>) – Window size and number of features
+scalar parameters are originally
+mapped into</p></li>
+<li><p><strong>initial_tconv_kernel</strong> (<em>tuple</em><em>[</em><em>int</em><em>, </em><em>int</em><em>]</em>) – Kernel size of initial tconv2d</p></li>
+<li><p><strong>initial_tconv_stride</strong> (<em>tuple</em><em>[</em><em>int</em><em>, </em><em>int</em><em>]</em>) – Stride size of initial tconv2d</p></li>
+<li><p><strong>initial_tconv_padding</strong> (<em>tuple</em><em>[</em><em>int</em><em>, </em><em>int</em><em>]</em>) – Padding size of initial tconv2d</p></li>
+<li><p><strong>initial_tconv_outpadding</strong> (<em>tuple</em><em>[</em><em>int</em><em>, </em><em>int</em><em>]</em>) – Outout padding size of
+initial tconv2d</p></li>
+<li><p><strong>initial_tconv_dilation</strong> (<em>tuple</em><em>[</em><em>int</em><em>, </em><em>int</em><em>]</em>) – Dilation size of initial tconv2d</p></li>
+<li><p><strong>kernel</strong> (<em>tuple</em><em>[</em><em>int</em><em>, </em><em>int</em><em>]</em>) – Size of transpose-convolutional kernel</p></li>
+<li><p><strong>nfeature_list</strong> (<em>list</em><em>[</em><em>int</em><em>]</em>) – List of number of features in each
+T-convolutional layer</p></li>
+<li><p><strong>output_image_size</strong> (<em>tuple</em><em>[</em><em>int</em><em>, </em><em>int</em><em>]</em>) – Image size to output, (H, W).</p></li>
+<li><p><strong>output_image_channels</strong> (<em>int</em>) – Number of output image channels.</p></li>
+<li><p><strong>act_layer</strong> (<em>nn.modules.activation</em>) – torch neural network layer class
+to use as activation</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="yoke.models.surrogateCNNmodules.tCNNsurrogate.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="_modules/yoke/models/surrogateCNNmodules.html#tCNNsurrogate.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.surrogateCNNmodules.tCNNsurrogate.forward" title="Link to this definition">¶</a></dt>
+<dd><p>Forward method for the t-CNN surrogate.</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-yoke.models">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-yoke.models" title="Link to this heading">¶</a></h2>
+<p>All YOKE models live under here.</p>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="yoke.models.vit.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">yoke.models.vit package</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="yoke.metrics.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">yoke.metrics package</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2025, Los Alamos National Labs. Produced by: Kyle Hickmann, Skylar Callis, Gal Egozi, Soumi De, Bryan Kaiser, Sourabh Pandit, Sharmistha Chakrabarti, Derek Armstrong, Andrew Henrick, David Schodt
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">yoke.models package</a><ul>
+<li><a class="reference internal" href="#subpackages">Subpackages</a></li>
+<li><a class="reference internal" href="#submodules">Submodules</a></li>
+<li><a class="reference internal" href="#module-yoke.models.CNNmodules">yoke.models.CNNmodules module</a><ul>
+<li><a class="reference internal" href="#yoke.models.CNNmodules.CNN_Interpretability_Module"><code class="docutils literal notranslate"><span class="pre">CNN_Interpretability_Module</span></code></a><ul>
+<li><a class="reference internal" href="#yoke.models.CNNmodules.CNN_Interpretability_Module.forward"><code class="docutils literal notranslate"><span class="pre">CNN_Interpretability_Module.forward()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#yoke.models.CNNmodules.CNN_Reduction_Module"><code class="docutils literal notranslate"><span class="pre">CNN_Reduction_Module</span></code></a><ul>
+<li><a class="reference internal" href="#yoke.models.CNNmodules.CNN_Reduction_Module.forward"><code class="docutils literal notranslate"><span class="pre">CNN_Reduction_Module.forward()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#yoke.models.CNNmodules.Image2ScalarCNN"><code class="docutils literal notranslate"><span class="pre">Image2ScalarCNN</span></code></a><ul>
+<li><a class="reference internal" href="#yoke.models.CNNmodules.Image2ScalarCNN.forward"><code class="docutils literal notranslate"><span class="pre">Image2ScalarCNN.forward()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#yoke.models.CNNmodules.Image2VectorCNN"><code class="docutils literal notranslate"><span class="pre">Image2VectorCNN</span></code></a><ul>
+<li><a class="reference internal" href="#yoke.models.CNNmodules.Image2VectorCNN.forward"><code class="docutils literal notranslate"><span class="pre">Image2VectorCNN.forward()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a class="reference internal" href="#module-yoke.models.cnn_utils">yoke.models.cnn_utils module</a><ul>
+<li><a class="reference internal" href="#yoke.models.cnn_utils.conv2d_shape"><code class="docutils literal notranslate"><span class="pre">conv2d_shape()</span></code></a></li>
+<li><a class="reference internal" href="#yoke.models.cnn_utils.convtranspose2d_shape"><code class="docutils literal notranslate"><span class="pre">convtranspose2d_shape()</span></code></a></li>
+<li><a class="reference internal" href="#yoke.models.cnn_utils.generalMLP"><code class="docutils literal notranslate"><span class="pre">generalMLP</span></code></a><ul>
+<li><a class="reference internal" href="#yoke.models.cnn_utils.generalMLP.forward"><code class="docutils literal notranslate"><span class="pre">generalMLP.forward()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a class="reference internal" href="#module-yoke.models.hybridCNNmodules">yoke.models.hybridCNNmodules module</a><ul>
+<li><a class="reference internal" href="#yoke.models.hybridCNNmodules.hybrid2vectorCNN"><code class="docutils literal notranslate"><span class="pre">hybrid2vectorCNN</span></code></a><ul>
+<li><a class="reference internal" href="#yoke.models.hybridCNNmodules.hybrid2vectorCNN.forward"><code class="docutils literal notranslate"><span class="pre">hybrid2vectorCNN.forward()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a class="reference internal" href="#module-yoke.models.mnist_model">yoke.models.mnist_model module</a><ul>
+<li><a class="reference internal" href="#yoke.models.mnist_model.mnist_CNN"><code class="docutils literal notranslate"><span class="pre">mnist_CNN</span></code></a><ul>
+<li><a class="reference internal" href="#yoke.models.mnist_model.mnist_CNN.forward"><code class="docutils literal notranslate"><span class="pre">mnist_CNN.forward()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a class="reference internal" href="#module-yoke.models.policyCNNmodules">yoke.models.policyCNNmodules module</a><ul>
+<li><a class="reference internal" href="#yoke.models.policyCNNmodules.gaussian_policyCNN"><code class="docutils literal notranslate"><span class="pre">gaussian_policyCNN</span></code></a><ul>
+<li><a class="reference internal" href="#yoke.models.policyCNNmodules.gaussian_policyCNN.forward"><code class="docutils literal notranslate"><span class="pre">gaussian_policyCNN.forward()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a class="reference internal" href="#module-yoke.models.surrogateCNNmodules">yoke.models.surrogateCNNmodules module</a><ul>
+<li><a class="reference internal" href="#yoke.models.surrogateCNNmodules.jekelCNNsurrogate"><code class="docutils literal notranslate"><span class="pre">jekelCNNsurrogate</span></code></a><ul>
+<li><a class="reference internal" href="#yoke.models.surrogateCNNmodules.jekelCNNsurrogate.forward"><code class="docutils literal notranslate"><span class="pre">jekelCNNsurrogate.forward()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#yoke.models.surrogateCNNmodules.tCNNsurrogate"><code class="docutils literal notranslate"><span class="pre">tCNNsurrogate</span></code></a><ul>
+<li><a class="reference internal" href="#yoke.models.surrogateCNNmodules.tCNNsurrogate.forward"><code class="docutils literal notranslate"><span class="pre">tCNNsurrogate.forward()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a class="reference internal" href="#module-yoke.models">Module contents</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="_static/documentation_options.js?v=8a448e45"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/scripts/furo.js?v=46bd48cc"></script>
+    </body>
+</html>
