@@ -12,8 +12,20 @@ from yoke.utils.training.datastep.loderunner import (
     eval_scheduled_loderunner_datastep,
     train_DDP_loderunner_datastep,
     eval_DDP_loderunner_datastep,
+    train_DDP_loderunner_datastep_cylex,
+    eval_DDP_loderunner_datastep_cylex,
 )
 
+DATASTEP_FN = {
+    "pli": {
+        "train": train_DDP_loderunner_datastep,
+        "eval": eval_DDP_loderunner_datastep,
+    },
+    "cylex": {
+        "train": train_DDP_loderunner_datastep_cylex,
+        "eval": eval_DDP_loderunner_datastep_cylex,
+    },
+}
 
 def train_simple_loderunner_epoch(
     channel_map: list,
@@ -346,6 +358,7 @@ def train_DDP_loderunner_epoch(
     device: torch.device,
     rank: int,
     world_size: int,
+    dataset: str = "pli",
 ) -> None:
     """Distributed data-parallel LodeRunner Epoch.
 
@@ -387,8 +400,15 @@ def train_DDP_loderunner_epoch(
             if trainbatch_ID >= num_train_batches:
                 break
 
-            # Perform a single training step
-            truth, pred, train_losses = train_DDP_loderunner_datastep(
+            # Get correct datastep function
+            dataset_fns = DATASTEP_FN.get(dataset)
+            if dataset_fns is None:
+                raise ValueError(f"Unsupported dataset: {dataset}")
+
+            train_fn = dataset_fns["train"]
+
+            # Training
+            truth, pred, train_losses = train_fn(
                 traindata, model, optimizer, loss_fn, device, rank, world_size
             )
 
@@ -419,14 +439,15 @@ def train_DDP_loderunner_epoch(
                     # Stop when number of training batches is reached
                     if valbatch_ID >= num_val_batches:
                         break
-
-                    end_img, pred_img, val_losses = eval_DDP_loderunner_datastep(
+                    
+                    eval_fn  = dataset_fns["eval"]
+                    end_img, pred_img, val_losses = eval_fn(
                         valdata,
                         model,
                         loss_fn,
                         device,
                         rank,
-                        world_size,
+                        world_size
                     )
 
                     # Save validation record (rank 0 only)
