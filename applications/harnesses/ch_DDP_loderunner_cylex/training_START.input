@@ -50,4 +50,4 @@ cx241203_prefixes_test_10pct_noBe_noVoid_truncated.txt
 --val_batches
 <NVAL_BATCH>
 --TRAIN_PER_VAL
-2
+5
