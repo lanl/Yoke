@@ -19,7 +19,7 @@ import random
 import logging
 import numpy as np
 
-from yoke.models.vit.swin.bomberman import LodeRunner
+from yoke.models.vit.swin.loderunner import LodeRunner
 from yoke.datasets.lsc_dataset import LSC_rho2rho_temporal_DataSet
 from yoke.utils.training.epoch.loderunner import train_simple_loderunner_epoch
 from yoke.utils.dataload import make_dataloader

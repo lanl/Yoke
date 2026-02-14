@@ -18,7 +18,7 @@ import numpy as np
 
 import torch
 
-from yoke.models.vit.swin.bomberman import LodeRunner
+from yoke.models.vit.swin.loderunner import LodeRunner
 from yoke.utils.checkpointing import load_model_and_optimizer_hdf5
 
 # Imports for plotting
