@@ -79,7 +79,7 @@ def main(args: argparse.Namespace) -> None:
 
     # NOTE: optimizer args are required by load_model_and_optimizer, even for eval.
     model, _optimizer, starting_epoch = load_model_and_optimizer(
-        args.checkpoint,
+        args.pretrain_checkpoint,
         optimizer_class=torch.optim.AdamW,
         optimizer_kwargs={
             "lr": 1e-6,
@@ -95,7 +95,7 @@ def main(args: argparse.Namespace) -> None:
     model.eval()
 
     # load_and_eval_YokePth.py prints these; keep similar behavior here
-    print(f"Loaded checkpoint: {args.checkpoint}", flush=True)
+    print(f"Loaded checkpoint: {args.pretrain_checkpoint}", flush=True)
     print(f"Checkpoint starting_epoch: {starting_epoch}", flush=True)
     if hasattr(model, "default_vars"):
         print("Default LodeRunner fields:", model.default_vars, flush=True)
