@@ -301,6 +301,8 @@ def add_training_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParse
         default=None,
         help="Path to checkpoint to continue training from",
     )
+    parser.add_argument("--pretrained_model", type=str, default=None,
+                    help="Path to pretrained model file to initialize weights for fine-tuning.")
     parser.add_argument(
         "--only_load_backbone",
         action="store_true",
