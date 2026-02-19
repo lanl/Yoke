@@ -103,10 +103,10 @@ class LodeRunner(nn.Module):
             window_sizes=window_sizes,
             patch_merge_scales=patch_merge_scales,
         )
-        #print("In bomberman: image_size=",image_size)
-        #print("In bomberman: patch_size=",patch_size)
-        #print("In bomberman: window_sizes=",window_sizes)
-        #print("In bomberman: patch_merge_scales=",patch_merge_scales)
+        print("In bomberman: image_size=",image_size)
+        print("In bomberman: patch_size=",patch_size)
+        print("In bomberman: window_sizes=",window_sizes)
+        print("In bomberman: patch_merge_scales=",patch_merge_scales)
         assert np.all(valid), (
             "Invalid combination of image_size, patch_size, window_sizes, "
             "and patch_merge_scales!"
