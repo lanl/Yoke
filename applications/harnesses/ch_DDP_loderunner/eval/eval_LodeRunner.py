@@ -7,6 +7,7 @@ batches each of a set `batch_size`.
 
 import argparse
 import os
+import time
 
 import torch
 import torch.nn as nn
@@ -143,6 +144,9 @@ def main(args: argparse.Namespace) -> None:
         test_sampler = test_dataloader.sampler
         test_sampler.set_epoch(epochIDX)
 
+        # Time each epoch and print to stdout
+        startTime = time.time()
+
         # Testing epoch
         eval_loderunner_epoch(
             testing_data=test_dataloader,
@@ -155,7 +159,14 @@ def main(args: argparse.Namespace) -> None:
             device=device,
         )
 
+        # Time each epoch and print to stdout
+        endTime = time.time()
+
+        epoch_time = (endTime - startTime) / 60
+
+        # Print Summary Results
         print(f"Completed epoch {epochIDX}...", flush=True)
+        print(f"Epoch time (minutes): {epoch_time:.2f}", flush=True)
 
 
 if __name__ == "__main__":
