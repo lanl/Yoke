@@ -5,7 +5,7 @@
 --LSC_NPZ_DIR
 /lustre/scratch5/exempt/artimis/data/lsc240420/
 --test_filelist
-lsc240420_prefixes_test_80pct.txt
+lsc240420_prefixes_test_10pct.txt
 --test_rcrd_filename
 ./testing_evaluation.csv
 --batch_size
