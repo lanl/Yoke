@@ -261,7 +261,6 @@ def train_DDP_loderunner_datastep_cylex(
     out_vars = torch.tensor(channel_map).flatten().to(device, non_blocking=True)
 
     # Forward pass
-    #print("In torch_training_utils, start_img size=",start_img.size())
     pred_img = model(start_img, in_vars, out_vars, Dt)
 
     # Compute loss

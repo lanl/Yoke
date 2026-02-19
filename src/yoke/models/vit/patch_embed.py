@@ -132,8 +132,8 @@ class ParallelVarPatchEmbed(nn.Module):
         must correspond to the same variables.
 
         """
-        print("In patch_embed forward, in_vars=", in_vars)
-        print("In patch_embed forward, in_vars size=", in_vars.size())
+        #print("In patch_embed forward, in_vars=", in_vars)
+        #print("In patch_embed forward, in_vars size=", in_vars.size())
         weights = self.proj_weights[in_vars].flatten(0, 1)
         biases = self.proj_biases[in_vars].flatten(0, 1)
 
