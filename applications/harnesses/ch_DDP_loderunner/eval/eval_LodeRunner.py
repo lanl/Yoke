@@ -43,7 +43,7 @@ parser.set_defaults(
 
 # Eval-specific args
 parser.add_argument(
-    "--checkpoint",
+    "--pretrain_checkpoint",
     type=str,
     default="./study005_modelState_epoch0100.pth",
     help=(

@@ -1,4 +1,4 @@
---checkpoint
+--pretrain_checkpoint
 ./study005_modelState_epoch0100.pth
 --FILELIST_DIR
 /usr/projects/artimis/mpmm/hickmank/github_yoke/applications/filelists/
