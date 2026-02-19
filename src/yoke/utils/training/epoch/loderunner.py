@@ -494,7 +494,7 @@ def eval_loderunner_epoch(
                 [
                     np.full(len(test_losses), epochIDX),
                     np.full(len(test_losses), testbatch_ID),
-                    test_losses.cpu().numpy().flatten(),
+                    test_losses.cpu().detach().numpy().flatten(),
                 ]
             )
             np.savetxt(test_rcrd_file, batch_records, fmt="%d, %d, %.8f")
