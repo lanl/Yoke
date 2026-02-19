@@ -275,18 +275,6 @@ def main(args, rank, world_size, local_rank, device):
         last_epoch=last_epoch,
     )
 
-    def collate_variable_channels(batch: list) -> list:
-        """
-        Custom collate function for variable-channel tensors.
-
-        Args:
-            batch: List of dataset items (e.g. tensors or tuples).
-
-        Returns:
-            List of dataset items without stacking.
-        """
-        return batch
-
     #############################################
     # Data Initialization (Distributed Dataloader)
     #############################################
