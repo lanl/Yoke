@@ -149,9 +149,6 @@ def main(args: argparse.Namespace) -> None:
     ending_epoch = starting_epoch + cycle_epochs
 
     for epochIDX in range(starting_epoch, ending_epoch):
-        test_sampler = test_dataloader.sampler
-        test_sampler.set_epoch(epochIDX)
-
         # Time each epoch and print to stdout
         startTime = time.time()
 
