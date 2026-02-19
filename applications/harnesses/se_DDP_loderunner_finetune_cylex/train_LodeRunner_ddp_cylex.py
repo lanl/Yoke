@@ -373,7 +373,7 @@ def main(args, rank, world_size, local_rank, device):
         half_image=True,
     )
     val_dataset = TemporalDataSet(
-        args.LSC_NPZ_DIR,
+        args.NPZ_DIR,
         args.CSV_FILEPATH,
         file_prefix_list=validation_filelist,
         max_time_idx_offset=2,
