@@ -1,5 +1,7 @@
 --pretrain_checkpoint
 ./study005_modelState_epoch0100.pth
+--number_channels
+8
 --FILELIST_DIR
 /usr/projects/artimis/mpmm/hickmank/github_yoke/applications/filelists/
 --LSC_NPZ_DIR

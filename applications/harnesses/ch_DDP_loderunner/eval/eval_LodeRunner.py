@@ -51,7 +51,15 @@ parser.add_argument(
     )
 )
 
-
+# Number of channels
+parser.add_argument(
+    "--number_channels",
+    type=int,
+    default=8,
+    help=(
+        "Number of channels in model for channel_map.",
+    )
+)
 def main(args: argparse.Namespace) -> None:
     """Main evaluation function."""
     #############################################
@@ -130,7 +138,7 @@ def main(args: argparse.Namespace) -> None:
 
     # This is the natural channel map for the model trained in train_LodeRunner_ddp.py
     # (8 default vars, indices 0..7).
-    channel_map = list(range(args.num_channels))
+    channel_map = list(range(args.number_channels))
 
     #############################################
     # Testing Loop
