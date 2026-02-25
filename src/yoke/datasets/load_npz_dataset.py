@@ -402,7 +402,7 @@ class TemporalDataSet(Dataset):
     as the (R, Z)-velocity fields. The time-offset between the two images is
     also returned.
 
-    NOTE: The way time indices are chosen necessitates *max_time_idx_offset*
+    NOTE: The way time indices are chosen necessitates *max_timeIDX_offset*
     being less than or equal to 3 in the lsc240420 data.
 
     Args:
@@ -410,7 +410,7 @@ class TemporalDataSet(Dataset):
         csv_filepath (str): Path to the 'design' file (CSV).
         file_prefix_list (str): Text file listing unique prefixes corresponding
                                 to unique simulations.
-        max_time_idx_offset (int): Maximum timesteps-ahead to attempt
+        max_timeIDX_offset (int): Maximum timesteps-ahead to attempt
                                 prediction for. A prediction image will be chosen
                                 within this timeframe at random.
         max_file_checks (int): This dataset generates two random time indices and
@@ -422,11 +422,11 @@ class TemporalDataSet(Dataset):
     """
 
     def __init__(self, npz_dir: str, csv_filepath: str, file_prefix_list: str,
-max_time_idx_offset: int, max_file_checks: int, half_image: bool=True) -> None:
+max_timeIDX_offset: int, max_file_checks: int, half_image: bool=True) -> None:
         """Initialization of timestep dataset."""
         self.npz_dir = npz_dir
         self.csv_filepath = csv_filepath
-        self.max_time_idx_offset = max_time_idx_offset
+        self.max_timeIDX_offset = max_timeIDX_offset
         self.max_file_checks = max_file_checks
         self.half_image = half_image
         self.expected_channels: typing.Optional[int] = None
@@ -450,7 +450,7 @@ torch.Tensor, torch.Tensor, torch.Tensor]:
             file_prefix = self.file_prefix_list[index]
             attempt = 0
             while attempt < self.max_file_checks:
-                seqLen = self.rng.integers(0, self.max_time_idx_offset, endpoint=True)
+                seqLen = self.rng.integers(0, self.max_timeIDX_offset, endpoint=True)
                 start_idx = self.rng.integers(0, 100 - seqLen, endpoint=True)
                 end_idx = start_idx + seqLen
                 start_file = file_prefix + f'_pvi_idx{start_idx:05d}.npz'
