@@ -359,6 +359,57 @@ def eval_loderunner_datastep(
 
     return end_img, pred_img, per_sample_loss
 
+def eval_loderunner_datastep_cylex(
+    data: tuple,
+    model: torch.nn.Module,
+    loss_fn: torch.nn.Module,
+    device: torch.device,
+    channel_map: None,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """An evaluation step for which the data is of multi-input, multi-output type.
+
+    This is currently a proto-type function to get the LodeRunner architecture
+    training on a non-variable set of channels.
+
+    Args:
+        data (tuple): tuple of model input, corresponding ground truth, and lead time
+        model (torch.nn.Module): model to evaluate
+        loss_fn (torch.nn.Module): loss function for evaluation
+        device (torch.device): device index to select
+        channel_map (list[int]): list of channel indices to use
+
+    Returns:
+        end_img (torch.Tensor): Ground truth end image
+        pred_img (torch.Tensor): Predicted end image
+        per_sample_loss (torch.Tensor): Per-sample loss for the batch
+
+    """
+    # Set model to train
+    model.eval()
+
+    # Extract data
+    start_img, channel_map, end_img, channel_map, Dt = data
+    start_img = start_img.to(device, non_blocking=True)
+    Dt = Dt.to(device, non_blocking=True)
+    end_img = end_img.to(device, non_blocking=True)
+
+    in_vars = torch.tensor(channel_map).flatten().to(device, non_blocking=True)
+    out_vars = torch.tensor(channel_map).flatten().to(device, non_blocking=True)
+
+    # Perform a forward pass
+    # NOTE: If training on GPU model should have already been moved to GPU
+    # prior to initalizing optimizer.
+    pred_img = model(start_img, in_vars, out_vars, Dt)
+
+    # Expecting to use a *reduction="none"* loss function so we can track loss
+    # between individual samples. However, this will make the loss be computed
+    # element-wise so we need to still average over the (channel, height,
+    # width) dimensions to get the per-sample loss.
+    loss = loss_fn(pred_img, end_img)
+    per_sample_loss = loss.mean(dim=[1, 2, 3])  # Shape: (batch_size,)
+
+    return end_img, pred_img, per_sample_loss
+
 
 def eval_scheduled_loderunner_datastep(
     data: tuple,

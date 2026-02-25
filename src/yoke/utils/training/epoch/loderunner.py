@@ -8,6 +8,7 @@ from contextlib import nullcontext
 from yoke.utils.training.datastep.loderunner import (
     train_loderunner_datastep,
     eval_loderunner_datastep,
+    eval_loderunner_datastep_cylex,
     train_scheduled_loderunner_datastep,
     eval_scheduled_loderunner_datastep,
     train_DDP_loderunner_datastep,
@@ -18,12 +19,14 @@ from yoke.utils.training.datastep.loderunner import (
 
 DATASTEP_FN = {
     "pli": {
-        "train": train_DDP_loderunner_datastep,
-        "eval": eval_DDP_loderunner_datastep,
+        "train_ddp": train_DDP_loderunner_datastep,
+        "eval_ddp": eval_DDP_loderunner_datastep,
+        "eval": eval_loderunner_datastep
     },
     "cylex": {
-        "train": train_DDP_loderunner_datastep_cylex,
-        "eval": eval_DDP_loderunner_datastep_cylex,
+        "train_ddp": train_DDP_loderunner_datastep_cylex,
+        "eval_ddp": eval_DDP_loderunner_datastep_cylex,
+        "eval": eval_loderunner_datastep_cylex
     },
 }
 
@@ -405,7 +408,7 @@ def train_DDP_loderunner_epoch(
             if dataset_fns is None:
                 raise ValueError(f"Unsupported dataset: {dataset}")
 
-            train_fn = dataset_fns["train"]
+            train_fn = dataset_fns["train_ddp"]
 
             # Training
             truth, pred, train_losses = train_fn(
@@ -440,7 +443,7 @@ def train_DDP_loderunner_epoch(
                     if valbatch_ID >= num_val_batches:
                         break
                     
-                    eval_fn  = dataset_fns["eval"]
+                    eval_fn  = dataset_fns["eval_ddp"]
                     end_img, pred_img, val_losses = eval_fn(
                         valdata,
                         model,
@@ -471,6 +474,7 @@ def eval_loderunner_epoch(
     epochIDX: int,
     test_rcrd_filename: str,
     device: torch.device,
+    dataset: str = "pli",
 ) -> None:
     """LodeRunner Evaluation-Only Epoch.
 
@@ -495,6 +499,14 @@ def eval_loderunner_epoch(
     # Testing loop
     model.eval()
     test_rcrd_filename = test_rcrd_filename.replace("<epochIDX>", f"{epochIDX:04d}")
+
+    # Get correct datastep function
+    dataset_fns = DATASTEP_FN.get(dataset)
+    if dataset_fns is None:
+        raise ValueError(f"Unsupported dataset: {dataset}")
+
+    eval_fn  = dataset_fns["eval"]
+
     with open(test_rcrd_filename, "a") as test_rcrd_file:
         for testbatch_ID, testdata in enumerate(testing_data):
             # Stop when number of training batches is reached
@@ -502,7 +514,7 @@ def eval_loderunner_epoch(
                 break
 
             # Perform a single test step
-            end_img, pred_img, test_losses = eval_loderunner_datastep(
+            end_img, pred_img, test_losses = eval_fn(
                 testdata,
                 model,
                 loss_fn,
