@@ -36,19 +36,9 @@ parser = cli.add_training_args(parser=parser)
 
 # Keep the same default filelists as train_LodeRunner_ddp.py
 parser.set_defaults(
-    train_filelist="lsc240420_prefixes_train_80pct.txt",
-    validation_filelist="lsc240420_prefixes_validation_10pct.txt",
-    test_filelist="lsc240420_prefixes_test_10pct.txt",
-)
-
-# Eval-specific args
-parser.add_argument(
-    "--pretrain_checkpoint",
-    type=str,
-    default="./study005_modelState_epoch0100.pth",
-    help=(
-        "Path to .pth created by yoke.utils.checkpointing.save_model_and_optimizer.",
-    )
+    train_filelist="cx241203_prefixes_train_80pct_noBe_noVoid_truncated.txt",
+    validation_filelist="cx241203_prefixes_val_10pct_noBe_noVoid_truncated.txt",
+    test_filelist="cx241203_prefixes_test_10pct_noBe_noVoid_truncated.txt",
 )
 
 # Number of channels
@@ -167,7 +157,7 @@ def main(args: argparse.Namespace) -> None:
 
     # NOTE: optimizer args are required by load_model_and_optimizer, even for eval.
     model, _optimizer, starting_epoch = load_model_and_optimizer(
-        args.pretrain_checkpoint,
+        args.pretrained_model,
         optimizer_class=torch.optim.AdamW,
         optimizer_kwargs={
             "lr": 1e-6,
@@ -183,7 +173,7 @@ def main(args: argparse.Namespace) -> None:
     model.eval()
 
     # load_and_eval_YokePth.py prints these; keep similar behavior here
-    print(f"Loaded checkpoint: {args.pretrain_checkpoint}", flush=True)
+    print(f"Loaded checkpoint: {args.pretrained_model}", flush=True)
     print(f"Checkpoint starting_epoch: {starting_epoch}", flush=True)
     if hasattr(model, "default_vars"):
         print("Default LodeRunner fields:", model.default_vars, flush=True)
