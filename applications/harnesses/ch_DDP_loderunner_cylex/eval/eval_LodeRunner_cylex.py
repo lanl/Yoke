@@ -189,9 +189,6 @@ def main(args: argparse.Namespace) -> None:
     # Match train_LodeRunner_ddp.py: use per-element MSE so we can reduce ourselves
     loss_fn = nn.MSELoss(reduction="none")
 
-    # This is the natural channel map for the model trained in train_LodeRunner_ddp.py
-    # (8 default vars, indices 0..7).
-    #channel_map = list(range(args.number_channels))
 
     #############################################
     # Testing Loop
@@ -206,6 +203,8 @@ def main(args: argparse.Namespace) -> None:
         startTime = time.time()
 
         # Testing epoch
+        # for cylex channel_map changes per sample. So pass None here
+        # & calculate channel_map later in the datastep function.
         eval_loderunner_epoch(
             testing_data=test_dataloader,
             num_test_batches=test_batches,
