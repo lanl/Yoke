@@ -41,15 +41,6 @@ parser.set_defaults(
     test_filelist="cx241203_prefixes_test_10pct_noBe_noVoid_truncated.txt",
 )
 
-# Number of channels
-#parser.add_argument(
-#    "--number_channels",
-#    type=int,
-#    default=8,
-#    help=(
-#        "Number of channels in model for channel_map.",
-#    )
-#)
 def main(args: argparse.Namespace) -> None:
     """Main evaluation function."""
     #############################################
@@ -130,25 +121,6 @@ def main(args: argparse.Namespace) -> None:
     }
 
     model = LodeRunner(**model_args)
-    #    default_vars=default_vars,
-    #    image_size=(1120, 400),
-    #    patch_size=(10, 5),  # Since using half-image, halve patch size.
-    #    embed_dim=embed_dim,
-    #    emb_factor=2,
-    #    num_heads=8,
-    #    block_structure=block_structure,
-    #    window_sizes=[
-    #        (8, 8),
-    #        (8, 8),
-    #        (4, 4),
-    #        (2, 2),
-    #    ],
-    #    patch_merge_scales=[
-    #        (2, 2),
-    #        (2, 2),
-    #        (2, 2),
-    #    ],
-    #)
 
     #############################################
     # Load Model Checkpoint
