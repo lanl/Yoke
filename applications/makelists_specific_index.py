@@ -5,12 +5,10 @@
 import os
 import glob
 import argparse
-import typing
-import fnmatch
 import random
 import numpy as np
 
-NoneStr = typing.Union[None, str]
+NoneStr = None | str
 
 
 def make_prefix_tvtlists(

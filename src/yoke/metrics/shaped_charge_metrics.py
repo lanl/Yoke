@@ -1,34 +1,17 @@
-################################################################
-# This file defines a class for computing shaped-charge metrics.
-#
-# Created by Derek Armstrong, XCP-8, June 2024
-################################################################
+"""Metric functions related to perturbed layer interface data."""
 
 import numpy as np
 import scipy as sp
-import os
-
-# import matplotlib stuff and set as desired
-import matplotlib
-
-# Get rid of type 3 fonts in figures
-matplotlib.rcParams["pdf.fonttype"] = 42
-matplotlib.rcParams["ps.fonttype"] = 42
-import matplotlib.pyplot as plt
-
-# Ensure LaTeX font
-font = {"family": "serif"}
-plt.rc("font", **font)
-plt.rcParams["figure.figsize"] = (6, 6)
-from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 
 # function for reading the npz files
-def singlePVIarray(npzfile="./lsc_nonconvex_pvi_idx00115.npz", FIELD="rho"):
+def singlePVIarray(
+    npzfile: str = "./lsc_nonconvex_pvi_idx00115.npz", FIELD: str = "rho"
+) -> np.ndarray:
     """Function to grab single array from NPZ.
 
     Args:
-       indir (str): File name for NPZ.
+       npzfile (str): File name for NPZ.
        FIELD (str): Field to return array for.
 
     Returns:
@@ -46,19 +29,21 @@ def singlePVIarray(npzfile="./lsc_nonconvex_pvi_idx00115.npz", FIELD="rho"):
 
 
 class SCmetrics:
-    # initialization class, primarily called by SCmetrics(filename),
-    # where filename is the name of the npz file.
-    # variable liner is for the name of the shaped-charge liner
-    # in the Pagosa simulations (more specifically, as named in
-    # the npz files).
-    def __init__(self, filename, liner="throw"):
+    """LSC-NPZ initialization class.
+
+    Primarily called by SCmetrics(filename), where filename is the name of the npz file.
+    Variable liner is for the name of the shaped-charge liner in the Pagosa simulations
+    (more specifically, as named in the npz files).
+    """
+
+    def __init__(self, filename: str, liner: str = "throw") -> None:
+        """Initialize SCmetrics object."""
         self.filename = filename
 
         # initialize density and vf of liner
-        rhofield = singlePVIarray(npzfile=filename, FIELD="density_" + liner)
         self.density = self.get_field("density_" + liner)
 
-        # initialize volume fraction for liner andW-velocity
+        # initialize volume fraction for liner and W-velocity
         self.vofm = self.get_field("vofm_" + liner)
         self.Wvelocity = self.get_field("Wvelocity")
 
@@ -90,31 +75,34 @@ class SCmetrics:
     # function for getting a field from a npz file
     # function checks for nans, as they can occur, for example,
     # in the density fields
-    def get_field(self, field_name):
+    def get_field(self, field_name: str) -> np.ndarray:
+        """Return single hydrofield."""
         field = singlePVIarray(npzfile=self.filename, FIELD=field_name)
         field_map = np.zeros(field.shape)
         Dind = np.where(np.isfinite(field))
         field_map[Dind] = field[Dind]
+
         return field_map
 
     # function to compute and return HE mass
-    def get_HE_mass(self):
-        if self.HE_mass == None:
+    def get_HE_mass(self) -> float:
+        """Return the mass of the high explosive (HE) material."""
+        if self.HE_mass is None:
             HEdensity = self.get_field(self.HE_field_name)
             HEvofm = self.get_field(self.HE_vofm_field_name)
             return np.sum(self.volume * HEdensity * HEvofm)
         else:
             return self.HE_mass
 
-    ###############################################################
-    # Function to compute jet width statistics.
-    # Function returns avg width, std dev of width, and max width.
-    #
-    # Variable vel_thres sets the velocity threshold and the
-    # "jet" is only considered when its velocity exceeds the
-    # threshold.
-    ###############################################################
-    def get_jet_width_stats(self, vel_thres=0.0):
+    def get_jet_width_stats(self, vel_thres: float = 0.0) -> tuple[float, float, float]:
+        """Function to compute jet width statistics.
+
+        Function returns avg width, std dev of width, and max width.
+
+        Variable vel_thres sets the velocity threshold and the
+        "jet" is only considered when its velocity exceeds the
+        threshold.
+        """
         if vel_thres > 0.0:
             # get jet locations above threshold
             Vind = np.where((self.regions) & (self.Wvelocity > vel_thres))
@@ -139,55 +127,51 @@ class SCmetrics:
 
         return avg_width, std_width, max_width
 
-    ###############################################################
-    # Function to compute cumulative value of jet density times
-    # velocity squared over a 2D cross section of jet.
-    # This is primarly intended for 2D axi-symmetric calculations.
-    #
-    # Variable vel_thres allows for parts of jet below the
-    # threshold to be ignored.
-    ###############################################################
-    def get_jet_rho_velsq_2D(self, vel_thres=0.1):
+    def get_jet_rho_velsq_2D(self, vel_thres: float = 0.1) -> float:
+        """Function to compute cumulative value of jet density times.
+
+        Computes velocity squared over a 2D cross section of jet. This is primarly
+        intended for 2D axi-symmetric calculations.
+
+        Variable vel_thres allows for parts of jet below the threshold to be ignored.
+        """
         Vind = np.where((self.Wvelocity >= vel_thres) & (self.regions))
         return np.sum(self.density[Vind] * np.square(self.Wvelocity[Vind]))
 
-    ###############################################################
-    # Function to compute cumulative value of jet sqrt(density)
-    # times velocity over a 2D cross section of jet.
-    # This is primarly intended for 2D axi-symmetric calculations.
-    #
-    # Variable vel_thres allows for parts of jet below the
-    # threshold to be ignored.
-    ###############################################################
-    def get_jet_sqrt_rho_vel_2D(self, vel_thres=0.1):
+    def get_jet_sqrt_rho_vel_2D(self, vel_thres: float = 0.1) -> float:
+        """Function to compute cumulative value of jet sqrt(density).
+
+        Computes velocity squared over a 2D cross section of jet.
+        This is primarly intended for 2D axi-symmetric calculations.
+
+        Variable vel_thres allows for parts of jet below the
+        threshold to be ignored.
+        """
         Vind = np.where((self.Wvelocity > vel_thres) & (self.regions))
         return np.sum(np.sqrt(self.density[Vind]) * self.Wvelocity[Vind])
 
-    ###############################################################
-    # Function to compute jet kinetic energy of effective jet.
-    #
-    # This differs from function get_jet_rho_velsq_2D in that
-    # it computes the kinetic energy of the actual 3D jet object.
-    ###############################################################
-    def get_jet_kinetic_energy(self, vel_thres=0.1):
+    def get_jet_kinetic_energy(self, vel_thres: float = 0.1) -> float:
+        """Function to compute jet kinetic energy of effective jet.
+
+        This differs from function get_jet_rho_velsq_2D in that
+        it computes the kinetic energy of the actual 3D jet object.
+        """
         eff_jet_mass_map = self.get_eff_jet_mass_map(vel_thres=vel_thres)
         return 0.5 * np.sum(eff_jet_mass_map * np.square(self.Wvelocity))
 
-    ###############################################################
-    # Function to compute spatially integrated quantity of
-    # sqrt(0.5 * mass) * velocity.
-    #
-    # This differs from function get_jet_sqrt_rho_velsq_2D in that
-    # it computes the quantity for the actual 3D jet object.
-    ###############################################################
-    def get_jet_sqrt_kinetic_energy(self, vel_thres=0.1):
+    def get_jet_sqrt_kinetic_energy(self, vel_thres: float = 0.1) -> float:
+        """Function to compute spatially integrated quantity.
+
+        Computes sqrt(0.5 * mass) * velocity.
+
+        This differs from function get_jet_sqrt_rho_velsq_2D in that
+        it computes the quantity for the actual 3D jet object.
+        """
         eff_jet_mass_map = np.sqrt(self.get_eff_jet_mass_map(vel_thres=vel_thres))
         return 0.70710678 * np.sum(np.sqrt(eff_jet_mass_map) * self.Wvelocity)
 
-    ###############################################################
-    # Function to compute volume for 2D axis-symmetric grid cells.
-    ###############################################################
-    def compute_volume(self):
+    def compute_volume(self) -> float:
+        """Function to compute volume for 2D axis-symmetric grid cells."""
         surf_area = np.pi * (np.square(self.Rcoord[1:]) - np.square(self.Rcoord[0:-1]))
         height = self.Zcoord[1:] - self.Zcoord[0:-1]
         volume = np.matmul(
@@ -196,26 +180,25 @@ class SCmetrics:
         )
         return volume
 
-    ###############################################################
-    # Compute and return jet mass
-    ###############################################################
-    def get_jet_mass(self):
-        if self.jet_mass == None:
+    def get_jet_mass(self) -> float:
+        """Compute and return jet mass."""
+        if self.jet_mass is None:
             return np.sum(self.volume * self.density * self.vofm)
         else:
             return self.jet_mass
 
-    ###############################################################
-    # Returns the connected components that touch the
-    # central axis (axis of symmetry for 2D runs).
-    # Initial field is taken as the density-liner field.
-    #
-    # If mask is True, then only return zero/one with
-    # one representing an on-axis jet component.
-    # Otherwise, each different connected component will be
-    # labeled with an "ID" (just a number) for the component.
-    ###############################################################
-    def compute_regions(self, mask=False):
+    def compute_regions(self, mask: bool = False) -> np.ndarray:
+        """Returns the connected components.
+
+        Connected components that touch the
+        central axis (axis of symmetry for 2D runs).
+        Initial field is taken as the density-liner field.
+
+        If mask is True, then only return zero/one with
+        one representing an on-axis jet component.
+        Otherwise, each different connected component will be
+        labeled with an "ID" (just a number) for the component.
+        """
         structure = [[1, 1, 1], [1, 1, 1], [1, 1, 1]]
         field_regions, n_regions = sp.ndimage.label(self.density, structure)
 
@@ -238,125 +221,52 @@ class SCmetrics:
 
         return field_regions
 
-    ##############################################################
-    # Function to compute maximum field value over contiguous jet.
-    # To be included in the contiguous jet, a location must
-    # be in a connected component that is touching the "central"
-    # axis (which is the 2D axis of symmetry).
-    #
-    # Input:
-    #   field - field to take max value from
-    ##############################################################
-    def max_regions(self, field):
+    def max_regions(self, field: str) -> float:
+        """Function to compute maximum field value over contiguous jet.
+
+        To be included in the contiguous jet, a location must
+        be in a connected component that is touching the "central"
+        axis (which is the 2D axis of symmetry).
+        """
         Vind = np.where(self.regions > 0)  # get on-axis jet regions
         maxv = np.max(field[Vind])
         return maxv
 
-    ##############################################################
-    # Function to compute average field value, where average
-    # is taken over connected jet regions that are on-axis.
-    ##############################################################
-    def avg_regions(self, field, thresh=0.0):
+    def avg_regions(self, field: str, thresh: float = 0.0) -> float:
+        """Function to compute average field value.
+
+        Here average is taken over connected jet regions that are on-axis.
+        """
         Vind = np.where((self.regions) > 0 and (field >= thresh))
         avg = np.mean(field[Vind])
         return avg
 
-    ##############################################################
-    # Function to return maximum vertical velocity
-    ##############################################################
-    def max_Wvelocity(self):
+    def max_Wvelocity(self) -> float:
+        """Function to return maximum vertical velocity."""
         return self.max_regions(self.Wvelocity)
 
-    ##############################################################
-    # Function to return average vertical velocity
-    ##############################################################
-    def avg_Wvelocity(self, Wthresh=0.0):
+    def avg_Wvelocity(self, Wthresh: float = 0.0) -> float:
+        """Function to return average vertical velocity."""
         return self.avg_regions(self.Wvelocity, Wthresh=Wthresh)
 
-    ##############################################################
-    # Function to perform PCA --- fit ellipse to the on-axis
-    # jet regions. This function is a work in progress.
-    ##############################################################
-    def pca(self):
-        Vind = np.where(self.regions > 0)
-        Rvalues = self.Rcoord[Vind[1]]
-        Zvalues = self.Zcoord[Vind[0]]
-        meanZ = np.mean(Zvalues)
-        meanR = np.mean(Rvalues)
-        Zvalues = Zvalues - meanZ
-        Rvalues = Rvalues - meanR
-        nd = len(Rvalues)
-        RZ_matrix = np.zeros((nd, 2))
-        RZ_matrix[:, 0] = Rvalues
-        RZ_matrix[:, 1] = Zvalues
-        Rvar = np.var(Rvalues)
-        Zvar = np.var(Zvalues)
-        print("Rvar", Rvar)
-        print("Zvar", Zvar)
-        # Zvar = np.var(Zvalues)
-        # RZcovar = np.dot(Rvalues,Zvalues)
-        U, S, Vh = np.linalg.svd(RZ_matrix)
-        print("D")
-        print(S)
-        # rows of Vh are the eigenvectors
-        print(Vh[0, :])
-        print(Vh[1, :])
-        print("variances", S[0] * S[0] / nd, S[1] * S[1] / nd)
+    def get_eff_jet_mass(self, vel_thres: float = 0.1, asPercent: bool = False) -> float:
+        """Function to compute effective jet mass.
 
-    ##############################################################
-    # Function to compute effective jet mass.
-    # Effective jet mass is mass of jet with Wvelocity above
-    # a threshold and for a connected component that lies on
-    # the vertical axis.
-    ##############################################################
-    def get_eff_jet_mass(self, vel_thres=0.1, asPercent=False):
+        Effective jet mass is mass of jet with Wvelocity above
+        a threshold and for a connected component that lies on
+        the vertical axis.
+        """
         eff_jet_mass = np.sum(self.get_eff_jet_mass_map())
         if asPercent:
             return eff_jet_mass / self.get_jet_mass()
         else:
             return eff_jet_mass
 
-    ##############################################################
-    # Function to compute effective jet mass map.
-    # Return effective jet mass for each cell/zone in simulation.
-    ##############################################################
-    def get_eff_jet_mass_map(self, vel_thres=0.1):
+    def get_eff_jet_mass_map(self, vel_thres: float = 0.1) -> np.ndarray:
+        """Function to compute effective jet mass map.
+
+        Return effective jet mass for each cell/zone in simulation.
+        """
         Vind = np.where((self.Wvelocity >= vel_thres) & (self.regions))
         eff_jet_mass_map = self.volume[Vind] * self.density[Vind] * self.vofm[Vind]
         return eff_jet_mass_map
-
-    ##############################################################
-    # Function for plotting the density-liner field.
-    # Modify later to plot for user selected variable field.
-    ##############################################################
-    def plotField(self):
-        # Plot normalized radiograph and density field for diagnostics.
-        field = np.concatenate((np.fliplr(self.density), self.density), axis=1)
-        fig1, ax1 = plt.subplots(1, 1, figsize=(12, 12))
-        img1 = ax1.imshow(
-            field,
-            aspect="equal",
-            extent=[
-                -self.Rcoord.max(),
-                self.Rcoord.max(),
-                self.Zcoord.min(),
-                self.Zcoord.max(),
-            ],
-            origin="lower",
-            cmap="jet",
-        )
-        # cmap='cividis' if FIELD=='pRad' else 'jet')
-        ax1.set_ylabel("Z-axis (um)", fontsize=16)
-        ax1.set_xlabel("R-axis (um)", fontsize=16)
-        # ax1.set_title('T={:.2f}us'.format(float(simtime)), fontsize=18)
-
-        divider1 = make_axes_locatable(ax1)
-        cax1 = divider1.append_axes("right", size="10%", pad=0.1)
-        fig1.colorbar(img1, cax=cax1).set_label("density", fontsize=14)
-        # fig1.colorbar(img1,
-        #               cax=cax1).set_label(f'{FIELD}',
-        #                                   fontsize=14)
-
-        fig1.savefig(
-            os.path.join("png", self.filename + ".density.png"), bbox_inches="tight"
-        )

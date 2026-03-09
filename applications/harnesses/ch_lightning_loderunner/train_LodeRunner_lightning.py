@@ -27,7 +27,8 @@ import numpy as np
 from yoke.models.vit.swin.bomberman import LodeRunner, Lightning_LodeRunner
 from yoke.datasets.lsc_dataset import LSCDataModule
 from yoke.datasets.transforms import ResizePadCrop
-import yoke.torch_training_utils as tr
+from yoke.utils.restart import continuation_setup
+from yoke.utils.parameters import freeze_torch_params
 from yoke.lr_schedulers import CosineWithWarmupScheduler
 from yoke.helpers import cli
 import yoke.scheduled_sampling
@@ -128,8 +129,8 @@ if __name__ == "__main__":
     )
     ds_params = {
         "LSC_NPZ_DIR": args.LSC_NPZ_DIR,
-        "max_file_checks": 10,
         "seq_len": args.seq_len,
+        "timeIDX_offset": args.timeIDX_offset,
         "half_image": True,
         "transform": transform,
     }
@@ -205,7 +206,7 @@ if __name__ == "__main__":
 
     # Freeze the U-Net backbone.
     if args.freeze_backbone:
-        tr.freeze_torch_params(L_loderunner.model.unet)
+        freeze_torch_params(L_loderunner.model.unet)
 
     # Prepare Lightning logger.
     logger = TensorBoardLogger(save_dir="./")
@@ -245,7 +246,7 @@ if __name__ == "__main__":
         strategy="ddp",
         enable_progress_bar=True,
         logger=logger,
-        log_every_n_steps=min(args.train_batches, args.val_batches),
+        log_every_n_steps=min(1024, args.train_batches, args.val_batches),  # arbitrary choice of 1024 minimum
         callbacks=[checkpoint_callback, lr_monitor],
     )
 
@@ -268,7 +269,7 @@ if __name__ == "__main__":
     if trainer.is_global_zero:
         FINISHED_TRAINING = (final_epoch + 1) >= args.total_epochs
         if not FINISHED_TRAINING:
-            new_slurm_file = tr.continuation_setup(
+            new_slurm_file = continuation_setup(
                 checkpoint_callback.last_model_path,
                 args.studyIDX,
                 last_epoch=final_epoch + 1,

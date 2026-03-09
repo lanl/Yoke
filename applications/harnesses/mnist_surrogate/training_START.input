@@ -1,0 +1,16 @@
+--studyIDX
+<studyIDX>
+--conv1
+<conv1>
+--conv2
+<conv2>
+--conv3
+<conv3>
+--conv4
+<conv4>
+--epochs
+<epochs>
+--batch_size
+<batch_size>
+--lr
+<lr>

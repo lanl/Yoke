@@ -4,8 +4,8 @@
         "run-config": {
             "debug": {
                 "nodes": 1,
-                "partition": "gpu-debug",
-                "reservation": "gpu-debug",
+                "partition": "gpu_debug",
+                "reservation": "gpu_debug",
                 "time": "02:00:00"
             },
             "prod": {

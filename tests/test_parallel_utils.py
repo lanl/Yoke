@@ -4,7 +4,7 @@ import pytest
 import torch
 import torch.nn as nn
 from torch.testing import assert_close
-from yoke.parallel_utils import LodeRunner_DataParallel
+from yoke.utils.parallel import LodeRunner_DataParallel
 
 
 # Dummy model for testing

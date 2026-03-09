@@ -56,9 +56,13 @@ def add_default_args(parser: argparse.ArgumentParser = None) -> argparse.Argumen
         ),
     )
     parser.add_argument(
-        "--dryrun",
-        action="store_true",
-        help="Run through all setup steps without submitting jobs.",
+        "--submissionType",
+        choices=["slurm", "flux", "shell", "batch"],
+        default="slurm",
+        help=(
+            "Which job‐submission wrapper to use (defaults to slurm, "
+            "choices: slurm, flux, shell, batch)."
+        ),
     )
 
     return parser
@@ -226,6 +230,13 @@ def add_training_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParse
         help="Length of predicted sequence.",
     )
     parser.add_argument(
+        "--timeIDX_offset",
+        action="store",
+        type=int,
+        default=1,
+        help="Time index offset between images in data sequence.",
+    )
+    parser.add_argument(
         "--total_epochs",
         action="store",
         type=int,
@@ -289,6 +300,12 @@ def add_training_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParse
         type=str,
         default=None,
         help="Path to checkpoint to continue training from",
+    )
+    parser.add_argument(
+        "--pretrained_model",
+        type=str,
+        default=None,
+        help="Path to pretrained model file to initialize weights for fine-tuning.",
     )
     parser.add_argument(
         "--only_load_backbone",

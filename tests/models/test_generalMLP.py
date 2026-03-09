@@ -4,7 +4,7 @@ import pytest
 import torch
 from torch import nn
 
-from yoke.models.hybridCNNmodules import generalMLP
+from yoke.models.cnn_utils import generalMLP
 
 
 @pytest.fixture

@@ -13,6 +13,8 @@ class MLP(nn.Module):
     Consists of one hidden layer, and expanding the embedding size by 4x before
     contracting again.
 
+    This MLP structure is specific to reproduce the SWIN-V2 architecture.
+
     Args:
         emb_size (int): Embedding layer dimension from input layer.
 

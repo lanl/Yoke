@@ -1,13 +1,18 @@
 """Tests for Bomberman architecture."""
 
 import pytest
-
 from lightning.pytorch import Trainer
 import torch
 import torch.nn as nn
 from torch.optim.lr_scheduler import _LRScheduler
 
 from yoke.models.vit.swin.bomberman import LodeRunner, Lightning_LodeRunner
+
+
+# Ignore only SLURM "srun" warning
+pytestmark = pytest.mark.filterwarnings(
+    "ignore: The `srun` command is available on your system but is not used"
+)
 
 
 class MockScheduler(_LRScheduler):
@@ -52,7 +57,9 @@ def lightning_model(loderunner_model: LodeRunner) -> Lightning_LodeRunner:
         loss_fn=nn.MSELoss(reduction="none"),
         scheduled_sampling_scheduler=lambda global_step: 1.0,
     )
+
     lightning_loderunner.trainer = Trainer(logger=False)
+
     return lightning_loderunner
 
 

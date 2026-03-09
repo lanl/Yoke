@@ -59,7 +59,7 @@ def test_covariance_is_symmetric(
     output = model(y, h1, h2)
     cov = output.covariance_matrix
     diff = (cov - cov.transpose(-1, -2)).abs().max()
-    assert diff.item() < 1e-5
+    assert diff.detach().item() < 1e-5
 
 
 def test_covariance_positive_definite(

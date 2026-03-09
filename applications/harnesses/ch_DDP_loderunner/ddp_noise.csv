@@ -1,0 +1,8 @@
+studyIDX,YOKE_TORCH_ENV,KNODES,NGPUS,EMBED_DIM,B0,B1,B2,B3,NUM_WORKERS,BATCH_SIZE,NTRN_BATCH,NVAL_BATCH,ANCHOR_LR,NUM_CYCLES,MIN_FRACTION,TERMINAL_STEPS,WARMUP_STEPS,NOISE_SCALE,train_script
+10,torch_ch_gpu_241112,1,4,128,1,1,9,1,2,10,1000,500,2.0e-3,0.5,0.5,1000,500,0,train_LodeRunner_ddp.py
+11,torch_ch_gpu_241112,1,4,128,1,1,9,1,2,10,1000,500,2.0e-3,0.5,0.5,1000,500,5e-4,train_LodeRunner_ddp.py
+12,torch_ch_gpu_241112,1,4,128,1,1,9,1,2,10,1000,500,2.0e-3,0.5,0.5,1000,500,1e-4,train_LodeRunner_ddp.py
+13,torch_ch_gpu_241112,1,4,128,1,1,9,1,2,10,1000,500,2.0e-3,0.5,0.5,1000,500,5e-5,train_LodeRunner_ddp.py
+14,torch_ch_gpu_241112,1,4,128,1,1,9,1,2,10,1000,500,2.0e-3,0.5,0.5,1000,500,1e-5,train_LodeRunner_ddp.py
+# 15,torch_ch_gpu_241112,1,4,128,1,1,9,1,2,10,1000,500,2.0e-3,0.5,0.5,1000,500,1e-3,train_LodeRunner_ddp.py
+# 16,torch_ch_gpu_241112,1,4,128,1,1,9,1,2,10,1000,500,2.0e-3,0.5,0.5,1000,500,5e-3,train_LodeRunner_ddp.py

@@ -12,11 +12,10 @@ Created for use with the Nested Cylinder dataset.
 import os
 import glob
 import random
-import typing
 import argparse
 import numpy as np
 
-NoneStr = typing.Union[None, str]
+NoneStr = None | str
 
 
 ####################################

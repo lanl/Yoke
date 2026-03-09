@@ -15,13 +15,12 @@ When run as a script an NPZ of calculated parameters is generated.
 ####################################
 import os
 import argparse
-import typing
 import numpy as np
 
 from yoke.datasets.lsc_dataset import LSCnpz2key, LSCcsv2bspline_pts
 from yoke.datasets.lsc_dataset import LSCread_npz
 
-NoneStr = typing.Union[None, str]
+NoneStr = None | str
 
 
 ###################################################################

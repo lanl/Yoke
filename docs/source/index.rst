@@ -38,6 +38,8 @@ navigable and follows consistent design principles.
 
    harnesses
    start_study
+   loderunner_animate
+   prediction_modes
 
 .. toctree::
    :maxdepth: 2

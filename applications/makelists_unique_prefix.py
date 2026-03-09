@@ -1,15 +1,12 @@
-"""Creates TVT lists of unique *run ID* filename prefixes.
-
-"""
+"""Creates TVT lists of unique *run ID* filename prefixes."""
 
 import os
 import argparse
-import typing
 import fnmatch
 import random
 import numpy as np
 
-NoneStr = typing.Union[None, str]
+NoneStr = None | str
 
 
 def find_uniq_prefixes(input_dir: str, prefix_tag: str) -> list:
@@ -19,12 +16,11 @@ def find_uniq_prefixes(input_dir: str, prefix_tag: str) -> list:
         input_dir (str): Directory to look in for filenames matching prefix wildcard.
         prefix_tag (str): Wildcard representing only the types of filename-prefixes
                           the function should uniquely list.
-    
-    """
 
+    """
     # Initialize an empty set to store UNIQUE prefixes
     uniq_prefixes = set()
-    
+
     for filename in os.listdir(input_dir):
         # Check if filename matches wildcard prefix
         if fnmatch.fnmatch(filename, prefix_tag+'*'):
