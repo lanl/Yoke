@@ -43,7 +43,7 @@ parser.set_defaults(
 
 # Eval-specific args
 parser.add_argument(
-    "--pretrain_checkpoint",
+    "--pretrained_model",
     type=str,
     default="./study005_modelState_epoch0100.pth",
     help=(
@@ -87,7 +87,7 @@ def main(args: argparse.Namespace) -> None:
 
     # NOTE: optimizer args are required by load_model_and_optimizer, even for eval.
     model, _optimizer, starting_epoch = load_model_and_optimizer(
-        args.pretrain_checkpoint,
+        args.pretrained_model,
         optimizer_class=torch.optim.AdamW,
         optimizer_kwargs={
             "lr": 1e-6,
@@ -103,7 +103,7 @@ def main(args: argparse.Namespace) -> None:
     model.eval()
 
     # load_and_eval_YokePth.py prints these; keep similar behavior here
-    print(f"Loaded checkpoint: {args.pretrain_checkpoint}", flush=True)
+    print(f"Loaded checkpoint: {args.pretrained_model}", flush=True)
     print(f"Checkpoint starting_epoch: {starting_epoch}", flush=True)
     if hasattr(model, "default_vars"):
         print("Default LodeRunner fields:", model.default_vars, flush=True)
@@ -143,7 +143,6 @@ def main(args: argparse.Namespace) -> None:
     #############################################
     # Testing Loop
     #############################################
-    # Train Model
     print("Testining Model . . .")
     starting_epoch += 1
     ending_epoch = starting_epoch + cycle_epochs

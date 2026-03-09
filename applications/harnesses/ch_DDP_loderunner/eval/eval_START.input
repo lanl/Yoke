@@ -1,4 +1,4 @@
---pretrain_checkpoint
+--pretrained_model
 ./study005_modelState_epoch0100.pth
 --number_channels
 8
