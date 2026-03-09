@@ -19,7 +19,6 @@ Bryan Kaiser
 ####################################
 import sys
 from pathlib import Path
-import typing
 import random
 import re
 import numpy as np
@@ -27,7 +26,8 @@ import pandas as pd
 import torch
 from torch.utils.data import Dataset
 
-NoneStr = typing.Union[None, str]
+
+NoneStr = None | str
 
 
 def import_img_from_npz(npz_filename: str, hfield: str) -> np.ndarray:

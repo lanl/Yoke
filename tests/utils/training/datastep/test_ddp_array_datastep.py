@@ -7,7 +7,7 @@ distributed variants: `train_DDP_array_datastep` and `eval_DDP_array_datastep`.
 from __future__ import annotations
 
 import copy
-from typing import Callable
+from collections.abc import Callable
 
 import pytest
 import torch

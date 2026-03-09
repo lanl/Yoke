@@ -6,8 +6,8 @@ import scipy as sp
 
 # function for reading the npz files
 def singlePVIarray(
-        npzfile: str = "./lsc_nonconvex_pvi_idx00115.npz",
-        FIELD: str = "rho") -> np.ndarray:
+    npzfile: str = "./lsc_nonconvex_pvi_idx00115.npz", FIELD: str = "rho"
+) -> np.ndarray:
     """Function to grab single array from NPZ.
 
     Args:
@@ -35,10 +35,8 @@ class SCmetrics:
     Variable liner is for the name of the shaped-charge liner in the Pagosa simulations
     (more specifically, as named in the npz files).
     """
-    def __init__(
-            self,
-            filename: str,
-            liner: str = "throw") -> None:
+
+    def __init__(self, filename: str, liner: str = "throw") -> None:
         """Initialize SCmetrics object."""
         self.filename = filename
 
@@ -251,11 +249,7 @@ class SCmetrics:
         """Function to return average vertical velocity."""
         return self.avg_regions(self.Wvelocity, Wthresh=Wthresh)
 
-    def get_eff_jet_mass(
-        self,
-        vel_thres: float = 0.1,
-        asPercent: bool = False
-        ) -> float:
+    def get_eff_jet_mass(self, vel_thres: float = 0.1, asPercent: bool = False) -> float:
         """Function to compute effective jet mass.
 
         Effective jet mass is mass of jet with Wvelocity above

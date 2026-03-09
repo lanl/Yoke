@@ -49,8 +49,8 @@ def train_array_datastep(
     if loss.ndim == 0:
         # loss_fn was reduced to a scalar; can't compute per-sample loss
         raise ValueError(
-            'loss_fn returned a scalar. Set reduction=none (or equivalent) to compute'
-            'per-sample losses.'
+            "loss_fn returned a scalar. Set reduction=none (or equivalent) to compute"
+            "per-sample losses."
         )
 
     reduce_dims = tuple(range(1, loss.ndim))  # (1, 2, ..., N)
@@ -108,8 +108,8 @@ def train_DDP_array_datastep(
     if loss.ndim == 0:
         # loss_fn was reduced to a scalar; can't compute per-sample loss
         raise ValueError(
-            'loss_fn returned a scalar. Set reduction=none (or equivalent) to compute'
-            'per-sample losses.'
+            "loss_fn returned a scalar. Set reduction=none (or equivalent) to compute"
+            "per-sample losses."
         )
 
     reduce_dims = tuple(range(1, loss.ndim))  # (1, 2, ..., N)
