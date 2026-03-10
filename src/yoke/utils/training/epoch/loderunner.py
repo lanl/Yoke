@@ -439,3 +439,62 @@ def train_DDP_loderunner_epoch(
                             ]
                         )
                         np.savetxt(val_rcrd_file, batch_records, fmt="%d, %d, %.8f")
+
+
+def eval_loderunner_epoch(
+    testing_data: torch.utils.data.DataLoader,
+    num_test_batches: int,
+    model: torch.nn.Module,
+    channel_map: list[int],
+    loss_fn: torch.nn.Module,
+    epochIDX: int,
+    test_rcrd_filename: str,
+    device: torch.device,
+) -> None:
+    """LodeRunner Evaluation-Only Epoch.
+
+    Function to complete a testing epoch on the LodeRunner architecture with
+    fixed channels in the input and output. Testing information is saved to successive
+    CSV files.
+
+    Args:
+        testing_data (torch.utils.data.DataLoader): testing dataloader
+        num_test_batches (int): Number of batches in training epoch
+        model (torch.nn.Module): model to train
+        channel_map (list[int]): list of channel indices to use
+        loss_fn (torch.nn.Module): loss function for training set
+        epochIDX (int): Index of current training epoch
+        test_rcrd_filename (str): Name of CSV file to save testing sample stats to
+        device (torch.device): device index to select
+
+    """
+    # Initialize things to save
+    testbatch_ID = 0
+
+    # Testing loop
+    model.eval()
+    test_rcrd_filename = test_rcrd_filename.replace("<epochIDX>", f"{epochIDX:04d}")
+    with open(test_rcrd_filename, "a") as test_rcrd_file:
+        for testbatch_ID, testdata in enumerate(testing_data):
+            # Stop when number of training batches is reached
+            if testbatch_ID >= num_test_batches:
+                break
+
+            # Perform a single test step
+            end_img, pred_img, test_losses = eval_loderunner_datastep(
+                testdata,
+                model,
+                loss_fn,
+                device,
+                channel_map,
+                )
+
+            # Save testing record
+            batch_records = np.column_stack(
+                [
+                    np.full(len(test_losses), epochIDX),
+                    np.full(len(test_losses), testbatch_ID),
+                    test_losses.cpu().detach().numpy().flatten(),
+                ]
+            )
+            np.savetxt(test_rcrd_file, batch_records, fmt="%d, %d, %.8f")
