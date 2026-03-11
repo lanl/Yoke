@@ -464,16 +464,16 @@ def test_file_prefix_list_loading(temporal_dataset: TemporalDataSet) -> None:
 #        _ = temporal_dataset[0]  # type: ignore
 
 
-@patch("pathlib.Path.is_file", return_value=True)
-@patch("numpy.load", return_value=MagicMock())
-@patch(
-    "yoke.datasets.load_npz_dataset.import_img_from_npz",
-    side_effect=lambda npz, fld: np.ones((10, 10)),
-)
-@patch(
-    "yoke.datasets.load_npz_dataset.process_channel_data",
-    side_effect=lambda cm, imgs, names: (cm, imgs, names),
-)
+#@patch("pathlib.Path.is_file", return_value=True)
+#@patch("numpy.load", return_value=MagicMock())
+#@patch(
+#    "yoke.datasets.load_npz_dataset.import_img_from_npz",
+#    side_effect=lambda npz, fld: np.ones((10, 10)),
+#)
+#@patch(
+#    "yoke.datasets.load_npz_dataset.process_channel_data",
+#    side_effect=lambda cm, imgs, names: (cm, imgs, names),
+#)
 #def test_temporal_dataset_getitem_returns_expected(
 #    mock_proc: MagicMock,
 #    mock_import: MagicMock,

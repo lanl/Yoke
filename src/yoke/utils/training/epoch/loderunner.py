@@ -19,14 +19,14 @@ from yoke.utils.training.datastep.loderunner import (
 
 DATASTEP_FN = {
     "pli": {
-        "train_ddp": train_DDP_loderunner_datastep,
-        "eval_ddp": eval_DDP_loderunner_datastep,
-        "eval": eval_loderunner_datastep
+        "train_ddp": "train_DDP_loderunner_datastep",
+        "eval_ddp": "eval_DDP_loderunner_datastep",
+        "eval": "eval_loderunner_datastep"
     },
     "cylex": {
-        "train_ddp": train_DDP_loderunner_datastep_cylex,
-        "eval_ddp": eval_DDP_loderunner_datastep_cylex,
-        "eval": eval_loderunner_datastep_cylex
+        "train_ddp": "train_DDP_loderunner_datastep_cylex",
+        "eval_ddp": "eval_DDP_loderunner_datastep_cylex",
+        "eval": "eval_loderunner_datastep_cylex"
     },
 }
 
@@ -392,6 +392,14 @@ def train_DDP_loderunner_epoch(
     trainbatch_ID = 0
     valbatch_ID = 0
 
+    # Resolve datastep functions at runtime (supports monkeypatching in tests)
+    dataset_fns = DATASTEP_FN.get(dataset)
+    if dataset_fns is None:
+        raise ValueError(f"Unsupported dataset: {dataset}")
+
+    train_fn = globals()[dataset_fns["train_ddp"]]
+    eval_fn  = globals()[dataset_fns["eval_ddp"]]
+
     # Training loop
     model.train()
     train_rcrd_filename = train_rcrd_filename.replace("<epochIDX>", f"{epochIDX:04d}")
@@ -402,13 +410,6 @@ def train_DDP_loderunner_epoch(
             # Stop when number of training batches is reached
             if trainbatch_ID >= num_train_batches:
                 break
-
-            # Get correct datastep function
-            dataset_fns = DATASTEP_FN.get(dataset)
-            if dataset_fns is None:
-                raise ValueError(f"Unsupported dataset: {dataset}")
-
-            train_fn = dataset_fns["train_ddp"]
 
             # Training
             truth, pred, train_losses = train_fn(
@@ -443,7 +444,6 @@ def train_DDP_loderunner_epoch(
                     if valbatch_ID >= num_val_batches:
                         break
                     
-                    eval_fn  = dataset_fns["eval_ddp"]
                     end_img, pred_img, val_losses = eval_fn(
                         valdata,
                         model,
