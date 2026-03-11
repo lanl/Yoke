@@ -436,7 +436,7 @@ def test_temporal_dataset_getitem_max_file_checks(
     mock_is_file: MagicMock, temporal_dataset: TemporalDataSet
 ) -> None:
     """Test that max_file_checks is respected and FileNotFoundError is raised."""
-    with pytest.raises(FileNotFoundError):
+    with pytest.raises(RuntimeError):
         _ = temporal_dataset[0]  # type: ignore
 
 
