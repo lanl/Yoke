@@ -791,5 +791,4 @@ dtype=torch.float32).contiguous().clone()
         self.active_hydro_field_names = active_hydro_field_names
         img_seq = torch.stack(frames, dim=0)
         dt = torch.tensor(0.25, dtype=torch.float32)
-        return (img_seq.contiguous().clone(), dt, torch.tensor(self.channel_map,
-dtype=torch.long).clone())
+        return (img_seq.contiguous().clone(), dt, list(self.channel_map))

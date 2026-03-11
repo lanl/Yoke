@@ -561,7 +561,7 @@ def test_volfrac_density_empty_suffix_prints(
     monkeypatch.setattr(mod, "extract_after_density", lambda s: "")
     out = mod.volfrac_density(img, "dummy.npz", "density_")
     captured = capsys.readouterr()
-    assert "Could not extractsuffix from hfield" in captured.out
+    assert "Could not extract suffix from hfield" in captured.out
     np.testing.assert_array_equal(out, img)
 
 

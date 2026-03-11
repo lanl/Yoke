@@ -239,6 +239,7 @@ def test_train_DDP_loderunner_epoch(
         device=torch.device("cpu"),
         rank=0,
         world_size=2,
+        dataset='pli'
     )
     assert (tmp_path / "train_0004.csv").exists()
     assert (tmp_path / "val_0004.csv").exists()
@@ -267,6 +268,7 @@ def test_train_DDP_loderunner_epoch(
         device=torch.device("cpu"),
         rank=1,
         world_size=2,
+        dataset='pli'
     )
     assert not (tmp_path / "train_0005.csv").exists()
     assert not (tmp_path / "val_0005.csv").exists()

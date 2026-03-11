@@ -282,14 +282,6 @@ def add_training_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParse
         default=25,
         help="Number of batches to validate on in a given epoch",
     )
-    #SOUMI added for eval
-    parser.add_argument(
-        "--test_batches",
-        action="store",
-        type=int,
-        default=0,
-        help="Number of batches to evaluate on a test set in a given epoch",
-    )
     parser.add_argument(
         "--test_batches",
         action="store",
@@ -318,14 +310,6 @@ def add_training_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParse
         default="./default_validation.csv",
         help="Filename for text file of validation loss and metrics on each batch",
     )
-    #SOUMI: added for eval
-    parser.add_argument(
-        "--test_rcrd_filename",
-        action="store",
-        type=str,
-        default="./default_testing.csv",
-        help="Filename for text file of test evaluation loss and metrics on each batch",
-    )
     parser.add_argument(
         "--test_rcrd_filename",
         action="store",
@@ -345,8 +329,6 @@ def add_training_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParse
         default=None,
         help="Path to checkpoint to continue training from",
     )
-    parser.add_argument("--pretrained_model", type=str, default=None,
-                    help="Path to pretrained model file to initialize weights for fine-tuning.")
     parser.add_argument(
         "--pretrained_model",
         type=str,
