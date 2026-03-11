@@ -180,7 +180,7 @@ def test_init_sets_all_expected_attributes(tmp_path: pathlib.Path) -> None:
     assert ld.key == "cx240420_id00001"
 
     # full hydro‐field names
-    all_names = ld.get_hydro_field_names()
+    all_names = ld.get_all_hydro_field_names()
     assert isinstance(all_names, list)
     assert all_names[:4] == ["Rcoord", "Zcoord", "Uvelocity", "Wvelocity"]
     assert len(all_names) == 46
@@ -291,10 +291,10 @@ def test_get_study_and_key_parses_filepath() -> None:
     assert ld.key == "AbcXYZ123_id00099"
 
 
-def test_get_hydro_field_names_returns_all(tmp_path: pathlib.Path) -> None:
-    """Test that get_hydro_field_names returns the full hydro field list."""
+def test_get_all_hydro_field_names_returns_all(tmp_path: pathlib.Path) -> None:
+    """Test that get_all_hydro_field_names returns the full hydro field list."""
     ld = labeled_data(tmp_path)
-    all_names = ld.get_hydro_field_names()
+    all_names = ld.get_all_hydro_field_names()
     assert isinstance(all_names, list)
     assert all_names == ld.all_hydro_field_names
     assert len(all_names) == len(ld.all_hydro_field_names)
@@ -345,7 +345,7 @@ def test_process_channel_data_combines_duplicates(
     """
     # Use LabeledData to obtain the true hydro field list
     ld = labeled_data(tmp_path)
-    hydro_field_list = ld.get_hydro_field_names()
+    hydro_field_list = ld.get_active_hydro_field_names()
 
     # Create a channel_map with a duplicate (index 4 repeated)
     channel_map = [0, 4, 4]
