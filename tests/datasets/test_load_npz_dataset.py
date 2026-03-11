@@ -65,6 +65,7 @@ def test_rank_worker_tag_contains_rank_worker_pid(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """rank_worker_tag includes rank/worker/pid and optional index."""
+
     class _Info:
         id = 7
 
