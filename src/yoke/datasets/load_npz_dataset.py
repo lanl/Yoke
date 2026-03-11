@@ -199,18 +199,15 @@ def volfrac_density(
         return tmp_img
 
     suffix = extract_after_density(hfield)
-    if not suffix:
-        LOGGER.warning(
-            "Could not extract suffix from hfield: %r (file=%s)",
-            hfield,
-            npz_filename,
+    if suffix is None or suffix == "":
+        print(
+            f"\n [load_npz_dataset.py] Could not extract suffix from hfield: {hfield!r}"
         )
         return tmp_img
 
     vofm_hfield = f"vofm_{suffix}"
     vofm = read_npz_nan(npz_filename, vofm_hfield)
     return tmp_img * vofm
-
 
 def import_img_from_npz(npz_filename: str | Path, hfield: str) -> np.ndarray:
     """Import an image field from NPZ and apply transforms.
