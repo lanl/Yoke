@@ -209,6 +209,7 @@ def volfrac_density(
     vofm = read_npz_nan(npz_filename, vofm_hfield)
     return tmp_img * vofm
 
+
 def import_img_from_npz(npz_filename: str | Path, hfield: str) -> np.ndarray:
     """Import an image field from NPZ and apply transforms.
 
@@ -398,7 +399,7 @@ class LabeledData:
                 "Rcoord",
                 "Zcoord",
                 "Uvelocity",
-                "Wvelocity"
+                "Wvelocity",
             ]
             self.active_npz_field_names = list(self.active_hydro_field_names)
         else:
@@ -422,23 +423,14 @@ class LabeledData:
                 [f"pressure_{non_he_mats[0]}", f"pressure_{non_he_mats[1]}"]
             )
             self.active_npz_field_names.extend(
-                [
-                    "pressure_maincharge",
-                    "pressure_booster"
-                ]
+                ["pressure_maincharge", "pressure_booster"]
             )
             self.active_hydro_field_names.extend(
-                [
-                    "pressure_maincharge",
-                    "pressure_booster"
-                ]
+                ["pressure_maincharge", "pressure_booster"]
             )
         elif self.thermodynamic_variables in ("density and energy", "all"):
             self.active_npz_field_names.extend(
-                [
-                    "energy_wall",
-                    f"energy_{non_he_mats[1]}"
-                ]
+                ["energy_wall", f"energy_{non_he_mats[1]}"]
             )
             self.active_hydro_field_names.extend(
                 [f"energy_{non_he_mats[0]}", f"energy_{non_he_mats[1]}"]
@@ -529,6 +521,7 @@ _TemporalSample = tuple[
     torch.Tensor,
     torch.Tensor,
 ]
+
 
 class TemporalDataSet(Dataset[_TemporalSample]):
     """Temporal field-to-field mapping dataset.
@@ -780,9 +773,7 @@ class TemporalDataSet(Dataset[_TemporalSample]):
 
         if hits:
             self.valid_prefixes = np.array([h["prefix"] for h in hits])
-            self._probe_present_fields = {
-                h["prefix"]: h["present_fields"] for h in hits
-            }
+            self._probe_present_fields = {h["prefix"]: h["present_fields"] for h in hits}
             self.n_valid = len(self.valid_prefixes)
             print(
                 f"[TemporalDataSet] Indexed {self.n_valid}/{total} prefixes via probe.",
