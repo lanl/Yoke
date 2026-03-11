@@ -402,7 +402,7 @@ def temporal_dataset(tmp_path: pathlib.Path) -> TemporalDataSet:
         npz_dir=npz_dir,
         csv_filepath=str(csv_path),
         file_prefix_list=str(prefix_file),
-        max_time_idx_offset=3,
+        max_timeIDX_offset=3,
         max_file_checks=5,
         half_image=True,
     )
@@ -413,7 +413,7 @@ def test_init_temporal_dataset(temporal_dataset: TemporalDataSet) -> None:
     ds = temporal_dataset
     assert ds.npz_dir.endswith("mock/path/")
     assert ds.csv_filepath.endswith("design.csv")
-    assert ds.max_time_idx_offset == 3
+    assert ds.max_timeIDX_offset == 3
     assert ds.max_file_checks == 5
     assert ds.half_image is True
     assert len(ds.file_prefix_list) == 3
