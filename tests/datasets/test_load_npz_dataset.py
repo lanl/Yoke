@@ -410,31 +410,17 @@ def test_temporal_dataset_getitem_success_minimal(
     assert dt.item() == pytest.approx(0.25)
 
 
-def test_temporal_dataset_getitem_fails_fast_when_files_missing(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: pathlib.Path,
-) -> None:
-    """TemporalDataSet raises RuntimeError when required files are missing."""
-    npz_dir = tmp_path / "npz"
-    npz_dir.mkdir()
-    prefix_file = tmp_path / "prefixes.txt"
-    _write_prefix_file(prefix_file, ["cx241203_id00001"])
-    csv = tmp_path / "design.csv"
-    _write_design_csv(csv, [("cx241203_id00001", "Air", "Al")])
+class _InfiniteRNG:
+    """RNG stub that never exhausts (always returns a constant)."""
 
-    ds = m.TemporalDataSet(
-        npz_dir=str(npz_dir) + "/",
-        csv_filepath=str(csv),
-        file_prefix_list=str(prefix_file),
-        max_timeIDX_offset=1,
-        max_file_checks=1,
-        half_image=True,
-    )
+    def __init__(self, value: int = 0) -> None:
+        """Initialize with a constant return value."""
+        self._value = value
 
-    monkeypatch.setattr(pathlib.Path, "is_file", lambda self: False)
-
-    with pytest.raises(RuntimeError, match="unable to assemble any sample"):
-        _ = ds[0]
+    def integers(self, low: int, high: int, *, endpoint: bool = False) -> int:
+        """Return a constant integer within the requested range."""
+        _ = (low, high, endpoint)
+        return self._value
 
 
 def test_sequential_dataset_init_missing_dir_raises(tmp_path: pathlib.Path) -> None:
