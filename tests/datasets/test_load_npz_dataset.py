@@ -9,8 +9,6 @@ import pathlib
 import pandas as pd
 import pytest
 import numpy as np
-import torch
-from unittest.mock import patch, MagicMock
 from yoke.datasets.load_npz_dataset import (
     process_channel_data,
     LabeledData,
@@ -431,56 +429,56 @@ def test_file_prefix_list_loading(temporal_dataset: TemporalDataSet) -> None:
     assert sorted(temporal_dataset.file_prefix_list) == sorted(expected)
 
 
-#@patch("pathlib.Path.is_file", return_value=False)
-#def test_temporal_dataset_getitem_max_file_checks(
+# @patch("pathlib.Path.is_file", return_value=False)
+# def test_temporal_dataset_getitem_max_file_checks(
 #    mock_is_file: MagicMock, temporal_dataset: TemporalDataSet
-#) -> None:
+# ) -> None:
 #    """Test that max_file_checks is respected and FileNotFoundError is raised."""
 #    with pytest.raises(RuntimeError):
 #        _ = temporal_dataset[0]  # type: ignore
 
 
-#@patch("pathlib.Path.is_file", return_value=True)
-#@patch("numpy.load", side_effect=OSError("load failed"))
-#def test_temporal_dataset_getitem_load_error(
+# @patch("pathlib.Path.is_file", return_value=True)
+# @patch("numpy.load", side_effect=OSError("load failed"))
+# def test_temporal_dataset_getitem_load_error(
 #    mock_npz: MagicMock,
 #    mock_is_file: MagicMock,
 #    temporal_dataset: TemporalDataSet,
-#) -> None:
+# ) -> None:
 #    """Test that an OSError in numpy.load propagates out of __getitem__."""
 #    with pytest.raises(OSError, match="load failed"):
 #        _ = temporal_dataset[0]  # type: ignore
 
 
-#@patch("pathlib.Path.is_file", return_value=True)
-#@patch("numpy.load", side_effect=OSError("load failed"))
-#def test_getitem_propagates_load_error(
+# @patch("pathlib.Path.is_file", return_value=True)
+# @patch("numpy.load", side_effect=OSError("load failed"))
+# def test_getitem_propagates_load_error(
 #    mock_npz: MagicMock,
 #    mock_is_file: MagicMock,
 #    temporal_dataset: TemporalDataSet,
-#) -> None:
+# ) -> None:
 #    """If numpy.load throws, __getitem__ should propagate that OSError."""
 #    with pytest.raises(OSError, match="load failed"):
 #        _ = temporal_dataset[0]  # type: ignore
 
 
-#@patch("pathlib.Path.is_file", return_value=True)
-#@patch("numpy.load", return_value=MagicMock())
-#@patch(
+# @patch("pathlib.Path.is_file", return_value=True)
+# @patch("numpy.load", return_value=MagicMock())
+# @patch(
 #    "yoke.datasets.load_npz_dataset.import_img_from_npz",
 #    side_effect=lambda npz, fld: np.ones((10, 10)),
-#)
-#@patch(
+# )
+# @patch(
 #    "yoke.datasets.load_npz_dataset.process_channel_data",
 #    side_effect=lambda cm, imgs, names: (cm, imgs, names),
-#)
-#def test_temporal_dataset_getitem_returns_expected(
+# )
+# def test_temporal_dataset_getitem_returns_expected(
 #    mock_proc: MagicMock,
 #    mock_import: MagicMock,
 #    mock_npz: MagicMock,
 #    mock_isfile: MagicMock,
 #    temporal_dataset: TemporalDataSet,
-#) -> None:
+# ) -> None:
 #    """Tests that the __getitem__ method returns the correct data format as follows.
 #
 #    - start_img, end_img: torch.Tensor of shape (n_ch,10,10)
