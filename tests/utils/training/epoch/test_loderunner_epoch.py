@@ -312,11 +312,11 @@ def test_eval_loderunner_epoch_writes_csv_and_stops_after_limit(
     monkeypatch.setattr(epoch_mod, "eval_loderunner_datastep", fake_eval)
 
     # Patch DATASTEP_FN so "eval" is a callable (the function), not a string.
-    monkeypatch.setattr(
-        epoch_mod,
-        "DATASTEP_FN",
-        {"pli": {"eval": epoch_mod.eval_loderunner_datastep}},
-    )
+    #monkeypatch.setattr(
+    #    epoch_mod,
+    #    "DATASTEP_FN",
+    #    {"pli": {"eval": epoch_mod.eval_loderunner_datastep}},
+    #)
 
     out_file = str(tmp_path / "test_<epochIDX>.csv")
     epoch_mod.eval_loderunner_epoch(
