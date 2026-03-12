@@ -386,6 +386,7 @@ def train_DDP_loderunner_epoch(
         device (torch.device): device index to select
         rank (int): rank of process
         world_size (int): number of total processes
+        dataset (string): name of dataset being analyzed. Options are "pli" and "cylex".
 
     """
     # Initialize things to save
