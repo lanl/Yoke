@@ -534,3 +534,38 @@ def test_handle_voids_returns_nan_mask_for_void_field(tmp_path: pathlib.Path) ->
     assert out is not None
     assert out.shape == (2, 2)
     assert np.all(np.isnan(out))
+
+
+def test_read_npz_nan_accepts_npz_handle(tmp_path: pathlib.Path) -> None:
+    """read_npz_nan accepts an opened NpzFile handle."""
+    p = tmp_path / "a.npz"
+    np.savez(p, field=np.array([[np.nan, 2.0]], dtype=float))
+
+    with np.load(p, allow_pickle=False) as z:
+        out = m.read_npz_nan(z, "field")
+
+    assert out[0, 0] == 0.0
+    assert out[0, 1] == 2.0
+
+
+def test_meshgrid_position_noop_for_other_fields(tmp_path: pathlib.Path) -> None:
+    """meshgrid_position returns input unchanged for non-coordinate fields."""
+    p = tmp_path / "a.npz"
+    np.savez(p, dummy=np.zeros((1,), dtype=float))
+
+    img = np.ones((2, 2), dtype=float)
+    out = m.meshgrid_position(img, p, "density_Air")
+    assert out is img
+
+
+def test_import_img_from_npz_uses_handle_voids_when_present(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """import_img_from_npz uses handle_voids output when non-None."""
+    monkeypatch.setattr(m, "handle_voids", lambda npz, fld: np.full((2, 2), 3.0))
+    monkeypatch.setattr(m, "read_npz_nan", lambda npz, fld: np.full((2, 2), 9.0))
+    monkeypatch.setattr(m, "meshgrid_position", lambda img, npz, fld: img)
+    monkeypatch.setattr(m, "volfrac_density", lambda img, npz, fld: img)
+
+    out = m.import_img_from_npz("x.npz", "density_Void")
+    assert np.all(out == 3.0)
