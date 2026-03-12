@@ -499,3 +499,38 @@ def test_sequential_dataset_getitem_success_minimal(
     assert img_seq.shape == (2, 1, 2, 2)
     assert dt.item() == pytest.approx(0.25)
     assert cm == [0]
+
+
+def test_handle_voids_returns_none_for_non_void_field(tmp_path: pathlib.Path) -> None:
+    """handle_voids returns None when hfield does not end with '_Void'."""
+    p = tmp_path / "a.npz"
+    np.savez(
+        p,
+        av_density=np.zeros((2, 2), dtype=float),
+        density_booster=np.zeros((2, 2), dtype=float),
+        density_maincharge=np.zeros((2, 2), dtype=float),
+    )
+
+    assert m.handle_voids(p, "density_Air") is None
+
+
+def test_handle_voids_returns_nan_mask_for_void_field(tmp_path: pathlib.Path) -> None:
+    """handle_voids returns a NaN mask for '_Void' fields.
+
+    read_npz_nan replaces NaNs with 0, so the internal mask becomes True
+    everywhere when the booster/maincharge fields exist.
+    """
+    p = tmp_path / "a.npz"
+    booster = np.array([[np.nan, 1.0], [0.0, np.nan]], dtype=float)
+    main = np.array([[np.nan, 0.0], [2.0, np.nan]], dtype=float)
+    np.savez(
+        p,
+        av_density=np.zeros((2, 2), dtype=float),
+        density_booster=booster,
+        density_maincharge=main,
+    )
+
+    out = m.handle_voids(p, "density_Void")
+    assert out is not None
+    assert out.shape == (2, 2)
+    assert np.all(np.isnan(out))
