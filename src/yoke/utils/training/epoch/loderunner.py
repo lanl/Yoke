@@ -506,7 +506,7 @@ def eval_loderunner_epoch(
     if dataset_fns is None:
         raise ValueError(f"Unsupported dataset: {dataset}")
 
-    eval_fn  = dataset_fns["eval"]
+    eval_fn = globals()[dataset_fns["eval"]]
 
     with open(test_rcrd_filename, "a") as test_rcrd_file:
         for testbatch_ID, testdata in enumerate(testing_data):
