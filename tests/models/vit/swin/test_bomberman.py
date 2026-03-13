@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 from torch.optim.lr_scheduler import _LRScheduler
 
-from yoke.models.vit.swin.bomberman import LodeRunner, Lightning_LodeRunner
+from yoke.models.vit.swin.loderunner import LodeRunner, Lightning_LodeRunner
 
 
 # Ignore only SLURM "srun" warning
