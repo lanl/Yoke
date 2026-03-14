@@ -542,11 +542,11 @@ class TemporalDataSet(Dataset[_TemporalSample]):
         kinematic_variables: str = "velocity",
     ) -> None:
         """Initialize TemporalDataSet.
-        
+
         This dataset returns multi-channel images at two different times from
-        the *Cylex* simulation. The *maximum time-offset* can be specified. The channels 
-        in the images returned are the kinematic (position, velocity) and thermodynamic 
-        (pressure, density, energy) fields for each material as requested by the user. 
+        the *Cylex* simulation. The *maximum time-offset* can be specified. The channels
+        in the images returned are the kinematic (position, velocity) and thermodynamic
+        (pressure, density, energy) fields for each material as requested by the user.
         The time-offset between the two images is also returned.
 
         Args:
@@ -638,8 +638,8 @@ class TemporalDataSet(Dataset[_TemporalSample]):
                         str(start_file_path),
                         self.csv_filepath,
                         thermodynamic_variables=self.thermodynamic_variables,
-                        kinematic_variables=self.kinematic_variables
-                        )
+                        kinematic_variables=self.kinematic_variables,
+                    )
                     active_npz_field_names = ld.get_active_npz_field_names()
                     active_hydro_field_names = ld.get_active_hydro_field_names()
                     channel_map = ld.get_channel_map()
@@ -782,8 +782,8 @@ class TemporalDataSet(Dataset[_TemporalSample]):
                         str(start_fp),
                         self.csv_filepath,
                         thermodynamic_variables=self.thermodynamic_variables,
-                        kinematic_variables=self.kinematic_variables
-                        )
+                        kinematic_variables=self.kinematic_variables,
+                    )
                     active_fields = ld.get_active_npz_field_names()
                     available = set(z.files)
                     present_fields = [f for f in active_fields if f in available]
@@ -835,7 +835,7 @@ _SequentialSample = tuple[torch.Tensor, torch.Tensor, list[int]]
 
 class SequentialDataSet(Dataset[_SequentialSample]):
     """Return a sequence of consecutive frames from a Cylex simulation.
-    
+
     This dataset returns sequences of frames of Cylex simulation data at specified
     time offsets and sequence lengths.  For a given sequence length, multiple
     time offsets are allowed.  For example, if seq_len=2 and timeIDX_offset=[1, 2],
@@ -870,8 +870,8 @@ class SequentialDataSet(Dataset[_SequentialSample]):
         max_file_checks: int,
         seq_len: int,
         half_image: bool = True,
-        kinematic_variables = "velocity",
-        thermodynamic_variables = "density",
+        kinematic_variables: str = "velocity",
+        thermodynamic_variables: str = "density",
     ) -> None:
         """Initialize SequentialDataSet."""
         dir_path = Path(npz_dir)
@@ -946,8 +946,8 @@ class SequentialDataSet(Dataset[_SequentialSample]):
                     str(file_path),
                     self.csv_filepath,
                     thermodynamic_variables=self.thermodynamic_variables,
-                    kinematic_variables=self.kinematic_variables
-                    )
+                    kinematic_variables=self.kinematic_variables,
+                )
                 self.active_npz_field_names = ld.get_active_npz_field_names()
                 active_hydro_field_names = ld.get_active_hydro_field_names()
                 channel_map = ld.get_channel_map()
