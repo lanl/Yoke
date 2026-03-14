@@ -113,6 +113,20 @@ def add_filepath_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParse
         help="Directory in which LSC *.npz files live.",
     )
     parser.add_argument(
+        "--NPZ_DIR",
+        action="store",
+        type=str,
+        default=os.path.join(YOKE_PATH, "data_examples/cx241203_fp16_half/"),
+        help="Directory in which CX *.npz files live.",
+    )
+    parser.add_argument(
+        "--CSV_FILEPATH",
+        action="store",
+        type=str,
+        default=os.path.join(YOKE_PATH, "data_examples/design_cx241203_MASTER.csv"),
+        help="Filepath to CX csv file.",
+    )
+    parser.add_argument(
         "--NC_NPZ_DIR",
         action="store",
         type=str,
