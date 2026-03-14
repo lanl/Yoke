@@ -883,7 +883,7 @@ class SequentialDataSet(Dataset[_SequentialSample]):
         self.max_file_checks = max_file_checks
         self.seq_len = seq_len
         self.half_image = half_image
-        self.thermodynamic_variable = thermodynamic_variables
+        self.thermodynamic_variables = thermodynamic_variables
         self.kinematic_variables = kinematic_variables
 
         with open(file_prefix_list, encoding="utf-8") as f:

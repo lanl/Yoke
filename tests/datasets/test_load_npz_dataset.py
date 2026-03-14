@@ -342,6 +342,8 @@ def test_temporal_dataset_len_is_constant(tmp_path: pathlib.Path) -> None:
         max_timeIDX_offset=1,
         max_file_checks=1,
         half_image=True,
+        kinematic_variables="velocity",
+        thermodynamic_variables="density",
     )
     assert len(ds) == 800_000
 
@@ -366,8 +368,19 @@ def test_temporal_dataset_getitem_success_minimal(
     class FakeLabeledData:
         """Minimal stub that matches the tiny NPZ fields used in this test."""
 
-        def __init__(self, npz_filepath: str, csv_filepath: str) -> None:
-            _ = (npz_filepath, csv_filepath)
+        def __init__(
+            self,
+            npz_filepath: str,
+            csv_filepath: str,
+            kinematic_variables: str = "velocity",
+            thermodynamic_variables: str = "density",
+        ) -> None:
+            _ = (
+                npz_filepath,
+                csv_filepath,
+                kinematic_variables,
+                thermodynamic_variables,
+            )
 
         def get_active_npz_field_names(self) -> list[str]:
             """Return present fields."""
@@ -400,6 +413,8 @@ def test_temporal_dataset_getitem_success_minimal(
         max_timeIDX_offset=1,
         max_file_checks=1,
         half_image=True,
+        kinematic_variables="velocity",
+        thermodynamic_variables="density",
     )
     ds.rng = _FakeRNG([1, 0])  # seq_len=1, start_idx=0 -> end_idx=1
 
@@ -438,6 +453,8 @@ def test_sequential_dataset_init_missing_dir_raises(tmp_path: pathlib.Path) -> N
             file_prefix_list=str(prefix_file),
             max_file_checks=1,
             seq_len=2,
+            kinematic_variables="velocity",
+            thermodynamic_variables="density",
         )
 
 
@@ -461,8 +478,19 @@ def test_sequential_dataset_getitem_success_minimal(
     class FakeLabeledData:
         """Minimal stub that matches the tiny NPZ fields used in this test."""
 
-        def __init__(self, npz_filepath: str, csv_filepath: str) -> None:
-            _ = (npz_filepath, csv_filepath)
+        def __init__(
+            self,
+            npz_filepath: str,
+            csv_filepath: str,
+            kinematic_variables: str = "velocity",
+            thermodynamic_variables: str = "density",
+        ) -> None:
+            _ = (
+                npz_filepath,
+                csv_filepath,
+                kinematic_variables,
+                thermodynamic_variables,
+            )
 
         def get_active_npz_field_names(self) -> list[str]:
             """Return present fields."""
@@ -491,6 +519,8 @@ def test_sequential_dataset_getitem_success_minimal(
         max_file_checks=1,
         seq_len=2,
         half_image=True,
+        kinematic_variables="velocity",
+        thermodynamic_variables="density",
     )
     ds.rng = _FakeRNG([0])  # start_idx=0
 
@@ -569,3 +599,68 @@ def test_import_img_from_npz_uses_handle_voids_when_present(
 
     out = m.import_img_from_npz("x.npz", "density_Void")
     assert np.all(out == 3.0)
+
+
+def test_temporal_dataset_init_with_nondefault_variable_modes(
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """TemporalDataSet stores non-default variable mode settings."""
+    monkeypatch.setattr(
+        m.TemporalDataSet,
+        "_build_valid_prefixes",
+        lambda self: None,
+    )
+
+    npz_dir = tmp_path / "npz"
+    npz_dir.mkdir()
+    prefix_file = tmp_path / "prefixes.txt"
+    prefix_file.write_text("cx241203_id00001\n", encoding="utf-8")
+    csv_path = tmp_path / "design.csv"
+    csv_path.write_text(
+        "idx,wallMat,backMat\ncx241203_id00001,Air,Al\n",
+        encoding="utf-8",
+    )
+
+    ds = m.TemporalDataSet(
+        npz_dir=str(npz_dir) + "/",
+        csv_filepath=str(csv_path),
+        file_prefix_list=str(prefix_file),
+        max_timeIDX_offset=1,
+        max_file_checks=1,
+        kinematic_variables="both",
+        thermodynamic_variables="density and pressure",
+        half_image=True,
+    )
+
+    assert ds.kinematic_variables == "both"
+    assert ds.thermodynamic_variables == "density and pressure"
+
+
+def test_sequential_dataset_init_with_nondefault_variable_modes(
+    tmp_path: pathlib.Path,
+) -> None:
+    """SequentialDataSet stores non-default variable mode settings."""
+    npz_dir = tmp_path / "npz"
+    npz_dir.mkdir()
+    prefix_file = tmp_path / "prefixes.txt"
+    prefix_file.write_text("cx241203_id00001\n", encoding="utf-8")
+    csv_path = tmp_path / "design.csv"
+    csv_path.write_text(
+        "idx,wallMat,backMat\ncx241203_id00001,Air,Al\n",
+        encoding="utf-8",
+    )
+
+    ds = m.SequentialDataSet(
+        npz_dir=str(npz_dir),
+        csv_filepath=str(csv_path),
+        file_prefix_list=str(prefix_file),
+        max_file_checks=1,
+        seq_len=2,
+        kinematic_variables="position",
+        thermodynamic_variables="density and energy",
+        half_image=True,
+    )
+
+    assert ds.kinematic_variables == "position"
+    assert ds.thermodynamic_variables == "density and energy"
