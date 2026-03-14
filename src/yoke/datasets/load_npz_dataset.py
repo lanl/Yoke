@@ -538,13 +538,43 @@ class TemporalDataSet(Dataset[_TemporalSample]):
         max_timeIDX_offset: int,
         max_file_checks: int,
         half_image: bool = True,
+        thermodynamic_variables: str = "density",
+        kinematic_variables: str = "velocity",
     ) -> None:
-        """Initialize TemporalDataSet."""
+        """Initialize TemporalDataSet.
+        
+        This dataset returns multi-channel images at two different times from
+        the *Cylex* simulation. The *maximum time-offset* can be specified. The channels 
+        in the images returned are the kinematic (position, velocity) and thermodynamic 
+        (pressure, density, energy) fields for each material as requested by the user. 
+        The time-offset between the two images is also returned.
+
+        Args:
+            npz_dir (str): Directory path for CYL NPZ files.
+            csv_filepath: Full path for the design CSV.
+            file_prefix_list (str): Text file listing unique prefixes corresponding
+                                    to unique simulations.
+            max_timeIDX_offset (int): Maximum timesteps-ahead to attempt
+                                      prediction for. A prediction image will be chosen
+                                      within this timeframe at random.
+            max_file_checks (int): This dataset generates two random time indices and
+                                   checks if the corresponding files exist. This
+                                   argument controls the maximum number of times indices
+                                   are generated before throwing an error.
+            half_image (bool): If True then returned images are NOT reflected about axis
+                               of symmetry and half-images are returned instead.
+            kinematic_variables (str): "velocity", "position", or "both".
+            thermodynamic_variables (str): "density", "density and pressure",
+                                           "density and energy", or "all".
+
+        """
         self.npz_dir = npz_dir
         self.csv_filepath = csv_filepath
         self.max_timeIDX_offset = max_timeIDX_offset
         self.max_file_checks = max_file_checks
         self.half_image = half_image
+        self.thermodynamic_variables = thermodynamic_variables
+        self.kinematic_variables = kinematic_variables
 
         with open(file_prefix_list, encoding="utf-8") as f:
             self.file_prefix_list = [line.rstrip() for line in f]
@@ -604,7 +634,12 @@ class TemporalDataSet(Dataset[_TemporalSample]):
                     continue
 
                 try:
-                    ld = LabeledData(str(start_file_path), self.csv_filepath)
+                    ld = LabeledData(
+                        str(start_file_path),
+                        self.csv_filepath,
+                        thermodynamic_variables=self.thermodynamic_variables,
+                        kinematic_variables=self.kinematic_variables
+                        )
                     active_npz_field_names = ld.get_active_npz_field_names()
                     active_hydro_field_names = ld.get_active_hydro_field_names()
                     channel_map = ld.get_channel_map()
@@ -743,7 +778,12 @@ class TemporalDataSet(Dataset[_TemporalSample]):
 
             try:
                 with np.load(str(start_fp), allow_pickle=False) as z:
-                    ld = LabeledData(str(start_fp), self.csv_filepath)
+                    ld = LabeledData(
+                        str(start_fp),
+                        self.csv_filepath,
+                        thermodynamic_variables=self.thermodynamic_variables,
+                        kinematic_variables=self.kinematic_variables
+                        )
                     active_fields = ld.get_active_npz_field_names()
                     available = set(z.files)
                     present_fields = [f for f in active_fields if f in available]
@@ -794,7 +834,33 @@ _SequentialSample = tuple[torch.Tensor, torch.Tensor, list[int]]
 
 
 class SequentialDataSet(Dataset[_SequentialSample]):
-    """Return a sequence of consecutive frames from a simulation."""
+    """Return a sequence of consecutive frames from a Cylex simulation.
+    
+    This dataset returns sequences of frames of Cylex simulation data at specified
+    time offsets and sequence lengths.  For a given sequence length, multiple
+    time offsets are allowed.  For example, if seq_len=2 and timeIDX_offset=[1, 2],
+    this dataset will contain all Cylex simulation sequences of length 2 with frames
+    offset by 1 and 2 time indices (i.e., the set of sequences
+    (t, t+1), (t, t+2), (t+1, t+2), (t+1, t+3), ...).
+
+    Args:
+        npz_dir (str): Directory path for CYL NPZ files.
+        csv_filepath: Full path for the design CSV.
+        file_prefix_list (str): Text file listing unique prefixes corresponding
+                                to unique simulations.
+        max_file_checks (int): This dataset generates two random time indices and
+                               checks if the corresponding files exist. This
+                               argument controls the maximum number of times indices
+                               are generated before throwing an error.
+        seq_len (int): Number of consecutive frames to return. This includes the
+                       starting frame.
+        half_image (bool): If True then returned images are NOT reflected about axis
+                           of symmetry and half-images are returned instead.
+        kinematic_variables (str): "velocity", "position", or "both".
+        thermodynamic_variables (str): "density", "density and pressure",
+                                       "density and energy", or "all".
+
+    """
 
     def __init__(
         self,
@@ -804,6 +870,8 @@ class SequentialDataSet(Dataset[_SequentialSample]):
         max_file_checks: int,
         seq_len: int,
         half_image: bool = True,
+        kinematic_variables = "velocity",
+        thermodynamic_variables = "density",
     ) -> None:
         """Initialize SequentialDataSet."""
         dir_path = Path(npz_dir)
@@ -815,6 +883,8 @@ class SequentialDataSet(Dataset[_SequentialSample]):
         self.max_file_checks = max_file_checks
         self.seq_len = seq_len
         self.half_image = half_image
+        self.thermodynamic_variable = thermodynamic_variables
+        self.kinematic_variables = kinematic_variables
 
         with open(file_prefix_list, encoding="utf-8") as f:
             self.file_prefix_list = [line.rstrip() for line in f]
@@ -872,7 +942,12 @@ class SequentialDataSet(Dataset[_SequentialSample]):
         for file_path in file_paths:
             try:
                 data_npz = np.load(str(file_path), allow_pickle=False)
-                ld = LabeledData(str(file_path), self.csv_filepath)
+                ld = LabeledData(
+                    str(file_path),
+                    self.csv_filepath,
+                    thermodynamic_variables=self.thermodynamic_variables,
+                    kinematic_variables=self.kinematic_variables
+                    )
                 self.active_npz_field_names = ld.get_active_npz_field_names()
                 active_hydro_field_names = ld.get_active_hydro_field_names()
                 channel_map = ld.get_channel_map()
