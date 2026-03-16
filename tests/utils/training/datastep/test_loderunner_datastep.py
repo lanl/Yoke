@@ -16,6 +16,9 @@ from yoke.utils.training.datastep.loderunner import (
     eval_loderunner_datastep,
     eval_scheduled_loderunner_datastep,
     eval_DDP_loderunner_datastep,
+    eval_loderunner_datastep_cylex,
+    train_DDP_loderunner_datastep_cylex,
+    eval_DDP_loderunner_datastep_cylex,
 )
 
 
@@ -208,6 +211,108 @@ def test_eval_DDP_loderunner_datastep(
     assert torch.equal(end_img, end)
     assert torch.equal(pred_img, start + 1.0)
     if rank == 0:
+        assert all_losses.shape == (world_size * B,)
+    else:
+        assert all_losses is None
+
+
+def test_eval_loderunner_datastep_cylex(
+    device: torch.device, loss_fn: nn.Module
+) -> None:
+    """Cylex eval datastep uses channel_map from the 5-tuple data."""
+    model = DummyModel()
+    B, C, H, W = 2, 1, 2, 2
+    start = torch.zeros((B, C, H, W))
+    end = torch.zeros((B, C, H, W))
+    Dt = torch.ones((B, 1))
+    channel_map = [0]
+
+    end_img, pred_img, per_loss = eval_loderunner_datastep_cylex(
+        (start, channel_map, end, channel_map, Dt),
+        model,
+        loss_fn,
+        device,
+        channel_map=None,
+    )
+    assert torch.equal(end_img, end)
+    assert torch.equal(pred_img, start + 1.0)
+    assert per_loss.shape == (B,)
+    assert torch.allclose(per_loss, torch.ones(B))
+
+
+@pytest.mark.parametrize("rank", [0, 1])
+def test_train_DDP_loderunner_datastep_cylex(
+    rank: int,
+    device: torch.device,
+    loss_fn: nn.Module,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Cylex DDP train returns concatenated losses only on rank 0."""
+    # Avoid CUDA calls on CPU runners.
+    monkeypatch.setattr(torch.cuda, "empty_cache", lambda: None)
+
+    model = DummyModel()
+    optimizer = optim.SGD(model.parameters(), lr=0.1)
+
+    B, C, H, W = 2, 1, 2, 2
+    start = torch.zeros((B, C, H, W))
+    end = torch.zeros((B, C, H, W))
+    Dt = torch.ones((B, 1))
+    channel_map = [0, 1]
+
+    world_size = 3
+    end_img, pred_img, all_losses = train_DDP_loderunner_datastep_cylex(
+        (start, channel_map, end, channel_map, Dt),
+        model,
+        optimizer,
+        loss_fn,
+        device,
+        rank,
+        world_size,
+    )
+
+    assert torch.equal(end_img, end)
+    assert torch.equal(pred_img, start + 1.0)
+
+    if rank == 0:
+        assert all_losses is not None
+        assert all_losses.shape == (world_size * B,)
+    else:
+        assert all_losses is None
+
+
+@pytest.mark.parametrize("rank", [0, 1])
+def test_eval_DDP_loderunner_datastep_cylex(
+    rank: int,
+    device: torch.device,
+    loss_fn: nn.Module,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Cylex DDP eval returns concatenated losses only on rank 0."""
+    monkeypatch.setattr(torch.cuda, "empty_cache", lambda: None)
+
+    model = DummyModel()
+    B, C, H, W = 2, 1, 2, 2
+    start = torch.zeros((B, C, H, W))
+    end = torch.zeros((B, C, H, W))
+    Dt = torch.ones((B, 1))
+    channel_map = [0, 1]
+
+    world_size = 4
+    end_img, pred_img, all_losses = eval_DDP_loderunner_datastep_cylex(
+        (start, channel_map, end, channel_map, Dt),
+        model,
+        loss_fn,
+        device,
+        rank,
+        world_size,
+    )
+
+    assert torch.equal(end_img, end)
+    assert torch.equal(pred_img, start + 1.0)
+
+    if rank == 0:
+        assert all_losses is not None
         assert all_losses.shape == (world_size * B,)
     else:
         assert all_losses is None

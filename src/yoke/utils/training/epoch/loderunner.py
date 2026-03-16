@@ -8,12 +8,27 @@ from contextlib import nullcontext
 from yoke.utils.training.datastep.loderunner import (
     train_loderunner_datastep,
     eval_loderunner_datastep,
+    eval_loderunner_datastep_cylex,
     train_scheduled_loderunner_datastep,
     eval_scheduled_loderunner_datastep,
     train_DDP_loderunner_datastep,
     eval_DDP_loderunner_datastep,
+    train_DDP_loderunner_datastep_cylex,
+    eval_DDP_loderunner_datastep_cylex,
 )
 
+DATASTEP_FN = {
+    "pli": {
+        "train_ddp": "train_DDP_loderunner_datastep",
+        "eval_ddp": "eval_DDP_loderunner_datastep",
+        "eval": "eval_loderunner_datastep"
+    },
+    "cylex": {
+        "train_ddp": "train_DDP_loderunner_datastep_cylex",
+        "eval_ddp": "eval_DDP_loderunner_datastep_cylex",
+        "eval": "eval_loderunner_datastep_cylex"
+    },
+}
 
 def train_simple_loderunner_epoch(
     channel_map: list,
@@ -346,6 +361,7 @@ def train_DDP_loderunner_epoch(
     device: torch.device,
     rank: int,
     world_size: int,
+    dataset: str = "pli",
 ) -> None:
     """Distributed data-parallel LodeRunner Epoch.
 
@@ -370,11 +386,20 @@ def train_DDP_loderunner_epoch(
         device (torch.device): device index to select
         rank (int): rank of process
         world_size (int): number of total processes
+        dataset (string): name of dataset being analyzed. Options are "pli" and "cylex".
 
     """
     # Initialize things to save
     trainbatch_ID = 0
     valbatch_ID = 0
+
+    # Resolve datastep functions at runtime (supports monkeypatching in tests)
+    dataset_fns = DATASTEP_FN.get(dataset)
+    if dataset_fns is None:
+        raise ValueError(f"Unsupported dataset: {dataset}")
+
+    train_fn = globals()[dataset_fns["train_ddp"]]
+    eval_fn  = globals()[dataset_fns["eval_ddp"]]
 
     # Training loop
     model.train()
@@ -387,8 +412,8 @@ def train_DDP_loderunner_epoch(
             if trainbatch_ID >= num_train_batches:
                 break
 
-            # Perform a single training step
-            truth, pred, train_losses = train_DDP_loderunner_datastep(
+            # Training
+            truth, pred, train_losses = train_fn(
                 traindata, model, optimizer, loss_fn, device, rank, world_size
             )
 
@@ -419,14 +444,14 @@ def train_DDP_loderunner_epoch(
                     # Stop when number of training batches is reached
                     if valbatch_ID >= num_val_batches:
                         break
-
-                    end_img, pred_img, val_losses = eval_DDP_loderunner_datastep(
+                    
+                    end_img, pred_img, val_losses = eval_fn(
                         valdata,
                         model,
                         loss_fn,
                         device,
                         rank,
-                        world_size,
+                        world_size
                     )
 
                     # Save validation record (rank 0 only)
@@ -450,6 +475,7 @@ def eval_loderunner_epoch(
     epochIDX: int,
     test_rcrd_filename: str,
     device: torch.device,
+    dataset: str = "pli",
 ) -> None:
     """LodeRunner Evaluation-Only Epoch.
 
@@ -474,6 +500,14 @@ def eval_loderunner_epoch(
     # Testing loop
     model.eval()
     test_rcrd_filename = test_rcrd_filename.replace("<epochIDX>", f"{epochIDX:04d}")
+
+    # Get correct datastep function
+    dataset_fns = DATASTEP_FN.get(dataset)
+    if dataset_fns is None:
+        raise ValueError(f"Unsupported dataset: {dataset}")
+
+    eval_fn = globals()[dataset_fns["eval"]]
+
     with open(test_rcrd_filename, "a") as test_rcrd_file:
         for testbatch_ID, testdata in enumerate(testing_data):
             # Stop when number of training batches is reached
@@ -481,7 +515,7 @@ def eval_loderunner_epoch(
                 break
 
             # Perform a single test step
-            end_img, pred_img, test_losses = eval_loderunner_datastep(
+            end_img, pred_img, test_losses = eval_fn(
                 testdata,
                 model,
                 loss_fn,

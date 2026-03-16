@@ -239,6 +239,7 @@ def test_train_DDP_loderunner_epoch(
         device=torch.device("cpu"),
         rank=0,
         world_size=2,
+        dataset="pli",
     )
     assert (tmp_path / "train_0004.csv").exists()
     assert (tmp_path / "val_0004.csv").exists()
@@ -267,8 +268,71 @@ def test_train_DDP_loderunner_epoch(
         device=torch.device("cpu"),
         rank=1,
         world_size=2,
+        dataset="pli",
     )
     assert not (tmp_path / "train_0005.csv").exists()
     assert not (tmp_path / "val_0005.csv").exists()
     assert fake_ddp_train.calls == 1
     assert fake_ddp_eval.calls == 0
+
+
+def test_eval_loderunner_epoch_unsupported_dataset_raises(
+    simple_loaders: tuple[DataLoader, DataLoader],
+) -> None:
+    """eval_loderunner_epoch raises for an unsupported dataset name."""
+    test_loader, _ = simple_loaders
+    model = nn.Linear(1, 1)
+    loss_fn = nn.MSELoss(reduction="none")
+
+    with pytest.raises(ValueError, match="Unsupported dataset"):
+        epoch_mod.eval_loderunner_epoch(
+            testing_data=test_loader,
+            num_test_batches=1,
+            model=model,
+            channel_map=[0],
+            loss_fn=loss_fn,
+            epochIDX=1,
+            test_rcrd_filename="test_<epochIDX>.csv",
+            device=torch.device("cpu"),
+            dataset="not_a_dataset",
+        )
+
+
+def test_eval_loderunner_epoch_writes_csv_and_stops_after_limit(
+    tmp_path: Path,
+    simple_loaders: tuple[DataLoader, DataLoader],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """eval_loderunner_epoch writes CSV and respects num_test_batches."""
+    test_loader, _ = simple_loaders
+    model = nn.Linear(1, 1)
+    loss_fn = nn.MSELoss(reduction="none")
+
+    fake_eval = DummyEpochStep()
+    monkeypatch.setattr(epoch_mod, "eval_loderunner_datastep", fake_eval)
+
+    # Patch DATASTEP_FN so "eval" is a callable (the function), not a string.
+    # monkeypatch.setattr(
+    #    epoch_mod,
+    #    "DATASTEP_FN",
+    #    {"pli": {"eval": epoch_mod.eval_loderunner_datastep}},
+    # )
+
+    out_file = str(tmp_path / "test_<epochIDX>.csv")
+    epoch_mod.eval_loderunner_epoch(
+        testing_data=test_loader,
+        num_test_batches=1,
+        model=model,
+        channel_map=[0],
+        loss_fn=loss_fn,
+        epochIDX=9,
+        test_rcrd_filename=out_file,
+        device=torch.device("cpu"),
+        dataset="pli",
+    )
+
+    p = tmp_path / "test_0009.csv"
+    assert p.exists()
+    # Only 1 batch recorded because num_test_batches=1.
+    assert len(p.read_text().splitlines()) == 1
+    assert fake_eval.calls == 1

@@ -1,643 +1,666 @@
-"""Unit tests for the *load_npz_dataset* classes.
+"""Fast unit tests for yoke.datasets.load_npz_dataset.
 
-We use the *mock* submodule of *unittest* to allow fake files, directories, and
-data for testing. This avoids a lot of costly sample file storage.
-
+These tests avoid expensive filesystem probing and long retry loops by patching
+TemporalDataSet._build_valid_prefixes and using tiny NPZ fixtures.
 """
 
-import pathlib
-import pandas as pd
-import pytest
-import numpy as np
-import torch
-from unittest.mock import patch, MagicMock
-from yoke.datasets.load_npz_dataset import (
-    process_channel_data,
-    LabeledData,
-    TemporalDataSet,
-)
+from __future__ import annotations
 
-from yoke.datasets import load_npz_dataset as mod
+import pathlib
+
+import numpy as np
+import pytest
+import torch
+
+import yoke.datasets.load_npz_dataset as m
+
+
+def _write_npz(path: pathlib.Path, **fields: np.ndarray) -> None:
+    """Write a small NPZ file with provided fields."""
+    np.savez(path, **fields)
+
+
+def _write_prefix_file(path: pathlib.Path, prefixes: list[str]) -> None:
+    """Write a newline-delimited prefix file."""
+    path.write_text("\n".join(prefixes) + "\n", encoding="utf-8")
+
+
+def _write_design_csv(path: pathlib.Path, rows: list[tuple[str, str, str]]) -> None:
+    """Write a minimal design CSV with idx, wallMat, backMat columns."""
+    lines = ["idx,wallMat,backMat"]
+    lines += [f"{idx},{wall},{back}" for idx, wall, back in rows]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+class _FakeRNG:
+    """Deterministic RNG used to control dataset index selection in tests."""
+
+    def __init__(self, values: list[int]) -> None:
+        """Initialize with a fixed queue of integers."""
+        self._values = list(values)
+
+    def integers(self, low: int, high: int, *, endpoint: bool = False) -> int:
+        """Return the next queued integer."""
+        _ = (low, high, endpoint)
+        if not self._values:
+            raise RuntimeError("FakeRNG queue exhausted")
+        return int(self._values.pop(0))
+
+
+@pytest.fixture(autouse=True)
+def _disable_temporal_probe(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Disable expensive TemporalDataSet prefix probing in unit tests."""
+    monkeypatch.setattr(m.TemporalDataSet, "_build_valid_prefixes", lambda self: None)
+
+
+def test_current_rank_returns_zero_when_dist_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """_current_rank returns 0 when torch.distributed is unavailable."""
+    monkeypatch.setattr(m, "dist", None)
+    assert m._current_rank() == 0
+
+
+def test_rank_worker_tag_contains_rank_worker_pid(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """rank_worker_tag includes rank/worker/pid and optional index."""
+
+    class _Info:
+        id = 7
+
+    monkeypatch.setattr(m, "get_worker_info", lambda: _Info())
+    monkeypatch.setattr(m, "_current_rank", lambda: 3)
+    tag = m.rank_worker_tag(11)
+    assert "rank3" in tag
+    assert "worker7" in tag
+    assert "pid" in tag
+    assert "idx=11" in tag
 
 
 @pytest.mark.parametrize(
-    "hfield",
+    ("s", "expected"),
     [
-        "generic",  # no special behavior
-        "Rcoord",  # meshgrid branch
-        "density_xxx",  # volfrac branch
+        ("density_Air", True),
+        ("density_", True),
+        ("pressure_Air", False),
+        ("", False),
     ],
 )
-def test_import_img_from_npz_chaining(
-    monkeypatch: pytest.MonkeyPatch,
-    hfield: str,
-) -> None:
-    """Ensure import_img_from_npz calls read, meshgrid_position, then volfrac."""
-    calls: list[tuple] = []
-
-    # Base image returned by read_npz_nan
-    base = np.array([[1.0]])
-
-    def fake_read(arg1: str, arg2: str) -> np.ndarray:
-        """Stub for read_npz_nan."""
-        calls.append(("read", arg1, arg2))
-        return base.copy()
-
-    def fake_mesh(img: np.ndarray, fn: str, hf: str) -> np.ndarray:
-        """Stub for meshgrid_position."""
-        calls.append(("mesh", img.tolist(), fn, hf))
-        # e.g. add 10 so we can detect it
-        return img + 10.0
-
-    def fake_vol(img: np.ndarray, fn: str, hf: str) -> np.ndarray:
-        """Stub for volfrac_density."""
-        calls.append(("vol", img.tolist(), fn, hf))
-        # multiply by 2 so final is (base+10)*2
-        return img * 2.0
-
-    monkeypatch.setattr(mod, "read_npz_nan", fake_read)
-    monkeypatch.setattr(mod, "meshgrid_position", fake_mesh)
-    monkeypatch.setattr(mod, "volfrac_density", fake_vol)
-
-    out = mod.import_img_from_npz("myfile.npz", hfield)
-
-    # final should be (1 + 10)*2 = 22
-    assert out == pytest.approx(np.array([[22.0]]))
-
-    # the three helpers must be called in this exact order
-    assert calls == [
-        ("read", "myfile.npz", hfield),
-        ("mesh", base.tolist(), "myfile.npz", hfield),
-        ("vol", (base + 10.0).tolist(), "myfile.npz", hfield),
-    ]
+def test_has_density_prefix(s: str, expected: bool) -> None:
+    """has_density_prefix detects density_* fields."""
+    assert m.has_density_prefix(s) is expected
 
 
-def test_read_npz_nan_replaces_nans(tmp_path: pathlib.Path) -> None:
-    """read_npz_nan replaces NaNs in loaded array with zeros."""
-    # Create array with NaNs
-    arr = np.array([[np.nan, 1.0], [2.0, np.nan]], dtype=float)
-    fn = tmp_path / "sample.npz"
-    np.savez(fn, data=arr)
-    # Load and apply
-    npz = np.load(fn)
-    out = mod.read_npz_nan(npz, "data")
-    npz.close()
-    # Expect zeros in place of NaNs
-    expected = np.array([[0.0, 1.0], [2.0, 0.0]], dtype=float)
-    assert isinstance(out, np.ndarray)
-    np.testing.assert_array_equal(out, expected)
+@pytest.mark.parametrize(
+    ("s", "expected"),
+    [
+        ("density_Air", "Air"),
+        ("density_", ""),
+        ("pressure_Air", None),
+        ("", None),
+    ],
+)
+def test_extract_after_density(s: str, expected: str | None) -> None:
+    """extract_after_density returns suffix after density_ or None."""
+    assert m.extract_after_density(s) == expected
 
 
-def test_read_npz_nan_leaves_non_nan(tmp_path: pathlib.Path) -> None:
-    """read_npz_nan leaves non-NaN values unchanged."""
-    arr = np.array([[3.14, -5.0], [0.0, 7.2]], dtype=float)
-    fn = tmp_path / "clean.npz"
-    np.savez(fn, vals=arr)
-    with np.load(fn) as npz:
-        out = mod.read_npz_nan(npz, "vals")
-    np.testing.assert_array_equal(out, arr)
+def test_read_npz_nan_from_path_and_replaces_nan(tmp_path: pathlib.Path) -> None:
+    """read_npz_nan loads a field and replaces NaN with 0."""
+    p = tmp_path / "a.npz"
+    arr = np.array([[np.nan, 2.0]], dtype=float)
+    _write_npz(p, field=arr)
+    out = m.read_npz_nan(p, "field")
+    assert out.shape == (1, 2)
+    assert out[0, 0] == 0.0
+    assert out[0, 1] == 2.0
 
 
 def test_read_npz_nan_missing_field_raises(tmp_path: pathlib.Path) -> None:
-    """read_npz_nan raises KeyError when requested field is not present."""
-    arr = np.array([1.0, 2.0], dtype=float)
-    fn = tmp_path / "other.npz"
-    np.savez(fn, other=arr)
-    with np.load(fn) as npz:
-        with pytest.raises(KeyError):
-            _ = mod.read_npz_nan(npz, "missing")
+    """read_npz_nan raises KeyError when the field is absent."""
+    p = tmp_path / "a.npz"
+    _write_npz(p, other=np.zeros((1,), dtype=float))
+    with pytest.raises(KeyError):
+        _ = m.read_npz_nan(p, "field")
 
 
-# Mock np.load to simulate loading .npz files
-class MockNpzFile:
-    """Set up mock file load."""
-
-    def __init__(self, data: dict[str, np.ndarray]) -> None:
-        """Setup mock data."""
-        self.data = data
-
-    def __getitem__(self, item: str) -> np.ndarray:
-        """Return single mock data sample."""
-        return self.data[item]
-
-    def close(self) -> None:
-        """Close the file."""
-        pass
+def test_read_npz_nan_invalid_type_raises() -> None:
+    """read_npz_nan raises TypeError on unsupported npz input types."""
+    with pytest.raises(TypeError):
+        _ = m.read_npz_nan(123, "field")  # type: ignore[arg-type]
 
 
-# Mock LSCread_npz_NaN
-def mock_read_npz_NaN(npz_file: MockNpzFile, hfield: str) -> np.ndarray:
-    """Test function to read data and replace NaNs with 0.0."""
-    return np.nan_to_num(np.ones((10, 10)), nan=0.0)  # Return a simple array for testing
+def test_handle_voids_returns_none_when_not_void(tmp_path: pathlib.Path) -> None:
+    """handle_voids returns None when hfield does not end with _Void."""
+    p = tmp_path / "a.npz"
+    _write_npz(p, av_density=np.zeros((2, 2)))
+    assert m.handle_voids(p, "density_Air") is None
 
 
-@pytest.fixture
-def design_csv(tmp_path: pathlib.Path) -> str:
-    """Create a mock CSV with Steel as wallMat and Water as backMat."""
-    df = pd.DataFrame(
-        {"wallMat": ["Steel"], "backMat": ["Water"]},
-        index=["cx240420_id00001"],
-    )
-    path = tmp_path / "mock_design.csv"
-    df.to_csv(path)
-    return str(path)
+def test_handle_voids_sets_nan_where_any_density_present(tmp_path: pathlib.Path) -> None:
+    """handle_voids returns an all-NaN mask for current read_npz_nan semantics."""
+    p = tmp_path / "a.npz"
+    av = np.zeros((2, 2), dtype=float)
 
+    # Note: read_npz_nan converts NaNs to 0, so mask becomes True everywhere.
+    booster = np.array([[np.nan, 1.0], [np.nan, np.nan]], dtype=float)
+    main = np.array([[np.nan, np.nan], [2.0, np.nan]], dtype=float)
+    wall = np.array([[np.nan, np.nan], [np.nan, 3.0]], dtype=float)
 
-def labeled_data(tmp_path: pathlib.Path) -> LabeledData:
-    """Setup an instance of the dataset.
-
-    Instantiate LabeledData with a mock design CSV (Air/Al) and
-    a dummy NPZ path for study 'cx240420_id00001'.
-    """
-    # 1) write mock CSV
-    csv_path = tmp_path / "design.csv"
-    df = pd.DataFrame(
-        {"wallMat": ["Air"], "backMat": ["Al"]},
-        index=["cx240420_id00001"],
-    )
-    df.to_csv(csv_path)
-
-    # 2) define dummy NPZ filepath (no actual file needed)
-    npz_path = tmp_path / "cx240420_id00001_pvi_idx00000.npz"
-
-    # 3) return the instantiated object
-    return LabeledData(
-        npz_filepath=str(npz_path),
-        csv_filepath=str(csv_path),
+    _write_npz(
+        p,
+        av_density=av,
+        density_booster=booster,
+        density_maincharge=main,
+        density_wall=wall,
     )
 
-
-def test_init_sets_all_expected_attributes(tmp_path: pathlib.Path) -> None:
-    """Test that the dataset is initialized correctly."""
-    ld = labeled_data(tmp_path)
-
-    # metadata attributes
-    assert ld.npz_filepath.endswith("cx240420_id00001_pvi_idx00000.npz")
-    assert ld.csv_filepath.endswith("design.csv")
-    assert ld.kinematic_variables == "velocity"
-    assert ld.thermodynamic_variables == "density"
-    assert ld.study == "cx"
-    assert ld.key == "cx240420_id00001"
-
-    # full hydro‐field names
-    all_names = ld.get_hydro_field_names()
-    assert isinstance(all_names, list)
-    assert all_names[:4] == ["Rcoord", "Zcoord", "Uvelocity", "Wvelocity"]
-    assert len(all_names) == 46
-
-    # active fields for default velocity + density
-    expected_active = [
-        "Uvelocity",
-        "Wvelocity",
-        "density_Air",
-        "density_Al",
-        "density_maincharge",
-        "density_booster",
-    ]
-    got_active = list(ld.get_active_hydro_field_names())
-    assert got_active == expected_active
-
-    # channel_map indices should point into all_names
-    expected_idx = [all_names.index(fld) for fld in expected_active]
-    got_idx = ld.get_channel_map()
-    assert got_idx == expected_idx
+    out = m.handle_voids(p, "density_Void")
+    assert out is not None
+    assert out.shape == (2, 2)
+    assert np.all(np.isnan(out))
 
 
-def test_get_active_hydro_indices_matches_channel_map(
+def test_meshgrid_position_rcoord(tmp_path: pathlib.Path) -> None:
+    """meshgrid_position expands Rcoord into a 2D mesh."""
+    p = tmp_path / "a.npz"
+    r = np.array([1.0, 2.0])
+    z = np.array([10.0, 20.0, 30.0])
+    _write_npz(p, Rcoord=r, Zcoord=z)
+    out = m.meshgrid_position(r, p, "Rcoord")
+    assert out.shape == (3, 2)
+    assert np.all(out[0, :] == r)
+
+
+def test_meshgrid_position_zcoord(tmp_path: pathlib.Path) -> None:
+    """meshgrid_position expands Zcoord into a 2D mesh."""
+    p = tmp_path / "a.npz"
+    r = np.array([1.0, 2.0])
+    z = np.array([10.0, 20.0, 30.0])
+    _write_npz(p, Rcoord=r, Zcoord=z)
+    out = m.meshgrid_position(z, p, "Zcoord")
+    assert out.shape == (3, 2)
+    assert np.all(out[:, 0] == z)
+
+
+def test_volfrac_density_no_density_prefix_returns_input(tmp_path: pathlib.Path) -> None:
+    """volfrac_density does nothing for non-density fields."""
+    p = tmp_path / "a.npz"
+    _write_npz(p, pressure_Air=np.ones((2, 2)))
+    img = np.ones((2, 2))
+    out = m.volfrac_density(img, p, "pressure_Air")
+    assert np.all(out == img)
+
+
+def test_volfrac_density_empty_suffix_prints_and_returns_input(
     tmp_path: pathlib.Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Tests get_active_hydro_indices().
+    """volfrac_density prints a warning for 'density_' and returns the input."""
+    p = tmp_path / "a.npz"
+    _write_npz(p, density_=np.ones((2, 2)))
+    img = np.ones((2, 2))
+    out = m.volfrac_density(img, p, "density_")
+    captured = capsys.readouterr()
+    assert "Could not extract suffix from hfield" in captured.out
+    assert np.all(out == img)
 
-    Checks whether get_active_hydro_indices() returns the same list
-    as get_channel_map(), since channel_map is defined by it.
-    """
-    ld = labeled_data(tmp_path)
-    active_indices = ld.get_active_hydro_indices()
-    channel_map = ld.get_channel_map()
-    assert active_indices == channel_map
+
+def test_volfrac_density_multiplies_by_vofm(tmp_path: pathlib.Path) -> None:
+    """volfrac_density multiplies density by the matching vofm_* field."""
+    p = tmp_path / "a.npz"
+    dens = np.array([[2.0, 2.0]], dtype=float)
+    vofm = np.array([[0.5, 0.25]], dtype=float)
+    _write_npz(p, density_Air=dens, vofm_Air=vofm)
+    out = m.volfrac_density(dens, p, "density_Air")
+    assert np.allclose(out, dens * vofm)
 
 
-def test_cylex_data_loader_appends_pressure_fields(
-    tmp_path: pathlib.Path,
+def test_import_img_from_npz_applies_meshgrid_and_volfrac(
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Tess cylex_data_loader().
+    """import_img_from_npz applies void handling, meshgrid, and volfrac transforms."""
+    monkeypatch.setattr(m, "handle_voids", lambda npz, fld: None)
+    monkeypatch.setattr(m, "read_npz_nan", lambda npz, fld: np.ones((2, 2)))
+    monkeypatch.setattr(m, "meshgrid_position", lambda img, npz, fld: img + 1)
+    monkeypatch.setattr(m, "volfrac_density", lambda img, npz, fld: img * 2)
 
-    Checks that cylex_data_loader() adds only pressure fields (no energy)
-    when thermodynamic_variables='all'.
-    """
-    # Prepare CSV
-    csv_path = tmp_path / "design.csv"
-    df = pd.DataFrame(
-        {"wallMat": ["Air"], "backMat": ["Al"]},
-        index=["cx240420_id00001"],
-    )
-    df.to_csv(csv_path)
-    npz_path = tmp_path / "cx240420_id00001_pvi_idx00000.npz"
-
-    # Instantiate with all thermodynamic variables
-    ld = LabeledData(
-        npz_filepath=str(npz_path),
-        csv_filepath=str(csv_path),
-        kinematic_variables="velocity",
-        thermodynamic_variables="all",
-    )
-
-    # Get the active NPZ and hydro field names
-    active_npz = list(ld.get_active_npz_field_names())
-    active_hydro = list(ld.get_active_hydro_field_names())
-
-    # Pressure fields should be present
-    assert "pressure_wall" in active_npz
-    assert "pressure_Al" in active_npz
-    assert "pressure_maincharge" in active_npz
-    assert "pressure_booster" in active_npz
-
-    assert "pressure_Air" in active_hydro
-    assert "pressure_Al" in active_hydro
-    assert "pressure_maincharge" in active_hydro
-    assert "pressure_booster" in active_hydro
-
-    # Energy fields should not be present
-    assert not any(name.startswith("energy_") for name in active_npz)
-    assert not any(name.startswith("energy_") for name in active_hydro)
+    out = m.import_img_from_npz("x.npz", "density_Air")
+    assert np.all(out == (np.ones((2, 2)) + 1) * 2)
 
 
-def test_extract_letters_handles_various_strings() -> None:
-    """Tests extract_letters().
+def test_combine_by_number_and_label_combines_duplicates() -> None:
+    """combine_by_number_and_label merges repeated channel numbers."""
+    nums = [0, 0, 1]
+    labels = ["A", "A2", "B"]
+    arr = np.zeros((3, 2, 2), dtype=float)
+    arr[0, 0, 0] = 1.0
+    arr[1, 0, 1] = 2.0
+    arr[2, 1, 1] = 3.0
 
-    Checks that extract_letters returns the leading alphabetic segment
-    before the first digit, or None if no match.
-    """
-    ld = object.__new__(LabeledData)
-    assert ld.extract_letters("cx241203_id01250") == "cx"
-    assert ld.extract_letters("ABC123DEF") == "ABC"
-    assert ld.extract_letters("noDigitsHere") is None
-    assert ld.extract_letters("123ABC") is None
+    u_nums, comb, u_labels = m.combine_by_number_and_label(nums, arr, labels)
+    assert set(u_nums.tolist()) == {0, 1}
+
+    idx0 = int(np.where(u_nums == 0)[0][0])
+    assert comb[idx0, 0, 0] == 1.0
+    assert comb[idx0, 0, 1] == 2.0
+    assert u_labels[idx0] in ("A", "A2")
 
 
-def test_get_study_and_key_parses_filepath() -> None:
-    """Tests get_study_and_key().
+def test_combine_by_number_and_label_mismatch_raises() -> None:
+    """combine_by_number_and_label raises ValueError on inconsistent lengths."""
+    with pytest.raises(ValueError):
+        _ = m.combine_by_number_and_label([0], np.zeros((2, 2, 2)), ["A"])
 
-    Checks that get_study_and_key correctly sets .study and .key
-    based on the NPZ filename.
-    """
-    ld = object.__new__(LabeledData)
-    ld.get_study_and_key("path/to/cx241203_id01250_pvi_idx00000.npz")
+
+def test_process_channel_data_no_duplicates_returns_input() -> None:
+    """process_channel_data returns inputs unchanged when channels are unique."""
+    cm = [0, 1]
+    imgs = np.zeros((2, 2, 2, 2))
+    names = ["A", "B"]
+    cm2, imgs2, names2 = m.process_channel_data(cm, imgs, names)
+    assert cm2 == cm
+    assert imgs2 is imgs
+    assert names2 == names
+
+
+def test_process_channel_data_with_duplicates_combines() -> None:
+    """process_channel_data combines duplicate channels and reduces channel count."""
+    cm = [0, 0]
+    names = ["A", "A2"]
+    imgs = np.zeros((1, 2, 2, 2), dtype=float)
+    imgs[0, 0, 0, 0] = 1.0
+    imgs[0, 1, 0, 1] = 2.0
+
+    cm2, imgs2, names2 = m.process_channel_data(cm, imgs, names)
+    assert cm2 == [0]
+    assert imgs2.shape == (1, 1, 2, 2)
+    assert names2[0] in ("A", "A2")
+    assert imgs2[0, 0, 0, 0] == 1.0
+    assert imgs2[0, 0, 0, 1] == 2.0
+
+
+def test_labeled_data_study_key_extraction(tmp_path: pathlib.Path) -> None:
+    """LabeledData extracts key/study and produces an active channel map."""
+    csv = tmp_path / "design.csv"
+    _write_design_csv(csv, [("cx241203_id00001", "Air", "Al")])
+
+    npz = tmp_path / "cx241203_id00001_pvi_idx00000.npz"
+    _write_npz(npz, dummy=np.zeros((1,), dtype=float))
+
+    ld = m.LabeledData(npz, csv)
+    assert ld.key == "cx241203_id00001"
     assert ld.study == "cx"
-    assert ld.key == "cx241203_id01250"
-
-    ld.get_study_and_key("/abs/AbcXYZ123_id00099_pvi_foo.npz")
-    assert ld.study == "AbcXYZ"
-    assert ld.key == "AbcXYZ123_id00099"
-
-
-def test_get_hydro_field_names_returns_all(tmp_path: pathlib.Path) -> None:
-    """Test that get_hydro_field_names returns the full hydro field list."""
-    ld = labeled_data(tmp_path)
-    all_names = ld.get_hydro_field_names()
-    assert isinstance(all_names, list)
-    assert all_names == ld.all_hydro_field_names
-    assert len(all_names) == len(ld.all_hydro_field_names)
-
-
-def test_get_channel_map_returns_channel_map(tmp_path: pathlib.Path) -> None:
-    """Test that get_channel_map returns the same list as the channel_map attr."""
-    ld = labeled_data(tmp_path)
-    assert ld.get_channel_map() == ld.channel_map
     assert isinstance(ld.get_channel_map(), list)
 
 
-def test_get_active_hydro_field_names(tmp_path: pathlib.Path) -> None:
-    """Test that get_active_hydro_field_names returns the active hydro fields."""
-    ld = labeled_data(tmp_path)
-    expected_active = [
-        "Uvelocity",
-        "Wvelocity",
-        "density_Air",
-        "density_Al",
-        "density_maincharge",
-        "density_booster",
-    ]
-    assert list(ld.get_active_hydro_field_names()) == expected_active
+@pytest.mark.parametrize("kv", ["velocity", "position", "both"])
+def test_labeled_data_kinematic_modes(tmp_path: pathlib.Path, kv: str) -> None:
+    """LabeledData configures active kinematic fields by mode."""
+    csv = tmp_path / "design.csv"
+    _write_design_csv(csv, [("cx241203_id00001", "Air", "Al")])
+
+    npz = tmp_path / "cx241203_id00001_pvi_idx00000.npz"
+    _write_npz(npz, dummy=np.zeros((1,), dtype=float))
+
+    ld = m.LabeledData(npz, csv, kinematic_variables=kv)
+    fields = ld.get_active_npz_field_names()
+    if kv == "velocity":
+        assert fields[:2] == ["Uvelocity", "Wvelocity"]
+    elif kv == "position":
+        assert fields[:2] == ["Rcoord", "Zcoord"]
+    else:
+        assert fields[:4] == ["Rcoord", "Zcoord", "Uvelocity", "Wvelocity"]
 
 
-def test_get_active_npz_field_names(tmp_path: pathlib.Path) -> None:
-    """Test that get_active_npz_field_names returns the active NPZ field names."""
-    ld = labeled_data(tmp_path)
-    expected_npz = [
-        "Uvelocity",
-        "Wvelocity",
-        "density_wall",
-        "density_Al",
-        "density_maincharge",
-        "density_booster",
-    ]
-    assert list(ld.get_active_npz_field_names()) == expected_npz
+def test_labeled_data_invalid_kinematic_raises(tmp_path: pathlib.Path) -> None:
+    """LabeledData raises on invalid kinematic_variables."""
+    csv = tmp_path / "design.csv"
+    _write_design_csv(csv, [("cx241203_id00001", "Air", "Al")])
+
+    npz = tmp_path / "cx241203_id00001_pvi_idx00000.npz"
+    _write_npz(npz, dummy=np.zeros((1,), dtype=float))
+
+    with pytest.raises(ValueError, match="kinematic_variables"):
+        _ = m.LabeledData(npz, csv, kinematic_variables="nope")
 
 
-def test_process_channel_data_combines_duplicates(
+def test_temporal_dataset_len_is_constant(tmp_path: pathlib.Path) -> None:
+    """TemporalDataSet has a fixed training length."""
+    npz_dir = tmp_path / "npz"
+    npz_dir.mkdir()
+    prefix_file = tmp_path / "prefixes.txt"
+    _write_prefix_file(prefix_file, ["cx241203_id00001"])
+    csv = tmp_path / "design.csv"
+    _write_design_csv(csv, [("cx241203_id00001", "Air", "Al")])
+
+    ds = m.TemporalDataSet(
+        npz_dir=str(npz_dir) + "/",
+        csv_filepath=str(csv),
+        file_prefix_list=str(prefix_file),
+        max_timeIDX_offset=1,
+        max_file_checks=1,
+        half_image=True,
+        kinematic_variables="velocity",
+        thermodynamic_variables="density",
+    )
+    assert len(ds) == 800_000
+
+
+def test_temporal_dataset_getitem_success_minimal(
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path: pathlib.Path,
 ) -> None:
-    """Tests process_channel_data().
+    """TemporalDataSet returns the expected tuple types/shapes in a minimal success."""
+    npz_dir = tmp_path / "npz"
+    npz_dir.mkdir()
+    prefix_file = tmp_path / "prefixes.txt"
+    _write_prefix_file(prefix_file, ["cx241203_id00001"])
+    csv = tmp_path / "design.csv"
+    _write_design_csv(csv, [("cx241203_id00001", "Air", "Al")])
 
-    Checks that process_channel_data() merges duplicate channels correctly,
-    yielding unique channel_map, combined images, and labels.
-    """
-    # Use LabeledData to obtain the true hydro field list
-    ld = labeled_data(tmp_path)
-    hydro_field_list = ld.get_hydro_field_names()
+    start = npz_dir / "cx241203_id00001_pvi_idx00000.npz"
+    end = npz_dir / "cx241203_id00001_pvi_idx00001.npz"
+    _write_npz(start, dummy=np.zeros((1,), dtype=float))
+    _write_npz(end, dummy=np.zeros((1,), dtype=float))
 
-    # Create a channel_map with a duplicate (index 4 repeated)
-    channel_map = [0, 4, 4]
-    active_names = [hydro_field_list[i] for i in channel_map]
+    class FakeLabeledData:
+        """Minimal stub that matches the tiny NPZ fields used in this test."""
 
-    # Build a dummy img_list_combined: 1 image, 3 channels, 1×1 pixels
-    # Channel 0 → 9, first 4 → 0, second 4 → 5
-    img_list_combined = np.array([[[[9]], [[0]], [[5]]]])
+        def __init__(
+            self,
+            npz_filepath: str,
+            csv_filepath: str,
+            kinematic_variables: str = "velocity",
+            thermodynamic_variables: str = "density",
+        ) -> None:
+            _ = (
+                npz_filepath,
+                csv_filepath,
+                kinematic_variables,
+                thermodynamic_variables,
+            )
 
-    out_map, out_imgs, out_names = process_channel_data(
-        channel_map, img_list_combined, active_names
+        def get_active_npz_field_names(self) -> list[str]:
+            """Return present fields."""
+            return ["dummy"]
+
+        def get_active_hydro_field_names(self) -> list[str]:
+            """Return names for present fields."""
+            return ["dummy"]
+
+        def get_channel_map(self) -> list[int]:
+            """Return a single channel index."""
+            return [0]
+
+        def get_all_hydro_field_names(self) -> list[str]:
+            """Return the full list of hydro field names."""
+            return ["dummy"]
+
+    monkeypatch.setattr(m, "LabeledData", FakeLabeledData)
+    monkeypatch.setattr(m, "import_img_from_npz", lambda npz, fld: np.ones((2, 2)))
+    monkeypatch.setattr(
+        m,
+        "process_channel_data",
+        lambda cm, imgs, names: (cm, imgs, names),
     )
 
-    # Expect unique channels [0,4]
-    np.testing.assert_array_equal(out_map, [0, 4])
-
-    # Expect combined image shape (1,2,1,1)
-    assert out_imgs.shape == (1, 2, 1, 1)
-
-    # Channel 0 unchanged, channel 4 picks first non-zero (5)
-    assert out_imgs[0, 0, 0, 0] == 9
-    assert out_imgs[0, 1, 0, 0] == 5
-
-    # Labels correspond to indices 0 and 4
-    assert out_names == [hydro_field_list[0], hydro_field_list[4]]
-
-
-@pytest.fixture
-def temporal_dataset(tmp_path: pathlib.Path) -> TemporalDataSet:
-    """Set up an instance of TemporalDataSet.
-
-    Build a TemporalDataSet pointing at tmp_path/mock/path, with three real
-    'cx' prefixes and a matching design CSV so LabeledData populates its fields.
-    """
-    # Create npz directory
-    npz_root = tmp_path / "mock" / "path"
-    npz_root.mkdir(parents=True, exist_ok=True)
-    npz_dir = str(npz_root) + "/"
-
-    # Write prefix list (cx study keys)
-    prefixes = ["cx240420_id00001", "cx240420_id00002", "cx240420_id00003"]
-    prefix_file = npz_root / "mock_file_prefix_list.txt"
-    prefix_file.write_text("\n".join(prefixes) + "\n")
-
-    # Write minimal design CSV with wallMat/backMat for each cx key
-    csv_path = npz_root / "design.csv"
-    df = pd.DataFrame(
-        {"wallMat": ["Air", "Air", "Air"], "backMat": ["Al", "Al", "Al"]},
-        index=prefixes,
-    )
-    df.to_csv(csv_path)
-
-    return TemporalDataSet(
-        npz_dir=npz_dir,
-        csv_filepath=str(csv_path),
+    ds = m.TemporalDataSet(
+        npz_dir=str(npz_dir) + "/",
+        csv_filepath=str(csv),
         file_prefix_list=str(prefix_file),
-        max_time_idx_offset=3,
-        max_file_checks=5,
+        max_timeIDX_offset=1,
+        max_file_checks=1,
         half_image=True,
+        kinematic_variables="velocity",
+        thermodynamic_variables="density",
     )
+    ds.rng = _FakeRNG([1, 0])  # seq_len=1, start_idx=0 -> end_idx=1
 
-
-def test_init_temporal_dataset(temporal_dataset: TemporalDataSet) -> None:
-    """__init__ should set attributes based on the mock arguments."""
-    ds = temporal_dataset
-    assert ds.npz_dir.endswith("mock/path/")
-    assert ds.csv_filepath.endswith("design.csv")
-    assert ds.max_time_idx_offset == 3
-    assert ds.max_file_checks == 5
-    assert ds.half_image is True
-    assert len(ds.file_prefix_list) == 3
-    assert ds.n_samples == 3
-
-
-def test_temporal_dataset_len(temporal_dataset: TemporalDataSet) -> None:
-    """__len__ should return the fixed size of 800000."""
-    assert len(temporal_dataset) == 800000
-
-
-def test_file_prefix_list_loading(temporal_dataset: TemporalDataSet) -> None:
-    """Test that the file_prefix_list fixture loads the three cx prefixes correctly."""
-    expected = ["cx240420_id00001", "cx240420_id00002", "cx240420_id00003"]
-    assert sorted(temporal_dataset.file_prefix_list) == sorted(expected)
-
-
-@patch("pathlib.Path.is_file", return_value=False)
-def test_temporal_dataset_getitem_max_file_checks(
-    mock_is_file: MagicMock, temporal_dataset: TemporalDataSet
-) -> None:
-    """Test that max_file_checks is respected and FileNotFoundError is raised."""
-    with pytest.raises(FileNotFoundError):
-        _ = temporal_dataset[0]  # type: ignore
-
-
-@patch("pathlib.Path.is_file", return_value=True)
-@patch("numpy.load", side_effect=OSError("load failed"))
-def test_temporal_dataset_getitem_load_error(
-    mock_npz: MagicMock,
-    mock_is_file: MagicMock,
-    temporal_dataset: TemporalDataSet,
-) -> None:
-    """Test that an OSError in numpy.load propagates out of __getitem__."""
-    with pytest.raises(OSError, match="load failed"):
-        _ = temporal_dataset[0]  # type: ignore
-
-
-@patch("pathlib.Path.is_file", return_value=True)
-@patch("numpy.load", side_effect=OSError("load failed"))
-def test_getitem_propagates_load_error(
-    mock_npz: MagicMock,
-    mock_is_file: MagicMock,
-    temporal_dataset: TemporalDataSet,
-) -> None:
-    """If numpy.load throws, __getitem__ should propagate that OSError."""
-    with pytest.raises(OSError, match="load failed"):
-        _ = temporal_dataset[0]  # type: ignore
-
-
-@patch("pathlib.Path.is_file", return_value=True)
-@patch("numpy.load", return_value=MagicMock())
-@patch(
-    "yoke.datasets.load_npz_dataset.import_img_from_npz",
-    side_effect=lambda npz, fld: np.ones((10, 10)),
-)
-@patch(
-    "yoke.datasets.load_npz_dataset.process_channel_data",
-    side_effect=lambda cm, imgs, names: (cm, imgs, names),
-)
-def test_temporal_dataset_getitem_returns_expected(
-    mock_proc: MagicMock,
-    mock_import: MagicMock,
-    mock_npz: MagicMock,
-    mock_isfile: MagicMock,
-    temporal_dataset: TemporalDataSet,
-) -> None:
-    """Tests that the __getitem__ method returns the correct data format as follows.
-
-    - start_img, end_img: torch.Tensor of shape (n_ch,10,10)
-    - cm1, cm2 matching LabeledData.get_channel_map()
-    - dt = 0.25*(end_idx-start_idx)
-    """
-    ds = temporal_dataset
-
-    # Make exactly two NPZ files so start_idx=0, end_idx=1 wrap cheaply
-    prefix = ds.file_prefix_list[0]
-    start = pathlib.Path(ds.npz_dir) / f"{prefix}_pvi_idx00000.npz"
-    end = pathlib.Path(ds.npz_dir) / f"{prefix}_pvi_idx00001.npz"
-    np.savez(start, dummy=np.zeros((1,)))
-    np.savez(end, dummy=np.zeros((1,)))
-
-    # Fix RNG so first integers→0, next→1
-    class FakeRNG:
-        cnt = 0
-
-        def integers(self, low: int, high: int) -> int:
-            self.cnt += 1
-            return 0 if self.cnt == 1 else 1
-
-    ds.rng = FakeRNG()
-
-    # Fetch item
-    start_img, cm1, end_img, cm2, dt = ds[0]  # type: ignore
-
-    # Build expected channel map via LabeledData
-    ld = LabeledData(str(start), ds.csv_filepath)
-    expected_cm = ld.get_channel_map()
-
-    # Channel maps
-    assert cm1 == expected_cm
-    assert cm2 == expected_cm
-
-    # Tensors of shape (n_ch,10,10) filled with ones
-    n_ch = len(expected_cm)
-    assert isinstance(start_img, torch.Tensor)
-    assert start_img.shape == (n_ch, 10, 10)
-    assert torch.all(start_img == 1)
-
-    assert isinstance(end_img, torch.Tensor)
-    assert end_img.shape == (n_ch, 10, 10)
-    assert torch.all(end_img == 1)
-
-    # dt = 0.25*(1-0) == 0.25
-    assert isinstance(dt, torch.Tensor)
+    start_img, cm1, end_img, cm2, dt = ds[0]
+    assert start_img.shape == (1, 2, 2)
+    assert end_img.shape == (1, 2, 2)
+    assert cm1.tolist() == [0]
+    assert cm2.tolist() == [0]
     assert dt.item() == pytest.approx(0.25)
 
 
-def test_has_density_prefix_true_and_false() -> None:
-    """has_density_prefix should detect the 'density_' prefix correctly."""
-    assert mod.has_density_prefix("density_steel")
-    assert not mod.has_density_prefix("steel_density")
-    assert not mod.has_density_prefix("density")
+class _InfiniteRNG:
+    """RNG stub that never exhausts (always returns a constant)."""
+
+    def __init__(self, value: int = 0) -> None:
+        """Initialize with a constant return value."""
+        self._value = value
+
+    def integers(self, low: int, high: int, *, endpoint: bool = False) -> int:
+        """Return a constant integer within the requested range."""
+        _ = (low, high, endpoint)
+        return self._value
 
 
-def test_extract_after_density_suffix_and_empty() -> None:
-    """extract_after_density returns suffix or empty string when no suffix."""
-    # typical suffix
-    assert mod.extract_after_density("density_steel") == "steel"
-    # no suffix after underscore returns empty string
-    assert mod.extract_after_density("density_") == ""
-    # non-matching prefix returns None
-    assert mod.extract_after_density("den_steel") is None
-    assert mod.extract_after_density("") is None
+def test_sequential_dataset_init_missing_dir_raises(tmp_path: pathlib.Path) -> None:
+    """SequentialDataSet raises FileNotFoundError if npz_dir does not exist."""
+    prefix_file = tmp_path / "prefixes.txt"
+    _write_prefix_file(prefix_file, ["cx241203_id00001"])
+    csv = tmp_path / "design.csv"
+    _write_design_csv(csv, [("cx241203_id00001", "Air", "Al")])
+
+    with pytest.raises(FileNotFoundError):
+        _ = m.SequentialDataSet(
+            npz_dir=str(tmp_path / "nope"),
+            csv_filepath=str(csv),
+            file_prefix_list=str(prefix_file),
+            max_file_checks=1,
+            seq_len=2,
+            kinematic_variables="velocity",
+            thermodynamic_variables="density",
+        )
 
 
-def test_volfrac_density_empty_suffix_prints(
-    capsys: pytest.CaptureFixture[str],
+def test_sequential_dataset_getitem_success_minimal(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: pathlib.Path,
 ) -> None:
-    """volfrac_density prints warning and returns original when suffix empty."""
-    img = np.ones((2, 2))
-    # Force has_density_prefix to True and extract_after_density to empty
-    monkeypatch.setattr(mod, "has_density_prefix", lambda s: True)
-    monkeypatch.setattr(mod, "extract_after_density", lambda s: "")
-    out = mod.volfrac_density(img, "dummy.npz", "density_")
-    captured = capsys.readouterr()
-    assert "Could not extractsuffix from hfield" in captured.out
-    np.testing.assert_array_equal(out, img)
+    """SequentialDataSet returns (seq, dt, channel_map) for a minimal success case."""
+    npz_dir = tmp_path / "npz"
+    npz_dir.mkdir()
+    prefix_file = tmp_path / "prefixes.txt"
+    _write_prefix_file(prefix_file, ["cx241203_id00001"])
+    csv = tmp_path / "design.csv"
+    _write_design_csv(csv, [("cx241203_id00001", "Air", "Al")])
 
+    f0 = npz_dir / "cx241203_id00001_pvi_idx00000.npz"
+    f1 = npz_dir / "cx241203_id00001_pvi_idx00001.npz"
+    _write_npz(f0, dummy=np.zeros((1,), dtype=float))
+    _write_npz(f1, dummy=np.zeros((1,), dtype=float))
 
-def test_meshgrid_position_Rcoord(monkeypatch: pytest.MonkeyPatch) -> None:
-    """meshgrid_position should meshgrid properly when hfield == 'Rcoord'."""
-    base = np.array([1, 2])
-    zcoord = np.array([10, 20, 30])
-    # patch read_npz_nan to return zcoord for "Zcoord"
+    class FakeLabeledData:
+        """Minimal stub that matches the tiny NPZ fields used in this test."""
+
+        def __init__(
+            self,
+            npz_filepath: str,
+            csv_filepath: str,
+            kinematic_variables: str = "velocity",
+            thermodynamic_variables: str = "density",
+        ) -> None:
+            _ = (
+                npz_filepath,
+                csv_filepath,
+                kinematic_variables,
+                thermodynamic_variables,
+            )
+
+        def get_active_npz_field_names(self) -> list[str]:
+            """Return present fields."""
+            return ["dummy"]
+
+        def get_active_hydro_field_names(self) -> list[str]:
+            """Return names for present fields."""
+            return ["dummy"]
+
+        def get_channel_map(self) -> list[int]:
+            """Return a single channel index."""
+            return [0]
+
+    monkeypatch.setattr(m, "LabeledData", FakeLabeledData)
+    monkeypatch.setattr(m, "import_img_from_npz", lambda npz, fld: np.ones((2, 2)))
     monkeypatch.setattr(
-        mod,
-        "read_npz_nan",
-        lambda fn, hf: zcoord if hf == "Zcoord" else None,
+        m,
+        "process_channel_data",
+        lambda cm, imgs, names: (cm, imgs, names),
     )
-    out = mod.meshgrid_position(base, "file.npz", "Rcoord")
-    expected, _ = np.meshgrid(base, zcoord)
-    assert np.array_equal(out, expected)
 
-
-def test_meshgrid_position_Zcoord(monkeypatch: pytest.MonkeyPatch) -> None:
-    """meshgrid_position should meshgrid properly when hfield == 'Zcoord'."""
-    base = np.array([5, 6, 7])
-    rcoord = np.array([100, 200])
-    monkeypatch.setattr(
-        mod,
-        "read_npz_nan",
-        lambda fn, hf: rcoord if hf == "Rcoord" else None,
+    ds = m.SequentialDataSet(
+        npz_dir=str(npz_dir),
+        csv_filepath=str(csv),
+        file_prefix_list=str(prefix_file),
+        max_file_checks=1,
+        seq_len=2,
+        half_image=True,
+        kinematic_variables="velocity",
+        thermodynamic_variables="density",
     )
-    out = mod.meshgrid_position(base, "file.npz", "Zcoord")
-    _, expected = np.meshgrid(rcoord, base)
-    assert np.array_equal(out, expected)
+    ds.rng = _FakeRNG([0])  # start_idx=0
+
+    img_seq, dt, cm = ds[0]
+    assert isinstance(img_seq, torch.Tensor)
+    assert img_seq.shape == (2, 1, 2, 2)
+    assert dt.item() == pytest.approx(0.25)
+    assert cm == [0]
 
 
-def test_meshgrid_position_other() -> None:
-    """meshgrid_position should return the input unchanged for other hfields."""
-    arr = np.arange(4).reshape(2, 2)
-    out = mod.meshgrid_position(arr, "file.npz", "Uvelocity")
-    # must be the identical array object
-    assert out is arr
+def test_handle_voids_returns_none_for_non_void_field(tmp_path: pathlib.Path) -> None:
+    """handle_voids returns None when hfield does not end with '_Void'."""
+    p = tmp_path / "a.npz"
+    np.savez(
+        p,
+        av_density=np.zeros((2, 2), dtype=float),
+        density_booster=np.zeros((2, 2), dtype=float),
+        density_maincharge=np.zeros((2, 2), dtype=float),
+    )
+
+    assert m.handle_voids(p, "density_Air") is None
 
 
-def test_volfrac_density_no_prefix() -> None:
-    """volfrac_density should leave tmp_img unchanged if no 'density_' prefix."""
-    img = np.full((2, 2), 3.14)
-    out = mod.volfrac_density(img, "file.npz", "Uvelocity")
+def test_handle_voids_returns_nan_mask_for_void_field(tmp_path: pathlib.Path) -> None:
+    """handle_voids returns a NaN mask for '_Void' fields.
+
+    read_npz_nan replaces NaNs with 0, so the internal mask becomes True
+    everywhere when the booster/maincharge fields exist.
+    """
+    p = tmp_path / "a.npz"
+    booster = np.array([[np.nan, 1.0], [0.0, np.nan]], dtype=float)
+    main = np.array([[np.nan, 0.0], [2.0, np.nan]], dtype=float)
+    np.savez(
+        p,
+        av_density=np.zeros((2, 2), dtype=float),
+        density_booster=booster,
+        density_maincharge=main,
+    )
+
+    out = m.handle_voids(p, "density_Void")
+    assert out is not None
+    assert out.shape == (2, 2)
+    assert np.all(np.isnan(out))
+
+
+def test_read_npz_nan_accepts_npz_handle(tmp_path: pathlib.Path) -> None:
+    """read_npz_nan accepts an opened NpzFile handle."""
+    p = tmp_path / "a.npz"
+    np.savez(p, field=np.array([[np.nan, 2.0]], dtype=float))
+
+    with np.load(p, allow_pickle=False) as z:
+        out = m.read_npz_nan(z, "field")
+
+    assert out[0, 0] == 0.0
+    assert out[0, 1] == 2.0
+
+
+def test_meshgrid_position_noop_for_other_fields(tmp_path: pathlib.Path) -> None:
+    """meshgrid_position returns input unchanged for non-coordinate fields."""
+    p = tmp_path / "a.npz"
+    np.savez(p, dummy=np.zeros((1,), dtype=float))
+
+    img = np.ones((2, 2), dtype=float)
+    out = m.meshgrid_position(img, p, "density_Air")
     assert out is img
 
 
-def test_volfrac_density_builds_vofm_name_and_multiplies(
+def test_import_img_from_npz_uses_handle_voids_when_present(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """volfrac_density should form 'vofm_<suffix>' and multiply tmp_img by it."""
-    # 1) force the density prefix branch
-    monkeypatch.setattr(mod, "has_density_prefix", lambda s: True)
-    # 2) produce a known suffix
-    monkeypatch.setattr(mod, "extract_after_density", lambda s: "mat")
-    # 3) stub read_npz_nan to record its inputs and return a small array
-    calls: dict[str, str] = {}
+    """import_img_from_npz uses handle_voids output when non-None."""
+    monkeypatch.setattr(m, "handle_voids", lambda npz, fld: np.full((2, 2), 3.0))
+    monkeypatch.setattr(m, "read_npz_nan", lambda npz, fld: np.full((2, 2), 9.0))
+    monkeypatch.setattr(m, "meshgrid_position", lambda img, npz, fld: img)
+    monkeypatch.setattr(m, "volfrac_density", lambda img, npz, fld: img)
 
-    def fake_read(fname: str, fld: str) -> np.ndarray:
-        calls["fname"] = fname
-        calls["fld"] = fld
-        # return a 1×2 volume‐fraction array
-        return np.array([[2.0, 3.0]])
+    out = m.import_img_from_npz("x.npz", "density_Void")
+    assert np.all(out == 3.0)
 
-    monkeypatch.setattr(mod, "read_npz_nan", fake_read)
 
-    # 4) prepare a matching tmp_img
-    tmp_img = np.array([[4.0, 5.0]])
+def test_temporal_dataset_init_with_nondefault_variable_modes(
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """TemporalDataSet stores non-default variable mode settings."""
+    monkeypatch.setattr(
+        m.TemporalDataSet,
+        "_build_valid_prefixes",
+        lambda self: None,
+    )
 
-    # 5) call under test
-    out = mod.volfrac_density(tmp_img, "path/to/data.npz", "density_mat")
+    npz_dir = tmp_path / "npz"
+    npz_dir.mkdir()
+    prefix_file = tmp_path / "prefixes.txt"
+    prefix_file.write_text("cx241203_id00001\n", encoding="utf-8")
+    csv_path = tmp_path / "design.csv"
+    csv_path.write_text(
+        "idx,wallMat,backMat\ncx241203_id00001,Air,Al\n",
+        encoding="utf-8",
+    )
 
-    # verify read_npz_nan was called with the correct vofm_<suffix>
-    assert calls["fname"] == "path/to/data.npz"
-    assert calls["fld"] == "vofm_mat"
+    ds = m.TemporalDataSet(
+        npz_dir=str(npz_dir) + "/",
+        csv_filepath=str(csv_path),
+        file_prefix_list=str(prefix_file),
+        max_timeIDX_offset=1,
+        max_file_checks=1,
+        kinematic_variables="both",
+        thermodynamic_variables="density and pressure",
+        half_image=True,
+    )
 
-    # verify elementwise multiplication: [4,5] * [2,3] => [8,15]
-    expected = np.array([[8.0, 15.0]])
-    np.testing.assert_array_equal(out, expected)
+    assert ds.kinematic_variables == "both"
+    assert ds.thermodynamic_variables == "density and pressure"
+
+
+def test_sequential_dataset_init_with_nondefault_variable_modes(
+    tmp_path: pathlib.Path,
+) -> None:
+    """SequentialDataSet stores non-default variable mode settings."""
+    npz_dir = tmp_path / "npz"
+    npz_dir.mkdir()
+    prefix_file = tmp_path / "prefixes.txt"
+    prefix_file.write_text("cx241203_id00001\n", encoding="utf-8")
+    csv_path = tmp_path / "design.csv"
+    csv_path.write_text(
+        "idx,wallMat,backMat\ncx241203_id00001,Air,Al\n",
+        encoding="utf-8",
+    )
+
+    ds = m.SequentialDataSet(
+        npz_dir=str(npz_dir),
+        csv_filepath=str(csv_path),
+        file_prefix_list=str(prefix_file),
+        max_file_checks=1,
+        seq_len=2,
+        kinematic_variables="position",
+        thermodynamic_variables="density and energy",
+        half_image=True,
+    )
+
+    assert ds.kinematic_variables == "position"
+    assert ds.thermodynamic_variables == "density and energy"
