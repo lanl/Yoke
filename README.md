@@ -7,8 +7,8 @@ YOKE: Yielding Optimal Knowledge Enhancement
 
 ![Get YOKEd!](./YOKE_DALLE_512x512.png)
 
-About:
-------
+About
+-----
 
 A general prototyping, training, and testing harness for pytorch used
 for models developed under the **ArtIMis: Multi-physics/Multi-material
@@ -42,74 +42,78 @@ NOTE: Data for training is not housed within YOKE. The data locations are
 specified through command-line arguments passed to the programs in
 `harnesses`, `evaluation`, and `viewers`.
 
-
-Installation:
--------------
+Installation
+------------
 
 The Python environment is specified through the `pyproject.toml`
 file. YOKE is meant to be installed using `flit` in a minimal python
-environment.
+environment. We recommend a vanilla python virtual environment.
 
-Setup your base environment and activate it (we use conda):
+Setup your base environment and activate it:
 
-```
->> conda create -n <yoke_env_name> python=3.11 flit
->> conda activate <yoke_env_name>
+```bash
+>> python -m venv $HOME/<yoke_env_name> python=3.11
+>> source $HOME/<yoke_env_name>/bin/activate
+>> pip install flit
 >> cd <yoke_repo_clone_directory>
 >> flit install
 ```
 
-> **WARNING**
-> 
-> This install process does not guarantee that PyTorch is installed to
-> utilize your GPUs. If you want to ensure that PyTorch is installed to
-> make optimal use of your hardware we suggest manually installing
-> `torch` prior to installing `YOKE` with `flit`.
+Alternatively, one can do a developer install, which allows editing in the `yoke` clone
+and includes testing dependencies, with
 
-An alternative to building your Python environment for a particular computing 
-environment is to use containerization. This allows for portability and some 
+```bash
+>> flit install --symlink --deps develop
+```
+
+An alternative to building your Python environment for a particular computing
+environment is to use containerization. This allows for portability and some
 degree of isolation from the host system. You can then develop a Yoke
 application on one system and easily move it to another for larger training
 runs etc.
 
-Using the Docker runtime, build the container (this could be done as part of a 
+Using the Docker runtime, build the container (this could be done as part of a
 CI pipeline) and drop in to an interative shell:
 
-```
+```bash
 >> cd <yoke_repo_clone_directory>
 >> docker buildx build -f Dockerfile . -t yoke
 >> docker run -it yoke /bin/bash
 ```
 
-When you want to push your application to a different machine or deploy to a 
-service like Kubernetes, RunAI etc., you can run `docker push` or 
+When you want to push your application to a different machine or deploy to a
+service like Kubernetes, RunAI etc., you can run `docker push` or
 `docker export` along with any transfers of necessary training data.
 
-Testing:
---------
+Testing
+-------
 
-To run the tests use...
+To run the tests use ...
 
-```
+> **NOTE**
+> A developer install is recommended for testing. Otherwise you'll have to also install
+> `pytest`, `pytest-cov`, `ruff`, and `coverage` in your python environment separately.
+
+```bash
 >> pytest
 >> pytest --cov
 >> pytest --cov --cov-report term-missing
 ```
 
-Linting:
---------
+Linting
+-------
 
 The `ruff` linter is used in `YOKE` to enforce coding and formatting
 standards. To run the linter do
 
-```
+```bash
 >> ruff check
 >> ruff check --preview
 ```
 
 You can make `ruff` fix automatic standards using
 
-```
+```bash
 >> ruff check --fix
 >> ruff check --preview --fix
 ```
@@ -117,13 +121,13 @@ You can make `ruff` fix automatic standards using
 Use `ruff` to then check your code formatting and show you what would
 be adjusted, then fix formatting
 
-```
+```bash
 >> ruff format --check --diff
 >> ruff format
 ```
 
-Copyright:
-----------
+Copyright
+---------
 
 LANL **O4863**
 
