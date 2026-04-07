@@ -53,7 +53,7 @@ environment.
 Setup your base environment and activate it (we use conda):
 
 ```
->> conda create -n <yoke_env_name> python=3.9 flit
+>> conda create -n <yoke_env_name> python=3.11 flit
 >> conda activate <yoke_env_name>
 >> cd <yoke_repo_clone_directory>
 >> flit install
