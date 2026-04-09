@@ -1,0 +1,973 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="./">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="yoke.models.vit.swin package" href="yoke.models.vit.swin.html"><link rel="prev" title="yoke.models package" href="yoke.models.html">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>yoke.models.vit package - Get Yoked!</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=acfd86a5" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="index.html"><div class="brand">Get Yoked!</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
+  
+  <span class="sidebar-brand-text">Get Yoked!</span>
+  
+</a><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Concepts</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="harnesses.html">Yoke Harnesses</a></li>
+<li class="toctree-l1"><a class="reference internal" href="start_study.html">Using START_study.py</a></li>
+<li class="toctree-l1"><a class="reference internal" href="loderunner_animate.html">Lode Runner Animation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="prediction_modes.html">Prediction Modes Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference:</span></p>
+<ul class="current">
+<li class="toctree-l1 current has-children"><a class="reference internal" href="modules.html">yoke</a><input aria-label="Toggle navigation of yoke" checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l2 current has-children"><a class="reference internal" href="yoke.html">yoke package</a><input aria-label="Toggle navigation of yoke package" checked="" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="yoke.datasets.html">yoke.datasets package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="yoke.helpers.html">yoke.helpers package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="yoke.losses.html">yoke.losses package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="yoke.metrics.html">yoke.metrics package</a></li>
+<li class="toctree-l3 current has-children"><a class="reference internal" href="yoke.models.html">yoke.models package</a><input aria-label="Toggle navigation of yoke.models package" checked="" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l4 current has-children current-page"><a class="current reference internal" href="#">yoke.models.vit package</a><input aria-label="Toggle navigation of yoke.models.vit package" checked="" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l5"><a class="reference internal" href="yoke.models.vit.swin.html">yoke.models.vit.swin package</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="yoke.utils.html">yoke.utils package</a><input aria-label="Toggle navigation of yoke.utils package" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4 has-children"><a class="reference internal" href="yoke.utils.training.html">yoke.utils.training package</a><input aria-label="Toggle navigation of yoke.utils.training package" class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l5"><a class="reference internal" href="yoke.utils.training.datastep.html">yoke.utils.training.datastep package</a></li>
+<li class="toctree-l5"><a class="reference internal" href="yoke.utils.training.epoch.html">yoke.utils.training.epoch package</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+</div>
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="_sources/yoke.models.vit.rst.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div>
+<div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="yoke-models-vit-package">
+<h1>yoke.models.vit package<a class="headerlink" href="#yoke-models-vit-package" title="Link to this heading">¶</a></h1>
+<section id="subpackages">
+<h2>Subpackages<a class="headerlink" href="#subpackages" title="Link to this heading">¶</a></h2>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="yoke.models.vit.swin.html">yoke.models.vit.swin package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="yoke.models.vit.swin.html#submodules">Submodules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="yoke.models.vit.swin.html#module-yoke.models.vit.swin.bomberman">yoke.models.vit.swin.bomberman module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="yoke.models.vit.swin.html#yoke.models.vit.swin.bomberman.Lightning_LodeRunner"><code class="docutils literal notranslate"><span class="pre">Lightning_LodeRunner</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.swin.html#yoke.models.vit.swin.bomberman.Lightning_LodeRunner.configure_optimizers"><code class="docutils literal notranslate"><span class="pre">Lightning_LodeRunner.configure_optimizers()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.swin.html#yoke.models.vit.swin.bomberman.Lightning_LodeRunner.forward"><code class="docutils literal notranslate"><span class="pre">Lightning_LodeRunner.forward()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.swin.html#yoke.models.vit.swin.bomberman.Lightning_LodeRunner.training_step"><code class="docutils literal notranslate"><span class="pre">Lightning_LodeRunner.training_step()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.swin.html#yoke.models.vit.swin.bomberman.Lightning_LodeRunner.validation_step"><code class="docutils literal notranslate"><span class="pre">Lightning_LodeRunner.validation_step()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="yoke.models.vit.swin.html#yoke.models.vit.swin.bomberman.LodeRunner"><code class="docutils literal notranslate"><span class="pre">LodeRunner</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.swin.html#yoke.models.vit.swin.bomberman.LodeRunner.forward"><code class="docutils literal notranslate"><span class="pre">LodeRunner.forward()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="yoke.models.vit.swin.html#module-yoke.models.vit.swin.encoder">yoke.models.vit.swin.encoder module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="yoke.models.vit.swin.html#yoke.models.vit.swin.encoder.MLP"><code class="docutils literal notranslate"><span class="pre">MLP</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.swin.html#yoke.models.vit.swin.encoder.MLP.forward"><code class="docutils literal notranslate"><span class="pre">MLP.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="yoke.models.vit.swin.html#yoke.models.vit.swin.encoder.SwinConnectDecoder"><code class="docutils literal notranslate"><span class="pre">SwinConnectDecoder</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.swin.html#yoke.models.vit.swin.encoder.SwinConnectDecoder.forward"><code class="docutils literal notranslate"><span class="pre">SwinConnectDecoder.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="yoke.models.vit.swin.html#yoke.models.vit.swin.encoder.SwinConnectEncoder"><code class="docutils literal notranslate"><span class="pre">SwinConnectEncoder</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.swin.html#yoke.models.vit.swin.encoder.SwinConnectEncoder.forward"><code class="docutils literal notranslate"><span class="pre">SwinConnectEncoder.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="yoke.models.vit.swin.html#yoke.models.vit.swin.encoder.SwinEncoder"><code class="docutils literal notranslate"><span class="pre">SwinEncoder</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.swin.html#yoke.models.vit.swin.encoder.SwinEncoder.forward"><code class="docutils literal notranslate"><span class="pre">SwinEncoder.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="yoke.models.vit.swin.html#yoke.models.vit.swin.encoder.SwinEncoder2"><code class="docutils literal notranslate"><span class="pre">SwinEncoder2</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.swin.html#yoke.models.vit.swin.encoder.SwinEncoder2.forward"><code class="docutils literal notranslate"><span class="pre">SwinEncoder2.forward()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="yoke.models.vit.swin.html#module-yoke.models.vit.swin.transformer">yoke.models.vit.swin.transformer module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="yoke.models.vit.swin.html#yoke.models.vit.swin.transformer.Swin"><code class="docutils literal notranslate"><span class="pre">Swin</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.swin.html#yoke.models.vit.swin.transformer.Swin.forward"><code class="docutils literal notranslate"><span class="pre">Swin.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="yoke.models.vit.swin.html#yoke.models.vit.swin.transformer.SwinV2"><code class="docutils literal notranslate"><span class="pre">SwinV2</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.swin.html#yoke.models.vit.swin.transformer.SwinV2.forward"><code class="docutils literal notranslate"><span class="pre">SwinV2.forward()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="yoke.models.vit.swin.html#module-yoke.models.vit.swin.unet">yoke.models.vit.swin.unet module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="yoke.models.vit.swin.html#yoke.models.vit.swin.unet.SwinUnetBackbone"><code class="docutils literal notranslate"><span class="pre">SwinUnetBackbone</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.swin.html#yoke.models.vit.swin.unet.SwinUnetBackbone.forward"><code class="docutils literal notranslate"><span class="pre">SwinUnetBackbone.forward()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="yoke.models.vit.swin.html#module-yoke.models.vit.swin.windowed_msa">yoke.models.vit.swin.windowed_msa module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="yoke.models.vit.swin.html#yoke.models.vit.swin.windowed_msa.ShiftedWindowCosMSA"><code class="docutils literal notranslate"><span class="pre">ShiftedWindowCosMSA</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.swin.html#yoke.models.vit.swin.windowed_msa.ShiftedWindowCosMSA.forward"><code class="docutils literal notranslate"><span class="pre">ShiftedWindowCosMSA.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="yoke.models.vit.swin.html#yoke.models.vit.swin.windowed_msa.ShiftedWindowMSA"><code class="docutils literal notranslate"><span class="pre">ShiftedWindowMSA</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.swin.html#yoke.models.vit.swin.windowed_msa.ShiftedWindowMSA.forward"><code class="docutils literal notranslate"><span class="pre">ShiftedWindowMSA.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="yoke.models.vit.swin.html#yoke.models.vit.swin.windowed_msa.WindowCosMSA"><code class="docutils literal notranslate"><span class="pre">WindowCosMSA</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.swin.html#yoke.models.vit.swin.windowed_msa.WindowCosMSA.forward"><code class="docutils literal notranslate"><span class="pre">WindowCosMSA.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="yoke.models.vit.swin.html#yoke.models.vit.swin.windowed_msa.WindowMSA"><code class="docutils literal notranslate"><span class="pre">WindowMSA</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="yoke.models.vit.swin.html#yoke.models.vit.swin.windowed_msa.WindowMSA.forward"><code class="docutils literal notranslate"><span class="pre">WindowMSA.forward()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="yoke.models.vit.swin.html#module-yoke.models.vit.swin">Module contents</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</section>
+<section id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Link to this heading">¶</a></h2>
+</section>
+<section id="module-yoke.models.vit.aggregate_variables">
+<span id="yoke-models-vit-aggregate-variables-module"></span><h2>yoke.models.vit.aggregate_variables module<a class="headerlink" href="#module-yoke.models.vit.aggregate_variables" title="Link to this heading">¶</a></h2>
+<p>Variable Aggregation module.</p>
+<p>nn.Modules to carry out <em>variable aggregation</em> after patch embedding. Variable
+aggregation eliminates the variable dimension.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="yoke.models.vit.aggregate_variables.AggVars">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">yoke.models.vit.aggregate_variables.</span></span><span class="sig-name descname"><span class="pre">AggVars</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">embed_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_heads</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/yoke/models/vit/aggregate_variables.html#AggVars"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.vit.aggregate_variables.AggVars" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></p>
+<p>Variable aggregation.</p>
+<p>Variable aggregation performed through a learnable Query vector and a
+re-mapping of the tensor dimensions.</p>
+<p>The goal is to get some quantity representative of cross-attention across
+all the variables. This eliminates the variable dimension which is
+important if the number of variables is large or possibly not fixed.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>embed_dim</strong> (<em>int</em>) – Initial embedding dimension.</p></li>
+<li><p><strong>num_heads</strong> (<em>int</em>) – Number of heads in the MSA layers.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="yoke.models.vit.aggregate_variables.AggVars.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="_modules/yoke/models/vit/aggregate_variables.html#AggVars.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.vit.aggregate_variables.AggVars.forward" title="Link to this definition">¶</a></dt>
+<dd><p>Forward method for variable aggregation.</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-yoke.models.vit.embedding_encoders">
+<span id="yoke-models-vit-embedding-encoders-module"></span><h2>yoke.models.vit.embedding_encoders module<a class="headerlink" href="#module-yoke.models.vit.embedding_encoders" title="Link to this heading">¶</a></h2>
+<p>Various embeddings for ViT networks.</p>
+<p>Module containing classes for <em>variable embeddings</em>, <em>position embeddings</em>,
+<em>temporal embeddings</em>.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="yoke.models.vit.embedding_encoders.PosEmbed">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">yoke.models.vit.embedding_encoders.</span></span><span class="sig-name descname"><span class="pre">PosEmbed</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">embed_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">patch_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">image_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_patches</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/yoke/models/vit/embedding_encoders.html#PosEmbed"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.vit.embedding_encoders.PosEmbed" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></p>
+<p>Position encoding/embedding.</p>
+<p>Position embedding is used to help track where each patch embedding is
+located in relation to the others. After variable aggregation, embedding is
+added to patch tokens. It does not encode information about absolute
+position of a patch. This makes this position embedding non-Unit-Aware.</p>
+<p>This embedding consists of learnable weights but the weights are
+initialized with a 2D-sine/cosine embedding.</p>
+<p>NOTE: Entries for image_size and patch_size should divide eachother evenly.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>embed_dim</strong> (<em>int</em>) – Embedding dimension, must be divisible by 2.</p></li>
+<li><p><strong>patch_size</strong> (<em>tuple</em>) – Height and width of patches</p></li>
+<li><p><strong>image_size</strong> (<em>tuple</em>) – Height and width of original image</p></li>
+<li><p><strong>num_patches</strong> (<em>int</em>) – Number of patches after initial patch embedding.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="yoke.models.vit.embedding_encoders.PosEmbed.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="_modules/yoke/models/vit/embedding_encoders.html#PosEmbed.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.vit.embedding_encoders.PosEmbed.forward" title="Link to this definition">¶</a></dt>
+<dd><p>Forward method for position embedding.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="yoke.models.vit.embedding_encoders.PosEmbed.initialize_weights">
+<span class="sig-name descname"><span class="pre">initialize_weights</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/yoke/models/vit/embedding_encoders.html#PosEmbed.initialize_weights"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.vit.embedding_encoders.PosEmbed.initialize_weights" title="Link to this definition">¶</a></dt>
+<dd><p>Initialize position embedding weights using Sine/Cosine grid.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="yoke.models.vit.embedding_encoders.RelativePositionEmbed">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">yoke.models.vit.embedding_encoders.</span></span><span class="sig-name descname"><span class="pre">RelativePositionEmbed</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">window_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">(&lt;class</span> <span class="pre">'int'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">&lt;class</span> <span class="pre">'int'&gt;)</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(8</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">4)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/yoke/models/vit/embedding_encoders.html#RelativePositionEmbed"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.vit.embedding_encoders.RelativePositionEmbed" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></p>
+<p>Relative spatial encoding/embedding in SWIN.</p>
+<p>Relative spatial encoding/embedding used in the SWIN windowed multi-headed
+self-attention layers. In this specialized version we set up a relative
+position embedding for a rectangular image.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>window_size</strong> (<em>int</em><em>, </em><em>int</em>) – Embedding dimension, must be divisible by 2.</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="yoke.models.vit.embedding_encoders.RelativePositionEmbed.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="_modules/yoke/models/vit/embedding_encoders.html#RelativePositionEmbed.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.vit.embedding_encoders.RelativePositionEmbed.forward" title="Link to this definition">¶</a></dt>
+<dd><p>Forward method for Relative Position Embedding.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="yoke.models.vit.embedding_encoders.TimeEmbed">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">yoke.models.vit.embedding_encoders.</span></span><span class="sig-name descname"><span class="pre">TimeEmbed</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">embed_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/yoke/models/vit/embedding_encoders.html#TimeEmbed"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.vit.embedding_encoders.TimeEmbed" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></p>
+<p>Temporal encoding/embedding.</p>
+<p>This embedding is used to help track/tag each entry of a batch by it’s
+corresponding lead time. After variable aggregation and position encoding,
+temporal encoding is added to patch tokens.</p>
+<p>This embedding consists of a single 1D linear embedding of lead-times per
+sample in the batch to the embedding dimension.</p>
+<p>NOTE: Entries for image_size and patch_size should divide eachother evenly.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>embed_dim</strong> (<em>int</em>) – Embedding dimension, must be divisible by 2.</p>
+</dd>
+</dl>
+<dl class="simple">
+<dt>Foward method args:</dt><dd><dl class="simple">
+<dt>lead_times (torch.Tensor): lead_times.shape = (B,). Forecasting lead</dt><dd><p>times of each element of the batch.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="yoke.models.vit.embedding_encoders.TimeEmbed.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lead_times</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="_modules/yoke/models/vit/embedding_encoders.html#TimeEmbed.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.vit.embedding_encoders.TimeEmbed.forward" title="Link to this definition">¶</a></dt>
+<dd><p>Forward method for temporal embedding.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="yoke.models.vit.embedding_encoders.VarEmbed">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">yoke.models.vit.embedding_encoders.</span></span><span class="sig-name descname"><span class="pre">VarEmbed</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">default_vars</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">embed_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/yoke/models/vit/embedding_encoders.html#VarEmbed"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.vit.embedding_encoders.VarEmbed" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></p>
+<p>Variable encoding/embedding.</p>
+<p>Encodes information regarding which variable each token belongs to. Helps
+in tracking variables through variable aggregation layer. Prior to variable
+aggregation, embedding is added to parallel patch embedding output to tag
+variable entries.</p>
+<p>This embedding consists of learnable weights but the weights are
+initialized with a sin/cos embedding.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>default_vars</strong> (<em>list</em>) – list of default variables to be used for training</p></li>
+<li><p><strong>embed_dim</strong> (<em>int</em>) – Embedding dimension</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="yoke.models.vit.embedding_encoders.VarEmbed.create_var_embedding">
+<span class="sig-name descname"><span class="pre">create_var_embedding</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">Tensor</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">dict</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="_modules/yoke/models/vit/embedding_encoders.html#VarEmbed.create_var_embedding"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.vit.embedding_encoders.VarEmbed.create_var_embedding" title="Link to this definition">¶</a></dt>
+<dd><p>Create variable embedding.</p>
+<p>Returns a variable embedding tensor of the correct size along with a
+dictionary mapping variable name strings to integers that can be used
+to construct the <cite>in_vars</cite> input to the forward method during training.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="yoke.models.vit.embedding_encoders.VarEmbed.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">in_vars</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="_modules/yoke/models/vit/embedding_encoders.html#VarEmbed.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.vit.embedding_encoders.VarEmbed.forward" title="Link to this definition">¶</a></dt>
+<dd><p>Forward method for variable embedding.</p>
+<p>NOTE: <cite>in_vars</cite> should be a (1, C) tensor of integers where the
+integers correspond to the variables present in the channels of
+<cite>x</cite>. This implies that every sample in the batch represented by <cite>x</cite>
+must correspond to the same variables.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="yoke.models.vit.embedding_encoders.VarEmbed.initialize_weights">
+<span class="sig-name descname"><span class="pre">initialize_weights</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/yoke/models/vit/embedding_encoders.html#VarEmbed.initialize_weights"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.vit.embedding_encoders.VarEmbed.initialize_weights" title="Link to this definition">¶</a></dt>
+<dd><p>Weight initialization for variable embedding.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="yoke.models.vit.embedding_encoders.get_1d_sincos_pos_embed_from_grid">
+<span class="sig-prename descclassname"><span class="pre">yoke.models.vit.embedding_encoders.</span></span><span class="sig-name descname"><span class="pre">get_1d_sincos_pos_embed_from_grid</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">embed_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">position</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">ndarray</span></span></span><a class="reference internal" href="_modules/yoke/models/vit/embedding_encoders.html#get_1d_sincos_pos_embed_from_grid"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.vit.embedding_encoders.get_1d_sincos_pos_embed_from_grid" title="Link to this definition">¶</a></dt>
+<dd><p>1D Sine/Cosine embedding.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>embed_dim</strong> (<em>int</em>) – Must be divisible by 2. Output dimension, D, for each
+position</p></li>
+<li><p><strong>position</strong> (<em>np.array</em>) – Size (M, 1) array of 1D-positions
+to be encoded.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><dl class="simple">
+<dt>Size (M, D) array consisting of the outer product of</dt><dd><p>position-index values and a phase passed through sine
+and cosine. The first D/2 columns are passed through
+Sine, the second D/2 columns are passed through Cosine.</p>
+</dd>
+</dl>
+</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>emb (np.array)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="yoke.models.vit.embedding_encoders.get_2d_sincos_pos_embed">
+<span class="sig-prename descclassname"><span class="pre">yoke.models.vit.embedding_encoders.</span></span><span class="sig-name descname"><span class="pre">get_2d_sincos_pos_embed</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">embed_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">grid_size_h</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">grid_size_w</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cls_token</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">ndarray</span></span></span><a class="reference internal" href="_modules/yoke/models/vit/embedding_encoders.html#get_2d_sincos_pos_embed"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.vit.embedding_encoders.get_2d_sincos_pos_embed" title="Link to this definition">¶</a></dt>
+<dd><p>2D Sine/Cosine embedding on a index-grid of specified dimensions.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>embed_dim</strong> (<em>int</em>) – Must be divisible by 2. Output dimension, D, for each
+position</p></li>
+<li><p><strong>grid_size_h</strong> (<em>int</em>) – Index grid height.</p></li>
+<li><p><strong>grid_size_w</strong> (<em>int</em>) – Index grid width.</p></li>
+<li><p><strong>cls_token</strong> (<em>bool</em>) – Whether or not a class-token embedding is appended.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><dl class="simple">
+<dt>[grid_size_h*grid_size_w, embed_dim] OR</dt><dd><p>[1+grid_size*grid_size, embed_dim] with class token</p>
+</dd>
+</dl>
+</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>pos_embed (np.array)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="yoke.models.vit.embedding_encoders.get_2d_sincos_pos_embed_from_grid">
+<span class="sig-prename descclassname"><span class="pre">yoke.models.vit.embedding_encoders.</span></span><span class="sig-name descname"><span class="pre">get_2d_sincos_pos_embed_from_grid</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">embed_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">grid</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">ndarray</span></span></span><a class="reference internal" href="_modules/yoke/models/vit/embedding_encoders.html#get_2d_sincos_pos_embed_from_grid"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.vit.embedding_encoders.get_2d_sincos_pos_embed_from_grid" title="Link to this definition">¶</a></dt>
+<dd><p>2D Sine/Cosine embedding using grid array.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>embed_dim</strong> (<em>int</em>) – Must be divisible by 2. Output dimension, D, for each
+position</p></li>
+<li><p><strong>grid</strong> (<em>np.array</em>) – Size (2, <em>singleton dimensions</em>, M) array of 2D-positions
+to be encoded. Singleton dimensions are ignored through
+flattening of the grid[0] and grid[1] sub-arrays.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><dl class="simple">
+<dt>Size (2, M, D) array with each (1, M, D)-subarray</dt><dd><p>consisting of the outer product of
+position-index values and a phase passed through sine
+and cosine. The first D/2 columns are passed through
+Sine, the second D/2 columns are passed through Cosine.</p>
+</dd>
+</dl>
+</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>emb (np.array)</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="module-yoke.models.vit.patch_embed">
+<span id="yoke-models-vit-patch-embed-module"></span><h2>yoke.models.vit.patch_embed module<a class="headerlink" href="#module-yoke.models.vit.patch_embed" title="Link to this heading">¶</a></h2>
+<p>Grouped-convolution embedding.</p>
+<p>nn.Module classes defined here offer different methods to embed a multi-channel
+image as a series of tokenized patches.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="yoke.models.vit.patch_embed.ParallelVarPatchEmbed">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">yoke.models.vit.patch_embed.</span></span><span class="sig-name descname"><span class="pre">ParallelVarPatchEmbed</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">max_vars</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">img_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">(128,</span> <span class="pre">128)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">patch_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">(16,</span> <span class="pre">16)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">embed_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">64</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">norm_layer</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/yoke/models/vit/patch_embed.html#ParallelVarPatchEmbed"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.vit.patch_embed.ParallelVarPatchEmbed" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></p>
+<p>Parallel patch embedding.</p>
+<p>Variable to Patch Embedding with multiple variables in a single kernel. Key
+idea is to use Grouped Convolutions. This allows this layer to embed an
+arbitrary subset of a default list of variables.</p>
+<p>NOTE: The img_size entries should be divisible by the corresponding
+patch_size entries.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>max_vars</strong> (<em>int</em>) – Maximum number of variables</p></li>
+<li><p><strong>img_size</strong> (<em>(</em><em>int</em><em>, </em><em>int</em><em>)</em>) – Image size</p></li>
+<li><p><strong>patch_size</strong> (<em>(</em><em>int</em><em>, </em><em>int</em><em>)</em>) – Patch size</p></li>
+<li><p><strong>embed_dim</strong> (<em>int</em>) – Embedding dimension</p></li>
+<li><p><strong>norm_layer</strong> (<em>nn.Module</em><em>, </em><em>optional</em>) – Normalization layer. Defaults to None.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="yoke.models.vit.patch_embed.ParallelVarPatchEmbed.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">in_vars</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="_modules/yoke/models/vit/patch_embed.html#ParallelVarPatchEmbed.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.vit.patch_embed.ParallelVarPatchEmbed.forward" title="Link to this definition">¶</a></dt>
+<dd><p>Forward method of the Parallel Embedding.</p>
+<p>NOTE: <cite>in_vars</cite> should be a (1, C) tensor of integers where the
+integers correspond to the variables present in the channels of
+<cite>x</cite>. This implies that every sample in the batch represented by <cite>x</cite>
+must correspond to the same variables.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="yoke.models.vit.patch_embed.ParallelVarPatchEmbed.reset_parameters">
+<span class="sig-name descname"><span class="pre">reset_parameters</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="_modules/yoke/models/vit/patch_embed.html#ParallelVarPatchEmbed.reset_parameters"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.vit.patch_embed.ParallelVarPatchEmbed.reset_parameters" title="Link to this definition">¶</a></dt>
+<dd><p>Initialize weights for projections.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="yoke.models.vit.patch_embed.SwinEmbedding">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">yoke.models.vit.patch_embed.</span></span><span class="sig-name descname"><span class="pre">SwinEmbedding</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">num_vars</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">img_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">(&lt;class</span> <span class="pre">'int'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">&lt;class</span> <span class="pre">'int'&gt;)</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(128</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">128)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">patch_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">(&lt;class</span> <span class="pre">'int'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">&lt;class</span> <span class="pre">'int'&gt;)</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(16</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">16)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">embed_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">64</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">norm_layer</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/yoke/models/vit/patch_embed.html#SwinEmbedding"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.vit.patch_embed.SwinEmbedding" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></p>
+<p>SWIN patch embedding.</p>
+<p>This SWIN embedding layer takes a <em>channels-first</em> image, applies linear
+patch embeddings, and rearranges the resulting embedded patches into
+sequences of tokens.</p>
+<p>For an input tensor of shape <span class="math notranslate nohighlight">\((B, C, H, W)\)</span>, the embedding uses a
+convolutional kernel with embedding dimension <span class="math notranslate nohighlight">\(E\)</span> and patch size
+<span class="math notranslate nohighlight">\(P = (p_h, p_w)\)</span>. This operation produces an embedded tensor of shape
+<span class="math notranslate nohighlight">\((B, E, H', W')\)</span>, where:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[H' = \frac{H}{p_h}, \quad W' = \frac{W}{p_w}\]</div>
+</div>
+<p>The resulting tensor is then rearranged into a sequence of
+<span class="math notranslate nohighlight">\(H' \times W'\)</span> tokens, each of dimension <span class="math notranslate nohighlight">\(E\)</span>, resulting in a
+final tensor of shape:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[(B, H' \cdot W', E)\]</div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The values of <span class="math notranslate nohighlight">\(H\)</span> and <span class="math notranslate nohighlight">\(W\)</span> (i.e., <cite>img_size</cite>) must be
+divisible by their corresponding patch size dimensions <span class="math notranslate nohighlight">\(p_h\)</span> and
+<span class="math notranslate nohighlight">\(p_w\)</span>.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>max_vars</strong> (<em>int</em>) – Maximum number of variables</p></li>
+<li><p><strong>img_size</strong> (<em>Tuple</em><em>[</em><em>int</em><em>, </em><em>int</em><em>]</em>) – Image size (height, width)</p></li>
+<li><p><strong>patch_size</strong> (<em>Tuple</em><em>[</em><em>int</em><em>, </em><em>int</em><em>]</em>) – Patch size (height, width)</p></li>
+<li><p><strong>embed_dim</strong> (<em>int</em>) – Embedding dimension</p></li>
+<li><p><strong>norm_layer</strong> (<em>nn.Module</em><em>, </em><em>optional</em>) – Normalization layer. Defaults to None.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="yoke.models.vit.patch_embed.SwinEmbedding.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="_modules/yoke/models/vit/patch_embed.html#SwinEmbedding.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.vit.patch_embed.SwinEmbedding.forward" title="Link to this definition">¶</a></dt>
+<dd><p>Forward method for SWIN patch embedding.</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-yoke.models.vit.patch_manipulation">
+<span id="yoke-models-vit-patch-manipulation-module"></span><h2>yoke.models.vit.patch_manipulation module<a class="headerlink" href="#module-yoke.models.vit.patch_manipulation" title="Link to this heading">¶</a></h2>
+<p>Patch manipulation layers.</p>
+<p>Includes <em>merging</em>, <em>expanding</em>, <em>depatching</em> layer definitions.</p>
+<p>The goal of these layers is to reduce or increase the number of tokens of a
+patch embedding while simultaneously modifying the embedding
+dimension. Hypothetically this should allow a SWIN transformer to learn a
+heirarchical feature representation for the image.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="yoke.models.vit.patch_manipulation.PatchExpand">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">yoke.models.vit.patch_manipulation.</span></span><span class="sig-name descname"><span class="pre">PatchExpand</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">emb_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">64</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">emb_factor</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">patch_grid_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">(&lt;class</span> <span class="pre">'int'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">&lt;class</span> <span class="pre">'int'&gt;)</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(64</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">64)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">s1</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">s2</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/yoke/models/vit/patch_manipulation.html#PatchExpand"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.vit.patch_manipulation.PatchExpand" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></p>
+<p>Expand patches and decrease embedding dimension.</p>
+<p>This layer receives a tensor of shape <span class="math notranslate nohighlight">\((B, L, C)\)</span>, representing
+batches of <span class="math notranslate nohighlight">\(L\)</span> tokens, each with embedding dimension <span class="math notranslate nohighlight">\(C\)</span>.
+The embedding size <span class="math notranslate nohighlight">\(C\)</span> must match the output of the previous layer.</p>
+<p>It is assumed that <span class="math notranslate nohighlight">\(L = H \times W\)</span>, where <span class="math notranslate nohighlight">\((H, W)\)</span> define
+the patch grid from the previous layer.</p>
+<p>The expansion process proceeds as follows:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[(B, H \cdot W, C)
+\xrightarrow{\text{linear}}
+(B, H \cdot W, n \cdot C)
+\xrightarrow{\text{rearrange}}
+(B, H \cdot s_1 \cdot W \cdot s_2, \frac{n \cdot C}{s_1 \cdot s_2})\]</div>
+</div>
+<p>First, the embedding dimension is expanded linearly by a factor of
+<span class="math notranslate nohighlight">\(n\)</span>. Then, the embedding is rearranged by distributing the added
+capacity into more tokens, increasing the patch count while reducing the
+per-token dimension accordingly.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p><span class="math notranslate nohighlight">\(n \cdot C\)</span> must be divisible by <span class="math notranslate nohighlight">\(s_1 \cdot s_2\)</span></p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>emb_size</strong> (<em>int</em>) – Incoming embedding dimension</p></li>
+<li><p><strong>emb_factor</strong> (<em>int</em>) – Up-scaling factor for embedding dimension</p></li>
+<li><p><strong>patch_grid_size</strong> (<em>Tuple</em><em>[</em><em>int</em><em>, </em><em>int</em><em>]</em>) – Incoming patch-grid dimensions within
+the token set</p></li>
+<li><p><strong>s1</strong> (<em>int</em>) – Height scaling factor for the patch grid</p></li>
+<li><p><strong>s2</strong> (<em>int</em>) – Width scaling factor for the patch grid</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="yoke.models.vit.patch_manipulation.PatchExpand.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="_modules/yoke/models/vit/patch_manipulation.html#PatchExpand.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.vit.patch_manipulation.PatchExpand.forward" title="Link to this definition">¶</a></dt>
+<dd><p>Forward method for patch expansion.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="yoke.models.vit.patch_manipulation.PatchMerge">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">yoke.models.vit.patch_manipulation.</span></span><span class="sig-name descname"><span class="pre">PatchMerge</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">emb_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">64</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">emb_factor</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">patch_grid_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">(&lt;class</span> <span class="pre">'int'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">&lt;class</span> <span class="pre">'int'&gt;)</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(64</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">64)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">s1</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">s2</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/yoke/models/vit/patch_manipulation.html#PatchMerge"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.vit.patch_manipulation.PatchMerge" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></p>
+<p>Merge patches and increase embedding dimension.</p>
+<p>This layer is passed a tensor of shape <span class="math notranslate nohighlight">\((B, L, C)\)</span>, i.e., batches of
+<span class="math notranslate nohighlight">\(L\)</span> tokens, each of embedding size <span class="math notranslate nohighlight">\(C\)</span>. The embedding size must
+match the token embedding dimension from the previous layer. It is assumed
+<span class="math notranslate nohighlight">\(L = H \times W\)</span> with <span class="math notranslate nohighlight">\(H\)</span> divisible by <span class="math notranslate nohighlight">\(s_1\)</span> and <span class="math notranslate nohighlight">\(W\)</span>
+divisible by <span class="math notranslate nohighlight">\(s_2\)</span>.</p>
+<p>The tokens are reshaped into groups of shape:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[(H', s_1, W', s_2) \text{ with } H' = H / s_1 \text{ and } W' = W / s_2\]</div>
+</div>
+<p>Then, the input is remapped:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[B \times (H' \cdot s_1 \cdot W' \cdot s_2) \times C
+\rightarrow
+B \times (H' \cdot W') \times (s_1 \cdot s_2 \cdot C)\]</div>
+</div>
+<p>Finally, a linear embedding is applied to produce a tensor of shape:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[(B, H' \cdot W', \text{embedding factor} \cdot C)\]</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>emb_size</strong> (<em>int</em>) – Incoming embedding dimension</p></li>
+<li><p><strong>emb_factor</strong> (<em>int</em>) – Up-scaling factor for embedding dimension</p></li>
+<li><p><strong>patch_grid_size</strong> (<em>Tuple</em><em>[</em><em>int</em><em>, </em><em>int</em><em>]</em>) – Incoming patch-grid dimensions within
+the token set</p></li>
+<li><p><strong>s1</strong> (<em>int</em>) – Height reduction factor for the patch grid</p></li>
+<li><p><strong>s2</strong> (<em>int</em>) – Width reduction factor for the patch grid</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="yoke.models.vit.patch_manipulation.PatchMerge.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="_modules/yoke/models/vit/patch_manipulation.html#PatchMerge.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.vit.patch_manipulation.PatchMerge.forward" title="Link to this definition">¶</a></dt>
+<dd><p>Forward method for Patch Merging.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="yoke.models.vit.patch_manipulation.Unpatchify">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">yoke.models.vit.patch_manipulation.</span></span><span class="sig-name descname"><span class="pre">Unpatchify</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">total_num_vars</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">patch_grid_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">(&lt;class</span> <span class="pre">'int'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">&lt;class</span> <span class="pre">'int'&gt;)</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(64</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">64)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">patch_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">(&lt;class</span> <span class="pre">'int'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">&lt;class</span> <span class="pre">'int'&gt;)</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(8</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">8)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/yoke/models/vit/patch_manipulation.html#Unpatchify"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.vit.patch_manipulation.Unpatchify" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></p>
+<p>Expansion from patches to variables and images.</p>
+<p>This layer performs the remap:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[(B, H \cdot W, V \cdot p_h \cdot p_w)
+\xrightarrow{\text{rearrange}}
+(B, V, H \cdot p_h, W \cdot p_w)\]</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>total_num_vars</strong> (<em>int</em>) – Total number of variables to be output.</p></li>
+<li><p><strong>patch_grid_size</strong> (<em>int</em><em>, </em><em>int</em>) – Height and width grid size of patches
+making up the tokens.</p></li>
+<li><p><strong>patch_size</strong> (<em>int</em><em>, </em><em>int</em>) – Height and width of each patch.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="yoke.models.vit.patch_manipulation.Unpatchify.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="_modules/yoke/models/vit/patch_manipulation.html#Unpatchify.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#yoke.models.vit.patch_manipulation.Unpatchify.forward" title="Link to this definition">¶</a></dt>
+<dd><p>Forward method for Unpatchify.</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-yoke.models.vit">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-yoke.models.vit" title="Link to this heading">¶</a></h2>
+<p>Module implementing various structures necessary for ViTs.</p>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="yoke.models.vit.swin.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">yoke.models.vit.swin package</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="yoke.models.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">yoke.models package</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2025, Los Alamos National Labs. Produced by: Kyle Hickmann, Skylar Callis, Gal Egozi, Soumi De, Bryan Kaiser, Sourabh Pandit, Sharmistha Chakrabarti, Derek Armstrong, Andrew Henrick, David Schodt
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">yoke.models.vit package</a><ul>
+<li><a class="reference internal" href="#subpackages">Subpackages</a></li>
+<li><a class="reference internal" href="#submodules">Submodules</a></li>
+<li><a class="reference internal" href="#module-yoke.models.vit.aggregate_variables">yoke.models.vit.aggregate_variables module</a><ul>
+<li><a class="reference internal" href="#yoke.models.vit.aggregate_variables.AggVars"><code class="docutils literal notranslate"><span class="pre">AggVars</span></code></a><ul>
+<li><a class="reference internal" href="#yoke.models.vit.aggregate_variables.AggVars.forward"><code class="docutils literal notranslate"><span class="pre">AggVars.forward()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a class="reference internal" href="#module-yoke.models.vit.embedding_encoders">yoke.models.vit.embedding_encoders module</a><ul>
+<li><a class="reference internal" href="#yoke.models.vit.embedding_encoders.PosEmbed"><code class="docutils literal notranslate"><span class="pre">PosEmbed</span></code></a><ul>
+<li><a class="reference internal" href="#yoke.models.vit.embedding_encoders.PosEmbed.forward"><code class="docutils literal notranslate"><span class="pre">PosEmbed.forward()</span></code></a></li>
+<li><a class="reference internal" href="#yoke.models.vit.embedding_encoders.PosEmbed.initialize_weights"><code class="docutils literal notranslate"><span class="pre">PosEmbed.initialize_weights()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#yoke.models.vit.embedding_encoders.RelativePositionEmbed"><code class="docutils literal notranslate"><span class="pre">RelativePositionEmbed</span></code></a><ul>
+<li><a class="reference internal" href="#yoke.models.vit.embedding_encoders.RelativePositionEmbed.forward"><code class="docutils literal notranslate"><span class="pre">RelativePositionEmbed.forward()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#yoke.models.vit.embedding_encoders.TimeEmbed"><code class="docutils literal notranslate"><span class="pre">TimeEmbed</span></code></a><ul>
+<li><a class="reference internal" href="#yoke.models.vit.embedding_encoders.TimeEmbed.forward"><code class="docutils literal notranslate"><span class="pre">TimeEmbed.forward()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#yoke.models.vit.embedding_encoders.VarEmbed"><code class="docutils literal notranslate"><span class="pre">VarEmbed</span></code></a><ul>
+<li><a class="reference internal" href="#yoke.models.vit.embedding_encoders.VarEmbed.create_var_embedding"><code class="docutils literal notranslate"><span class="pre">VarEmbed.create_var_embedding()</span></code></a></li>
+<li><a class="reference internal" href="#yoke.models.vit.embedding_encoders.VarEmbed.forward"><code class="docutils literal notranslate"><span class="pre">VarEmbed.forward()</span></code></a></li>
+<li><a class="reference internal" href="#yoke.models.vit.embedding_encoders.VarEmbed.initialize_weights"><code class="docutils literal notranslate"><span class="pre">VarEmbed.initialize_weights()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#yoke.models.vit.embedding_encoders.get_1d_sincos_pos_embed_from_grid"><code class="docutils literal notranslate"><span class="pre">get_1d_sincos_pos_embed_from_grid()</span></code></a></li>
+<li><a class="reference internal" href="#yoke.models.vit.embedding_encoders.get_2d_sincos_pos_embed"><code class="docutils literal notranslate"><span class="pre">get_2d_sincos_pos_embed()</span></code></a></li>
+<li><a class="reference internal" href="#yoke.models.vit.embedding_encoders.get_2d_sincos_pos_embed_from_grid"><code class="docutils literal notranslate"><span class="pre">get_2d_sincos_pos_embed_from_grid()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#module-yoke.models.vit.patch_embed">yoke.models.vit.patch_embed module</a><ul>
+<li><a class="reference internal" href="#yoke.models.vit.patch_embed.ParallelVarPatchEmbed"><code class="docutils literal notranslate"><span class="pre">ParallelVarPatchEmbed</span></code></a><ul>
+<li><a class="reference internal" href="#yoke.models.vit.patch_embed.ParallelVarPatchEmbed.forward"><code class="docutils literal notranslate"><span class="pre">ParallelVarPatchEmbed.forward()</span></code></a></li>
+<li><a class="reference internal" href="#yoke.models.vit.patch_embed.ParallelVarPatchEmbed.reset_parameters"><code class="docutils literal notranslate"><span class="pre">ParallelVarPatchEmbed.reset_parameters()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#yoke.models.vit.patch_embed.SwinEmbedding"><code class="docutils literal notranslate"><span class="pre">SwinEmbedding</span></code></a><ul>
+<li><a class="reference internal" href="#yoke.models.vit.patch_embed.SwinEmbedding.forward"><code class="docutils literal notranslate"><span class="pre">SwinEmbedding.forward()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a class="reference internal" href="#module-yoke.models.vit.patch_manipulation">yoke.models.vit.patch_manipulation module</a><ul>
+<li><a class="reference internal" href="#yoke.models.vit.patch_manipulation.PatchExpand"><code class="docutils literal notranslate"><span class="pre">PatchExpand</span></code></a><ul>
+<li><a class="reference internal" href="#yoke.models.vit.patch_manipulation.PatchExpand.forward"><code class="docutils literal notranslate"><span class="pre">PatchExpand.forward()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#yoke.models.vit.patch_manipulation.PatchMerge"><code class="docutils literal notranslate"><span class="pre">PatchMerge</span></code></a><ul>
+<li><a class="reference internal" href="#yoke.models.vit.patch_manipulation.PatchMerge.forward"><code class="docutils literal notranslate"><span class="pre">PatchMerge.forward()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#yoke.models.vit.patch_manipulation.Unpatchify"><code class="docutils literal notranslate"><span class="pre">Unpatchify</span></code></a><ul>
+<li><a class="reference internal" href="#yoke.models.vit.patch_manipulation.Unpatchify.forward"><code class="docutils literal notranslate"><span class="pre">Unpatchify.forward()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a class="reference internal" href="#module-yoke.models.vit">Module contents</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="_static/documentation_options.js?v=8a448e45"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/scripts/furo.js?v=46bd48cc"></script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+    </body>
+</html>
