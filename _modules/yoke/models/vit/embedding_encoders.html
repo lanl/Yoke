@@ -1,0 +1,820 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../../genindex.html"><link rel="search" title="Search" href="../../../../search.html">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>yoke.models.vit.embedding_encoders - Get Yoked!</title>
+      <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=acfd86a5" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../../../index.html"><div class="brand">Get Yoked!</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../../index.html">
+  
+  <span class="sidebar-brand-text">Get Yoked!</span>
+  
+</a><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Concepts</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../harnesses.html">Yoke Harnesses</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../start_study.html">Using START_study.py</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../loderunner_animate.html">Lode Runner Animation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../prediction_modes.html">Prediction Modes Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference:</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../../modules.html">yoke</a><input aria-label="Toggle navigation of yoke" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../../yoke.html">yoke package</a><input aria-label="Toggle navigation of yoke package" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../yoke.datasets.html">yoke.datasets package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../yoke.helpers.html">yoke.helpers package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../yoke.losses.html">yoke.losses package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../yoke.metrics.html">yoke.metrics package</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../../yoke.models.html">yoke.models package</a><input aria-label="Toggle navigation of yoke.models package" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4 has-children"><a class="reference internal" href="../../../../yoke.models.vit.html">yoke.models.vit package</a><input aria-label="Toggle navigation of yoke.models.vit package" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l5"><a class="reference internal" href="../../../../yoke.models.vit.swin.html">yoke.models.vit.swin package</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../../yoke.utils.html">yoke.utils package</a><input aria-label="Toggle navigation of yoke.utils package" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4 has-children"><a class="reference internal" href="../../../../yoke.utils.training.html">yoke.utils.training package</a><input aria-label="Toggle navigation of yoke.utils.training package" class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l5"><a class="reference internal" href="../../../../yoke.utils.training.datastep.html">yoke.utils.training.datastep package</a></li>
+<li class="toctree-l5"><a class="reference internal" href="../../../../yoke.utils.training.epoch.html">yoke.utils.training.epoch package</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+</div>
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <h1>Source code for yoke.models.vit.embedding_encoders</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Various embeddings for ViT networks.</span>
+
+<span class="sd">Module containing classes for *variable embeddings*, *position embeddings*,</span>
+<span class="sd">*temporal embeddings*.</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">import</span> <span class="nn">torch.nn</span> <span class="k">as</span> <span class="nn">nn</span>
+
+
+<div class="viewcode-block" id="get_1d_sincos_pos_embed_from_grid">
+<a class="viewcode-back" href="../../../../yoke.models.vit.html#yoke.models.vit.embedding_encoders.get_1d_sincos_pos_embed_from_grid">[docs]</a>
+<span class="k">def</span> <span class="nf">get_1d_sincos_pos_embed_from_grid</span><span class="p">(</span>
+    <span class="n">embed_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">position</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;1D Sine/Cosine embedding.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        embed_dim (int): Must be divisible by 2. Output dimension, D, for each</span>
+<span class="sd">                         position</span>
+<span class="sd">        position (np.array): Size (M, 1) array of 1D-positions</span>
+<span class="sd">                             to be encoded.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        emb (np.array): Size (M, D) array consisting of the outer product of</span>
+<span class="sd">                        position-index values and a phase passed through sine</span>
+<span class="sd">                        and cosine. The first D/2 columns are passed through</span>
+<span class="sd">                        Sine, the second D/2 columns are passed through Cosine.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">assert</span> <span class="n">embed_dim</span> <span class="o">%</span> <span class="mi">2</span> <span class="o">==</span> <span class="mi">0</span>
+
+    <span class="c1"># omega = 10000^(-w) with w=(2/D)*[0, 1, 2, ..., (D/2) - 1]</span>
+    <span class="n">omega</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">embed_dim</span> <span class="o">//</span> <span class="mi">2</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+    <span class="n">omega</span> <span class="o">/=</span> <span class="n">embed_dim</span> <span class="o">/</span> <span class="mf">2.0</span>
+    <span class="n">omega</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">/</span> <span class="mi">10000</span><span class="o">**</span><span class="n">omega</span>  <span class="c1"># (D/2,)</span>
+
+    <span class="c1"># Flatten position array</span>
+    <span class="n">position</span> <span class="o">=</span> <span class="n">position</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>  <span class="c1"># (M,)</span>
+
+    <span class="c1"># Compute outer product of position vector and omega vector:</span>
+    <span class="c1">#</span>
+    <span class="c1"># out = position(M, 1) x omega(1, D/2) or out(i, j) = position(i) x omega(j)</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">einsum</span><span class="p">(</span><span class="s2">&quot;m,d-&gt;md&quot;</span><span class="p">,</span> <span class="n">position</span><span class="p">,</span> <span class="n">omega</span><span class="p">)</span>  <span class="c1"># (M, D/2), outer product</span>
+
+    <span class="n">emb_sin</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>  <span class="c1"># (M, D/2)</span>
+    <span class="n">emb_cos</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>  <span class="c1"># (M, D/2)</span>
+
+    <span class="n">emb</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">emb_sin</span><span class="p">,</span> <span class="n">emb_cos</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>  <span class="c1"># (M, D)</span>
+
+    <span class="k">return</span> <span class="n">emb</span></div>
+
+
+
+<div class="viewcode-block" id="get_2d_sincos_pos_embed_from_grid">
+<a class="viewcode-back" href="../../../../yoke.models.vit.html#yoke.models.vit.embedding_encoders.get_2d_sincos_pos_embed_from_grid">[docs]</a>
+<span class="k">def</span> <span class="nf">get_2d_sincos_pos_embed_from_grid</span><span class="p">(</span><span class="n">embed_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">grid</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;2D Sine/Cosine embedding using grid array.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        embed_dim (int): Must be divisible by 2. Output dimension, D, for each</span>
+<span class="sd">                         position</span>
+<span class="sd">        grid (np.array): Size (2, *singleton dimensions*, M) array of 2D-positions</span>
+<span class="sd">                         to be encoded. Singleton dimensions are ignored through</span>
+<span class="sd">                         flattening of the grid[0] and grid[1] sub-arrays.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        emb (np.array): Size (2, M, D) array with each (1, M, D)-subarray</span>
+<span class="sd">                        consisting of the outer product of</span>
+<span class="sd">                        position-index values and a phase passed through sine</span>
+<span class="sd">                        and cosine. The first D/2 columns are passed through</span>
+<span class="sd">                        Sine, the second D/2 columns are passed through Cosine.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">assert</span> <span class="n">embed_dim</span> <span class="o">%</span> <span class="mi">2</span> <span class="o">==</span> <span class="mi">0</span>
+
+    <span class="c1"># use half of dimensions to encode grid_h</span>
+    <span class="n">emb_h</span> <span class="o">=</span> <span class="n">get_1d_sincos_pos_embed_from_grid</span><span class="p">(</span><span class="n">embed_dim</span> <span class="o">//</span> <span class="mi">2</span><span class="p">,</span> <span class="n">grid</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>  <span class="c1"># (M, D/2)</span>
+    <span class="n">emb_w</span> <span class="o">=</span> <span class="n">get_1d_sincos_pos_embed_from_grid</span><span class="p">(</span><span class="n">embed_dim</span> <span class="o">//</span> <span class="mi">2</span><span class="p">,</span> <span class="n">grid</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>  <span class="c1"># (M, D/2)</span>
+
+    <span class="n">emb</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">emb_h</span><span class="p">,</span> <span class="n">emb_w</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>  <span class="c1"># (M, D)</span>
+
+    <span class="k">return</span> <span class="n">emb</span></div>
+
+
+
+<div class="viewcode-block" id="get_2d_sincos_pos_embed">
+<a class="viewcode-back" href="../../../../yoke.models.vit.html#yoke.models.vit.embedding_encoders.get_2d_sincos_pos_embed">[docs]</a>
+<span class="k">def</span> <span class="nf">get_2d_sincos_pos_embed</span><span class="p">(</span>
+    <span class="n">embed_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">grid_size_h</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">grid_size_w</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">cls_token</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;2D Sine/Cosine embedding on a index-grid of specified dimensions.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        embed_dim (int): Must be divisible by 2. Output dimension, D, for each</span>
+<span class="sd">                         position</span>
+<span class="sd">        grid_size_h (int): Index grid height.</span>
+<span class="sd">        grid_size_w (int): Index grid width.</span>
+<span class="sd">        cls_token (bool): Whether or not a class-token embedding is appended.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        pos_embed (np.array): [grid_size_h*grid_size_w, embed_dim] OR</span>
+<span class="sd">                              [1+grid_size*grid_size, embed_dim] with class token</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">assert</span> <span class="n">embed_dim</span> <span class="o">%</span> <span class="mi">2</span> <span class="o">==</span> <span class="mi">0</span>
+
+    <span class="n">W</span> <span class="o">=</span> <span class="n">grid_size_w</span>
+    <span class="n">H</span> <span class="o">=</span> <span class="n">grid_size_h</span>
+    <span class="n">grid_h</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">H</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+    <span class="n">grid_w</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">W</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+    <span class="c1"># Create list of arrays for each grid dimension.</span>
+    <span class="c1"># grid[0] = repeat(row(0:grid_w))</span>
+    <span class="c1"># grid[1] = repeat(col(0:grid_h))</span>
+    <span class="n">grid</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">meshgrid</span><span class="p">(</span><span class="n">grid_w</span><span class="p">,</span> <span class="n">grid_h</span><span class="p">)</span>  <span class="c1"># grid[i].shape=(W, H), i=1,2</span>
+    <span class="n">grid</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>  <span class="c1"># (2, W, H)</span>
+
+    <span class="n">grid</span> <span class="o">=</span> <span class="n">grid</span><span class="o">.</span><span class="n">reshape</span><span class="p">([</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">grid_size_h</span><span class="p">,</span> <span class="n">grid_size_w</span><span class="p">])</span>
+    <span class="n">pos_embed</span> <span class="o">=</span> <span class="n">get_2d_sincos_pos_embed_from_grid</span><span class="p">(</span><span class="n">embed_dim</span><span class="p">,</span> <span class="n">grid</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">cls_token</span><span class="p">:</span>
+        <span class="n">pos_embed</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="n">embed_dim</span><span class="p">]),</span> <span class="n">pos_embed</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">pos_embed</span></div>
+
+
+
+<div class="viewcode-block" id="VarEmbed">
+<a class="viewcode-back" href="../../../../yoke.models.vit.html#yoke.models.vit.embedding_encoders.VarEmbed">[docs]</a>
+<span class="k">class</span> <span class="nc">VarEmbed</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Variable encoding/embedding.</span>
+
+<span class="sd">    Encodes information regarding which variable each token belongs to. Helps</span>
+<span class="sd">    in tracking variables through variable aggregation layer. Prior to variable</span>
+<span class="sd">    aggregation, embedding is added to parallel patch embedding output to tag</span>
+<span class="sd">    variable entries.</span>
+
+<span class="sd">    This embedding consists of learnable weights but the weights are</span>
+<span class="sd">    initialized with a sin/cos embedding.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        default_vars (list): list of default variables to be used for training</span>
+<span class="sd">        embed_dim (int): Embedding dimension</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">default_vars</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">embed_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Initialization for Variable Embedding.&quot;&quot;&quot;</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">default_vars</span> <span class="o">=</span> <span class="n">default_vars</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">embed_dim</span> <span class="o">=</span> <span class="n">embed_dim</span>
+
+        <span class="c1"># var_map is dictionary {var_name_str : var_idx_int}</span>
+        <span class="c1">#</span>
+        <span class="c1"># var_embed is (1, max_vars, embed_dim) tensor</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">var_embed</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">var_map</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_var_embedding</span><span class="p">(</span><span class="n">embed_dim</span><span class="p">)</span>
+
+        <span class="c1"># Initialize var_embed with sincos embedding</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">initialize_weights</span><span class="p">()</span>
+
+<div class="viewcode-block" id="VarEmbed.create_var_embedding">
+<a class="viewcode-back" href="../../../../yoke.models.vit.html#yoke.models.vit.embedding_encoders.VarEmbed.create_var_embedding">[docs]</a>
+    <span class="k">def</span> <span class="nf">create_var_embedding</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="nb">dict</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create variable embedding.</span>
+
+<span class="sd">        Returns a variable embedding tensor of the correct size along with a</span>
+<span class="sd">        dictionary mapping variable name strings to integers that can be used</span>
+<span class="sd">        to construct the `in_vars` input to the forward method during training.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">var_embed</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Parameter</span><span class="p">(</span>
+            <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">default_vars</span><span class="p">),</span> <span class="n">dim</span><span class="p">),</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span>
+        <span class="p">)</span>
+        <span class="c1"># TODO: create a mapping from var --&gt; idx</span>
+        <span class="n">var_map</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">idx</span> <span class="o">=</span> <span class="mi">0</span>
+
+        <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">default_vars</span><span class="p">:</span>
+            <span class="n">var_map</span><span class="p">[</span><span class="n">var</span><span class="p">]</span> <span class="o">=</span> <span class="n">idx</span>
+            <span class="n">idx</span> <span class="o">+=</span> <span class="mi">1</span>
+
+        <span class="k">return</span> <span class="n">var_embed</span><span class="p">,</span> <span class="n">var_map</span></div>
+
+
+<div class="viewcode-block" id="VarEmbed.initialize_weights">
+<a class="viewcode-back" href="../../../../yoke.models.vit.html#yoke.models.vit.embedding_encoders.VarEmbed.initialize_weights">[docs]</a>
+    <span class="k">def</span> <span class="nf">initialize_weights</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Weight initialization for variable embedding.&quot;&quot;&quot;</span>
+        <span class="n">var_embed</span> <span class="o">=</span> <span class="n">get_1d_sincos_pos_embed_from_grid</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">var_embed</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">default_vars</span><span class="p">))</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">var_embed</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">copy_</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">var_embed</span><span class="p">)</span><span class="o">.</span><span class="n">float</span><span class="p">()</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span></div>
+
+
+    <span class="c1"># @lru_cache(maxsize=None)</span>
+    <span class="c1"># def get_var_ids(self, vars, device):</span>
+    <span class="c1">#     ids = np.array([self.var_map[var] for var in vars])</span>
+    <span class="c1">#     return torch.from_numpy(ids).to(device)</span>
+
+    <span class="c1"># def get_var_emb(self, var_emb, vars):</span>
+    <span class="c1">#     ids = self.get_var_ids(vars, var_emb.device)</span>
+    <span class="c1">#     return var_emb[:, ids, :]</span>
+
+<div class="viewcode-block" id="VarEmbed.forward">
+<a class="viewcode-back" href="../../../../yoke.models.vit.html#yoke.models.vit.embedding_encoders.VarEmbed.forward">[docs]</a>
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">in_vars</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Forward method for variable embedding.</span>
+
+<span class="sd">        NOTE: `in_vars` should be a (1, C) tensor of integers where the</span>
+<span class="sd">        integers correspond to the variables present in the channels of</span>
+<span class="sd">        `x`. This implies that every sample in the batch represented by `x`</span>
+<span class="sd">        must correspond to the same variables.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># The input tensor is shape:</span>
+        <span class="c1">#  (B, V, L, D)=(B, NumVars, NumTokens, embed_dim)</span>
+
+        <span class="c1"># Variable embedding is (1, V, D)</span>
+        <span class="n">var_embed</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">var_embed</span><span class="p">[:,</span> <span class="n">in_vars</span><span class="p">,</span> <span class="p">:]</span>
+        <span class="c1"># var_embed = self.get_var_emb(self.var_embed, vars)</span>
+
+        <span class="c1"># Unsqueeze a dimension after variable dimension...</span>
+        <span class="c1">#   var_embed -&gt; (1, V, 1, D)</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">x</span> <span class="o">+</span> <span class="n">var_embed</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>  <span class="c1"># B, V, L, D</span>
+
+        <span class="k">return</span> <span class="n">x</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="PosEmbed">
+<a class="viewcode-back" href="../../../../yoke.models.vit.html#yoke.models.vit.embedding_encoders.PosEmbed">[docs]</a>
+<span class="k">class</span> <span class="nc">PosEmbed</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Position encoding/embedding.</span>
+
+<span class="sd">    Position embedding is used to help track where each patch embedding is</span>
+<span class="sd">    located in relation to the others. After variable aggregation, embedding is</span>
+<span class="sd">    added to patch tokens. It does not encode information about absolute</span>
+<span class="sd">    position of a patch. This makes this position embedding non-Unit-Aware.</span>
+
+<span class="sd">    This embedding consists of learnable weights but the weights are</span>
+<span class="sd">    initialized with a 2D-sine/cosine embedding.</span>
+
+<span class="sd">    NOTE: Entries for image_size and patch_size should divide eachother evenly.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        embed_dim (int): Embedding dimension, must be divisible by 2.</span>
+<span class="sd">        patch_size (tuple): Height and width of patches</span>
+<span class="sd">        image_size (tuple): Height and width of original image</span>
+<span class="sd">        num_patches (int): Number of patches after initial patch embedding.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">embed_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">patch_size</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span>
+        <span class="n">image_size</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span>
+        <span class="n">num_patches</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Initialization for position embedding.&quot;&quot;&quot;</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">embed_dim</span> <span class="o">=</span> <span class="n">embed_dim</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">patch_size</span> <span class="o">=</span> <span class="n">patch_size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">image_size</span> <span class="o">=</span> <span class="n">image_size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">num_patches</span> <span class="o">=</span> <span class="n">num_patches</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">pos_embed</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Parameter</span><span class="p">(</span>
+            <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_patches</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">embed_dim</span><span class="p">),</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span>
+        <span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">initialize_weights</span><span class="p">()</span>
+
+<div class="viewcode-block" id="PosEmbed.initialize_weights">
+<a class="viewcode-back" href="../../../../yoke.models.vit.html#yoke.models.vit.embedding_encoders.PosEmbed.initialize_weights">[docs]</a>
+    <span class="k">def</span> <span class="nf">initialize_weights</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Initialize position embedding weights using Sine/Cosine grid.&quot;&quot;&quot;</span>
+        <span class="n">pos_embed</span> <span class="o">=</span> <span class="n">get_2d_sincos_pos_embed</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">pos_embed</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span>
+            <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">image_size</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">patch_size</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span>
+            <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">image_size</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">patch_size</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span>
+            <span class="n">cls_token</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pos_embed</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">copy_</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">pos_embed</span><span class="p">)</span><span class="o">.</span><span class="n">float</span><span class="p">()</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span></div>
+
+
+<div class="viewcode-block" id="PosEmbed.forward">
+<a class="viewcode-back" href="../../../../yoke.models.vit.html#yoke.models.vit.embedding_encoders.PosEmbed.forward">[docs]</a>
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Forward method for position embedding.&quot;&quot;&quot;</span>
+        <span class="c1"># The input tensor is shape:</span>
+        <span class="c1">#  (B, L, D)=(B, NumTokens[i.e. Patches], embed_dim)</span>
+
+        <span class="n">x</span> <span class="o">=</span> <span class="n">x</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">pos_embed</span>
+
+        <span class="k">return</span> <span class="n">x</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="RelativePositionEmbed">
+<a class="viewcode-back" href="../../../../yoke.models.vit.html#yoke.models.vit.embedding_encoders.RelativePositionEmbed">[docs]</a>
+<span class="k">class</span> <span class="nc">RelativePositionEmbed</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Relative spatial encoding/embedding in SWIN.</span>
+
+<span class="sd">    Relative spatial encoding/embedding used in the SWIN windowed multi-headed</span>
+<span class="sd">    self-attention layers. In this specialized version we set up a relative</span>
+<span class="sd">    position embedding for a rectangular image.</span>
+
+
+<span class="sd">    Args:</span>
+<span class="sd">        window_size (int, int): Embedding dimension, must be divisible by 2.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">window_size</span><span class="p">:</span> <span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Initialization for Relative Position Embedding.&quot;&quot;&quot;</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+
+        <span class="c1"># Set window size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">window_size</span> <span class="o">=</span> <span class="n">window_size</span>
+
+        <span class="c1"># Since these weights are an nn.Parameter they will be updated during</span>
+        <span class="c1"># training.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pos_embeddings</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Parameter</span><span class="p">(</span>
+            <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">window_size</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">window_size</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="p">)</span>
+
+        <span class="c1"># Create array of indices for each point in a window of size</span>
+        <span class="c1"># (wh, ww), &#39;indices.shape = (wh*ww, 2)&#39;</span>
+        <span class="n">idx_array</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
+            <span class="p">[</span>
+                <span class="p">[</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">]</span>
+                <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">window_size</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+                <span class="k">for</span> <span class="n">y</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">window_size</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+            <span class="p">]</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">indices</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">idx_array</span><span class="p">)</span>
+
+        <span class="c1"># Using &#39;None&#39; creates an extra singleton dimension,</span>
+        <span class="c1"># i.e. self.indices[None, :, :] has dimension (1, wh*ww, 2).</span>
+        <span class="c1"># Therefore, self.relative_indices has size (wh*ww, wh*ww, 2) and</span>
+        <span class="c1"># the entry self.relative_indices[i, j, :, :] is the (delta-rowIDX, delta-colIDX)</span>
+        <span class="c1"># differences between the i and j points in the window.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">relative_indices</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">indices</span><span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:]</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">indices</span><span class="p">[:,</span> <span class="kc">None</span><span class="p">,</span> <span class="p">:]</span>
+
+        <span class="c1"># The previous range of self.relative_indices entries was [-wh+1, wh-1]</span>
+        <span class="c1"># for the row-indices and [-ww+1, ww-1] for the column-indices. By</span>
+        <span class="c1"># adding wh-1 to each entry in the first channel and ww-1 to each entry</span>
+        <span class="c1"># in the second channel the new ranges are [0, (2*wh-1)-1] and [0,</span>
+        <span class="c1"># (2*ww-1)-1], respectively. This ensures the `relative_indices` array</span>
+        <span class="c1"># can be used as indices in self.pos_embeddings</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">relative_indices</span><span class="p">[:,</span> <span class="p">:,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">window_size</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">relative_indices</span><span class="p">[:,</span> <span class="p">:,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">window_size</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span>
+
+<div class="viewcode-block" id="RelativePositionEmbed.forward">
+<a class="viewcode-back" href="../../../../yoke.models.vit.html#yoke.models.vit.embedding_encoders.RelativePositionEmbed.forward">[docs]</a>
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Forward method for Relative Position Embedding.&quot;&quot;&quot;</span>
+        <span class="c1"># The input tensor is shape:</span>
+        <span class="c1">#  (B, H, Hw, Ww, wh*ww, wh*ww)</span>
+        <span class="c1">#</span>
+        <span class="c1"># Here:</span>
+        <span class="c1">#    B = batch size</span>
+        <span class="c1">#    H = number of heads</span>
+        <span class="c1">#    Hw = Height of window grid</span>
+        <span class="c1">#    Ww = Width of window grid</span>
+        <span class="c1">#    wh = window height</span>
+        <span class="c1">#    ww = window_width</span>
+        <span class="c1">#</span>
+        <span class="c1"># In WindowedMSA, the input `x` represents the attention weights between</span>
+        <span class="c1"># every pair of patches/tokens within each of the Hw x Ww</span>
+        <span class="c1"># windows. There are wh*ww patches/tokens within each window so (wh*ww,</span>
+        <span class="c1"># wh*ww) pairs so shape(x) = (B, H, Hw, Ww, wh*ww, wh*ww)</span>
+
+        <span class="c1"># Get embedding weights between each pair of window positions.</span>
+        <span class="n">rel_pos_embedding</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pos_embeddings</span><span class="p">[</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">relative_indices</span><span class="p">[:,</span> <span class="p">:,</span> <span class="mi">0</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">relative_indices</span><span class="p">[:,</span> <span class="p">:,</span> <span class="mi">1</span><span class="p">]</span>
+        <span class="p">]</span>
+
+        <span class="c1"># Using broadcasting the relative position embedding weights are added</span>
+        <span class="c1"># to the last two dimensions of the attention weights for each batch,</span>
+        <span class="c1"># head, and window.</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">x</span> <span class="o">+</span> <span class="n">rel_pos_embedding</span>
+
+        <span class="k">return</span> <span class="n">x</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="TimeEmbed">
+<a class="viewcode-back" href="../../../../yoke.models.vit.html#yoke.models.vit.embedding_encoders.TimeEmbed">[docs]</a>
+<span class="k">class</span> <span class="nc">TimeEmbed</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Temporal encoding/embedding.</span>
+
+<span class="sd">    This embedding is used to help track/tag each entry of a batch by it&#39;s</span>
+<span class="sd">    corresponding lead time. After variable aggregation and position encoding,</span>
+<span class="sd">    temporal encoding is added to patch tokens.</span>
+
+<span class="sd">    This embedding consists of a single 1D linear embedding of lead-times per</span>
+<span class="sd">    sample in the batch to the embedding dimension.</span>
+
+<span class="sd">    NOTE: Entries for image_size and patch_size should divide eachother evenly.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        embed_dim (int): Embedding dimension, must be divisible by 2.</span>
+
+<span class="sd">    Foward method args:</span>
+<span class="sd">        lead_times (torch.Tensor): lead_times.shape = (B,). Forecasting lead</span>
+<span class="sd">                                   times of each element of the batch.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">embed_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Initialization for temporal embedding.&quot;&quot;&quot;</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">lead_time_embed</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">embed_dim</span><span class="p">)</span>
+
+<div class="viewcode-block" id="TimeEmbed.forward">
+<a class="viewcode-back" href="../../../../yoke.models.vit.html#yoke.models.vit.embedding_encoders.TimeEmbed.forward">[docs]</a>
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">lead_times</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Forward method for temporal embedding.&quot;&quot;&quot;</span>
+        <span class="c1"># The input tensor is shape:</span>
+        <span class="c1">#  (B, L, D)=(B, NumTokens, embed_dim)</span>
+
+        <span class="c1"># Add lead time embedding</span>
+        <span class="n">lead_time_emb</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">lead_time_embed</span><span class="p">(</span><span class="n">lead_times</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">))</span>  <span class="c1"># B, D</span>
+        <span class="n">lead_time_emb</span> <span class="o">=</span> <span class="n">lead_time_emb</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>  <span class="c1"># B, 1, D</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">x</span> <span class="o">+</span> <span class="n">lead_time_emb</span>  <span class="c1"># B, L, D</span>
+
+        <span class="k">return</span> <span class="n">x</span></div>
+</div>
+
+
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Usage Example.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">default_vars</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="s2">&quot;cu_pressure&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;cu_density&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;cu_temperature&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;ss_pressure&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;ss_density&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;ss_temperature&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;r_vel&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;z_vel&quot;</span><span class="p">,</span>
+    <span class="p">]</span>
+
+    <span class="n">embed_dim</span> <span class="o">=</span> <span class="mi">72</span>
+    <span class="n">patch_size</span> <span class="o">=</span> <span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">16</span><span class="p">)</span>
+    <span class="n">image_size</span> <span class="o">=</span> <span class="p">(</span><span class="mi">128</span><span class="p">,</span> <span class="mi">128</span><span class="p">)</span>
+    <span class="n">num_patches</span> <span class="o">=</span> <span class="mi">64</span>
+
+    <span class="n">device</span> <span class="o">=</span> <span class="s2">&quot;cuda&quot;</span> <span class="k">if</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">is_available</span><span class="p">()</span> <span class="k">else</span> <span class="s2">&quot;cpu&quot;</span>
+
+    <span class="c1"># Original: (B, C, H, W) = (3, 5, 128, 128)</span>
+    <span class="c1"># After parallel-patch embedding: (B, V, L, D)</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">rand</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">72</span><span class="p">)</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">type</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">FloatTensor</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+
+    <span class="c1"># Indices correspond to</span>
+    <span class="c1"># [&quot;cu_density&quot;, &quot;ss_density&quot;, &quot;ss_temperature&quot;, &quot;r_vel&quot;]</span>
+    <span class="n">in_vars</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">6</span><span class="p">])</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+
+    <span class="c1"># Prior to variable aggregation: (B, V, L, D)</span>
+    <span class="n">var_emb_model</span> <span class="o">=</span> <span class="n">VarEmbed</span><span class="p">(</span><span class="n">default_vars</span><span class="o">=</span><span class="n">default_vars</span><span class="p">,</span> <span class="n">embed_dim</span><span class="o">=</span><span class="n">embed_dim</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Vaiable Encoding Input shape:&quot;</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span>
+        <span class="s2">&quot;Variable Encoding shape:&quot;</span><span class="p">,</span>
+        <span class="n">var_emb_model</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">in_vars</span><span class="o">=</span><span class="n">in_vars</span><span class="p">)</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="c1"># After variable aggregation: (B, L, D)</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">rand</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">72</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+    <span class="n">pos_emb_model</span> <span class="o">=</span> <span class="n">PosEmbed</span><span class="p">(</span>
+        <span class="n">embed_dim</span><span class="o">=</span><span class="n">embed_dim</span><span class="p">,</span>
+        <span class="n">patch_size</span><span class="o">=</span><span class="n">patch_size</span><span class="p">,</span>
+        <span class="n">image_size</span><span class="o">=</span><span class="n">image_size</span><span class="p">,</span>
+        <span class="n">num_patches</span><span class="o">=</span><span class="n">num_patches</span><span class="p">,</span>
+    <span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Position Encoding input shape:&quot;</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Position Encoding shape:&quot;</span><span class="p">,</span> <span class="n">pos_emb_model</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+
+    <span class="c1"># After position encoding: (B, L, D)</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">rand</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">72</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+    <span class="n">lead_times</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">rand</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+    <span class="n">time_emb_model</span> <span class="o">=</span> <span class="n">TimeEmbed</span><span class="p">(</span><span class="n">embed_dim</span><span class="o">=</span><span class="n">embed_dim</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Temporal Encoding input shape:&quot;</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Temporal Encoding shape:&quot;</span><span class="p">,</span> <span class="n">time_emb_model</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">lead_times</span><span class="p">)</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+
+    <span class="c1"># Relative window embedding</span>
+    <span class="n">wh</span> <span class="o">=</span> <span class="mi">8</span>
+    <span class="n">ww</span> <span class="o">=</span> <span class="mi">5</span>
+    <span class="n">rel_emb_model</span> <span class="o">=</span> <span class="n">RelativePositionEmbed</span><span class="p">(</span><span class="n">window_size</span><span class="o">=</span><span class="p">(</span><span class="n">wh</span><span class="p">,</span> <span class="n">ww</span><span class="p">))</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Size of relative indices:&quot;</span><span class="p">,</span> <span class="n">rel_emb_model</span><span class="o">.</span><span class="n">relative_indices</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span>
+        <span class="s2">&quot;Minimum of x-coord relative indices:&quot;</span><span class="p">,</span>
+        <span class="n">rel_emb_model</span><span class="o">.</span><span class="n">relative_indices</span><span class="p">[:,</span> <span class="p">:,</span> <span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">min</span><span class="p">(),</span>
+    <span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span>
+        <span class="s2">&quot;Maximum of x-coord relative indices:&quot;</span><span class="p">,</span>
+        <span class="n">rel_emb_model</span><span class="o">.</span><span class="n">relative_indices</span><span class="p">[:,</span> <span class="p">:,</span> <span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">(),</span>
+    <span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span>
+        <span class="s2">&quot;Minimum of y-coord relative indices:&quot;</span><span class="p">,</span>
+        <span class="n">rel_emb_model</span><span class="o">.</span><span class="n">relative_indices</span><span class="p">[:,</span> <span class="p">:,</span> <span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">min</span><span class="p">(),</span>
+    <span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span>
+        <span class="s2">&quot;Maximum of y-coord relative indices:&quot;</span><span class="p">,</span>
+        <span class="n">rel_emb_model</span><span class="o">.</span><span class="n">relative_indices</span><span class="p">[:,</span> <span class="p">:,</span> <span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">(),</span>
+    <span class="p">)</span>
+
+    <span class="c1"># The input tensor is shape:</span>
+    <span class="c1">#  (B, H, Hw, Ww, wh*ww, wh*ww)</span>
+    <span class="n">win_patches</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">rand</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">16</span><span class="p">,</span> <span class="n">wh</span> <span class="o">*</span> <span class="n">ww</span><span class="p">,</span> <span class="n">wh</span> <span class="o">*</span> <span class="n">ww</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Size of relative-position embedding input:&quot;</span><span class="p">,</span> <span class="n">win_patches</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span>
+        <span class="s2">&quot;Size of relative-position embedding output:&quot;</span><span class="p">,</span> <span class="n">rel_emb_model</span><span class="p">(</span><span class="n">win_patches</span><span class="p">)</span><span class="o">.</span><span class="n">shape</span>
+    <span class="p">)</span>
+</pre></div>
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2025, Los Alamos National Labs. Produced by: Kyle Hickmann, Skylar Callis, Gal Egozi, Soumi De, Bryan Kaiser, Sourabh Pandit, Sharmistha Chakrabarti, Derek Armstrong, Andrew Henrick, David Schodt
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer no-toc">
+      
+      
+      
+    </aside>
+  </div>
+</div><script src="../../../../_static/documentation_options.js?v=8a448e45"></script>
+    <script src="../../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../../_static/scripts/furo.js?v=46bd48cc"></script>
+    </body>
+</html>
