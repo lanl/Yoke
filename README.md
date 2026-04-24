@@ -77,13 +77,24 @@ CI pipeline) and drop in to an interative shell:
 
 ```bash
 >> cd <yoke_repo_clone_directory>
->> docker buildx build -f Dockerfile . -t yoke
+>> docker buildx build -f docker/Dockerfile . -t yoke
 >> docker run -it yoke /bin/bash
 ```
 
 When you want to push your application to a different machine or deploy to a
 service like Kubernetes, RunAI etc., you can run `docker push` or
 `docker export` along with any transfers of necessary training data.
+
+Using the Charliecloud runtime, build the container and drop in to an 
+interactive shell:
+
+```bash
+>> ch-image build -f docker/Dockerfile . -t yoke
+>> ch-convert yoke yoke.sqfs
+>> ch-run -d -W --unset-env="*" --set-env \
+    --bind $PWD:/mnt/workspace --cd /mnt/workspace \
+    yoke.sqfs -- /bin/bash
+```
 
 Testing
 -------
