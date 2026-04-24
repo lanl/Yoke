@@ -1,0 +1,54 @@
+# docker buildx build --progress=plain -f Dockerfile . -t yoke
+# # or with Charliecloud
+# ch-image build -f Dockerfile . -t yoke && ch-convert yoke yoke.sqfs
+
+FROM condaforge/miniforge3:latest
+
+RUN conda install -c conda-forge flit
+
+# specify version and index to build for GPUs on non-GPU systems
+RUN pip3 install torch==2.11.0+cu128 torchvision --index-url https://download.pytorch.org/whl/cu128 
+# # use below for CPU build:
+# RUN pip3 install torch torchvision --resume-retries 2 --index-url https://download.pytorch.org/whl/cpu
+
+WORKDIR /workspace
+COPY src /workspace/src
+COPY applications /workspace/applications
+COPY tests /workspace/tests
+COPY pyproject.toml /workspace/pyproject.toml
+COPY README.md /workspace/README.md
+COPY LICENSE.txt /workspace/LICENSE.txt
+
+# build Yoke and download deps to allow offline, development installs
+RUN flit build
+RUN pip3 download \
+    "torch==2.11.0+cu128" \
+    "torchvision" \
+    "torchaudio" \
+		-d ./packages --index-url https://download.pytorch.org/whl/cu128
+RUN pip3 download \
+    "scikit-image" \
+    "matplotlib>=3.10.7" \
+    "pyparsing<3.3" \
+    "h5py" \
+    "pandas" \
+    "einops" \
+    "lightning" \
+	"flit_core" \
+	"coveralls" \
+	"ruff" \
+	"sphinx" \
+	"furo" \
+	"pytest" \
+	"pytest-cov" \
+		-d ./packages
+ENV PIP_NO_INDEX=1
+ENV PIP_FIND_LINKS=/workspace/packages
+# ENV FLIT_ROOT_INSTALL=1
+# RUN flit install --symlink --deps develop
+
+SHELL ["/bin/bash", "-c"]
+
+# docker run -it yoke /bin/bash
+# # or with Charliecloud
+# ch-run -d -W --unset-env="*" --set-env --bind $PWD:/mnt/workspace --cd /mnt/workspace yoke.sqfs -- /bin/bash
