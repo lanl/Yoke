@@ -10,9 +10,12 @@ RUN conda install -c conda-forge flit
 WORKDIR /workspace
 COPY . /workspace
 
-RUN pip3 install torch torchvision # --resume-retries 2 --index-url https://download.pytorch.org/whl/cpu
+RUN pip3 install torch==2.11.0+cu128 torchvision --index-url https://download.pytorch.org/whl/cu128 
+# # use below for CPU build:
+# RUN pip3 install torch torchvision --resume-retries 2 --index-url https://download.pytorch.org/whl/cpu
 
-RUN FLIT_ROOT_INSTALL=1 flit install
+ENV FLIT_ROOT_INSTALL=1
+RUN flit install --symlink --deps develop
 
 SHELL ["/bin/bash", "-c"]
 
