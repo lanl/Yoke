@@ -1,6 +1,6 @@
-# docker buildx build --progress=plain -f Dockerfile . -t yoke
+# docker buildx build --progress=plain -f docker/Dockerfile_gpu_dev . -t yoke
 # # or with Charliecloud
-# ch-image build -f Dockerfile . -t yoke && ch-convert yoke yoke.sqfs
+# ch-image build -f docker/Dockerfile_gpu_dev . -t yoke && ch-convert yoke yoke.sqfs
 
 FROM condaforge/miniforge3:latest
 
