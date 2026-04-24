@@ -28,13 +28,13 @@ def add_default_args(parser: argparse.ArgumentParser = None) -> argparse.Argumen
         default="./hyperparameters.csv",
         help="CSV file containing study hyperparameters",
     )
-    parser.add_argument(
-        "--studyIDX",
-        action="store",
-        type=int,
-        default=1,
-        help="Study ID number to match hyperparameters",
-    )
+    # parser.add_argument(
+    #     "--studyIDX",
+    #     action="store",
+    #     type=int,
+    #     default=1,
+    #     help="Study ID number to match hyperparameters",
+    # )
     parser.add_argument(
         "--rundir",
         action="store",
