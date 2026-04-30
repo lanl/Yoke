@@ -40,11 +40,18 @@ def train_loderunner_datastep(
     model.train()
 
     # Extract data
-    (start_img, end_img, Dt) = data
+    #(start_img, end_img, Dt) = data
+    img_seq, Dt = data
 
-    start_img = start_img.to(device, non_blocking=True)
+    #start_img = start_img.to(device, non_blocking=True)
+    #Dt = Dt.to(torch.float32).to(device, non_blocking=True)
+    #end_img = end_img.to(device, non_blocking=True)
+
+    img_seq = img_seq.to(device, non_blocking=True)
     Dt = Dt.to(torch.float32).to(device, non_blocking=True)
-    end_img = end_img.to(device, non_blocking=True)
+
+    start_img = img_seq[:, 0]
+    end_img = img_seq[:, -1]
 
     # For our first LodeRunner training on the lsc240420 dataset the input and
     # output prediction variables are fixed.
@@ -66,6 +73,9 @@ def train_loderunner_datastep(
     # Perform a forward pass
     # NOTE: If training on GPU model should have already been moved to GPU
     # prior to initalizing optimizer.
+    print("start_img entering model:", start_img.shape)   # expect [B, 8, 1120, 800]
+    print("len(in_vars):", len(in_vars))
+    print("in_vars:", in_vars)
     pred_img = model(start_img, in_vars, out_vars, Dt)
 
     # Expecting to use a *reduction="none"* loss function so we can track loss
@@ -224,6 +234,193 @@ def train_DDP_loderunner_datastep(
     return end_img, pred_img, all_losses
 
 
+def train_DDP_loderunner_seq_channel_datastep(
+    data,
+    model,
+    optimizer,
+    loss_fn,
+    device,
+    rank,
+    world_size,
+):
+    model.train()
+
+    start_img, end_img, Dt = data
+
+    start_img = start_img.to(device, non_blocking=True)
+    end_img = end_img.to(device, non_blocking=True)
+    Dt = Dt.to(torch.float32).to(device, non_blocking=True)
+
+    in_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7], device=device)
+    out_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7], device=device)
+
+    pred_img = model(start_img, in_vars, out_vars, Dt)
+
+    loss = loss_fn(pred_img, end_img)
+    per_sample_loss = loss.mean(dim=[1, 2, 3])
+
+    optimizer.zero_grad(set_to_none=True)
+    per_sample_loss.mean().backward()
+    optimizer.step()
+
+    return end_img, pred_img, per_sample_loss.detach()
+
+
+def train_DDP_loderunner_seq_datastep(
+    data: tuple,
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    loss_fn: torch.nn.Module,
+    device: torch.device,
+    rank: int,
+    world_size: int,
+    scheduled_prob: float = 1.0,
+    channel_map: list[int] | None = None,
+):
+    """
+    DDP training step for autoregressive sequence training.
+
+    Expected data:
+        img_seq, Dt = data
+
+    Shapes:
+        img_seq: [B, S, C, H, W]
+        Dt:
+            either [B] / [B, 1] for a single constant Dt reused at every step,
+            or [B, S-1] / [B, S-1, 1] for per-step lead times.
+
+    Returns:
+        gt_seq:      [B, S-1, C, H, W]
+        pred_seq:    [B, S-1, C, H, W]
+        all_losses:  concatenated per-sample losses on rank 0, else None
+    """
+    model.train()
+
+    img_seq, Dt = data
+    img_seq = img_seq.to(device, non_blocking=True)
+    Dt = Dt.to(torch.float32).to(device, non_blocking=True)
+
+    if channel_map is None:
+        channel_map = [0, 1, 2, 3, 4, 5, 6, 7]
+
+    in_vars = torch.tensor(channel_map, device=device)
+    out_vars = torch.tensor(channel_map, device=device)
+
+    B, S, C, H, W = img_seq.shape
+    assert S >= 2, "Sequence length must be at least 2."
+
+    pred_seq = []
+
+    # initial input is first frame
+    current_input = img_seq[:, 0]
+
+    for k in range(S - 1):
+        # support either one Dt for all steps or one Dt per step
+        if Dt.ndim == 1 or (Dt.ndim == 2 and Dt.shape[-1] == 1):
+            Dt_k = Dt
+        elif Dt.ndim == 2:
+            Dt_k = Dt[:, k].unsqueeze(-1)
+        elif Dt.ndim == 3:
+            Dt_k = Dt[:, k]
+        else:
+            raise ValueError(f"Unsupported Dt shape: {Dt.shape}")
+
+        pred_img = model(current_input, in_vars, out_vars, Dt_k)
+        pred_seq.append(pred_img)
+
+        if k < S - 2:
+            if random.random() < scheduled_prob:
+                current_input = img_seq[:, k + 1]   # teacher forcing
+            else:
+                current_input = pred_img.detach()   # autoregressive rollout
+
+    pred_seq = torch.stack(pred_seq, dim=1)   # [B, S-1, C, H, W]
+    gt_seq = img_seq[:, 1:]                   # [B, S-1, C, H, W]
+
+    loss = loss_fn(pred_seq, gt_seq)
+    per_sample_loss = loss.mean(dim=[1, 2, 3, 4])
+
+    optimizer.zero_grad(set_to_none=True)
+    loss.mean().backward()
+    optimizer.step()
+
+    gathered_losses = [torch.zeros_like(per_sample_loss) for _ in range(world_size)]
+    dist.all_gather(gathered_losses, per_sample_loss)
+
+    if rank == 0:
+        all_losses = torch.cat(gathered_losses, dim=0)
+    else:
+        all_losses = None
+
+    return gt_seq, pred_seq, all_losses
+
+
+def train_DDP_loderunner_datastep_seq_old(
+    data: tuple,
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    loss_fn: torch.nn.Module,
+    device: torch.device,
+    rank: int,
+    world_size: int,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """A DDP-compatible training step for multi-input, multi-output data.
+
+    Args:
+        data (tuple): tuple of model input, corresponding ground truth, and lead time
+        model (loaded pytorch model): model to train
+        optimizer (torch.optim): optimizer for training set
+        loss_fn (torch.nn Loss Function): loss function for training set
+        device (torch.device): device index to select
+        rank (int): Rank of device
+        world_size (int): Number of total DDP processes
+
+    Returns:
+        end_img (torch.Tensor): Ground truth end image
+        pred_img (torch.Tensor): Predicted end image
+        all_losses (torch.Tensor): Concatenated per-sample losses from all processes
+    """
+    # Set model to train mode
+    model.train()
+
+    # Extract data
+    #start_img, end_img, Dt = data
+    img_seq, Dt = data
+    #for img in img_seq:
+    #    # ...
+    start_img = start_img.to(device, non_blocking=True)
+    Dt = Dt.to(device, non_blocking=True)
+    end_img = end_img.to(device, non_blocking=True)
+
+    # Fixed input and output variable indices
+    in_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7]).to(device, non_blocking=True)
+    out_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7]).to(device, non_blocking=True)
+
+    # Forward pass
+    pred_img = model(start_img, in_vars, out_vars, Dt)
+
+    # Compute loss
+    loss = loss_fn(pred_img, end_img)
+    per_sample_loss = loss.mean(dim=[1, 2, 3])  # Per-sample loss
+
+    # Backward pass and optimization
+    optimizer.zero_grad(set_to_none=True)
+    loss.mean().backward()
+    optimizer.step()
+
+    # Gather per-sample losses from all processes
+    gathered_losses = [torch.zeros_like(per_sample_loss) for _ in range(world_size)]
+    dist.all_gather(gathered_losses, per_sample_loss)
+
+    # Rank 0 concatenates and saves or returns all losses
+    if rank == 0:
+        all_losses = torch.cat(gathered_losses, dim=0)  # Shape: (total_batch_size,)
+    else:
+        all_losses = None
+
+    return end_img, pred_img, all_losses
+
+
 ####################################
 # Evaluating on a Datastep
 ####################################
@@ -292,6 +489,87 @@ def eval_loderunner_datastep(
     per_sample_loss = loss.mean(dim=[1, 2, 3])  # Shape: (batch_size,)
 
     return end_img, pred_img, per_sample_loss
+
+
+def eval_DDP_loderunner_seq_channel_datastep(
+    data,
+    model,
+    loss_fn,
+    device,
+    rank,
+    world_size,
+):
+    model.eval()
+
+    start_img, end_img, Dt = data
+
+    start_img = start_img.to(device, non_blocking=True)
+    end_img = end_img.to(device, non_blocking=True)
+    Dt = Dt.to(torch.float32).to(device, non_blocking=True)
+
+    in_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7], device=device)
+    out_vars = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7], device=device)
+
+    with torch.no_grad():
+        pred_img = model(start_img, in_vars, out_vars, Dt)
+
+    loss = loss_fn(pred_img, end_img)
+    per_sample_loss = loss.mean(dim=[1, 2, 3])
+
+    # No manual all_gather during eval.
+    return end_img, pred_img, per_sample_loss.detach()
+
+
+def eval_DDP_loderunner_seq_datastep(
+    data,
+    model,
+    loss_fn,
+    device,
+    rank,
+    world_size,
+):
+    model.eval()
+
+    img_seq, Dt = data
+    img_seq = img_seq.to(device, non_blocking=True)
+    Dt = Dt.to(torch.float32).to(device, non_blocking=True)
+
+    in_vars = torch.arange(img_seq.shape[2], device=device)
+    out_vars = torch.arange(img_seq.shape[2], device=device)
+
+    B, S, C, H, W = img_seq.shape
+    current_input = img_seq[:, 0]
+    preds = []
+
+    for k in range(S - 1):
+        if Dt.ndim == 1:
+            Dt_k = Dt
+        elif Dt.ndim == 2:
+            Dt_k = Dt[:, k]
+        else:
+            Dt_k = Dt[:, k].squeeze(-1)
+
+        pred_img = model(current_input, in_vars, out_vars, Dt_k)
+        preds.append(pred_img)
+
+        if k < S - 2:
+            current_input = img_seq[:, k + 1]
+
+    pred_seq = torch.stack(preds, dim=1)
+    gt_seq = img_seq[:, 1:]
+
+    loss = loss_fn(pred_seq, gt_seq)
+    per_sample_loss = loss.mean(dim=[1, 2, 3, 4])
+
+    gathered_losses = [torch.zeros_like(per_sample_loss) for _ in range(world_size)]
+    dist.all_gather(gathered_losses, per_sample_loss)
+
+    if rank == 0:
+        all_losses = torch.cat(gathered_losses, dim=0)
+    else:
+        all_losses = None
+
+    return gt_seq, pred_seq, all_losses
 
 
 def eval_scheduled_loderunner_datastep(
@@ -419,3 +697,134 @@ def eval_DDP_loderunner_datastep(
         all_losses = None
 
     return end_img, pred_img, all_losses
+
+
+def train_DDP_temporal_loderunner_datastep(
+    data,
+    model,
+    optimizer,
+    loss_fn,
+    device,
+    rank,
+    world_size,
+):
+    model.train()
+
+    context_seq, target_img, Dt = data
+
+    context_seq = context_seq.to(device, non_blocking=True)   # [B, K, C, H, W]
+    target_img = target_img.to(device, non_blocking=True)     # [B, C, H, W]
+    Dt = Dt.to(torch.float32).to(device, non_blocking=True)
+
+    C = target_img.shape[1]
+    in_vars = torch.arange(C, device=device)
+    out_vars = torch.arange(C, device=device)
+
+    pred_img = model(context_seq, in_vars, out_vars, Dt)
+
+    loss = loss_fn(pred_img, target_img)              # [B, C, H, W] if reduction="none"
+    per_sample_loss = loss.mean(dim=[1, 2, 3])
+
+    optimizer.zero_grad(set_to_none=True)
+    per_sample_loss.mean().backward()
+    optimizer.step()
+
+    gathered_losses = [torch.zeros_like(per_sample_loss) for _ in range(world_size)]
+    dist.all_gather(gathered_losses, per_sample_loss)
+
+    if rank == 0:
+        all_losses = torch.cat(gathered_losses, dim=0)
+    else:
+        all_losses = None
+
+    return target_img, pred_img, all_losses
+
+
+def eval_DDP_temporal_loderunner_datastep(
+    data,
+    model,
+    loss_fn,
+    device,
+    rank,
+    world_size,
+):
+    model.eval()
+
+    context_seq, target_img, Dt = data
+
+    context_seq = context_seq.to(device, non_blocking=True)
+    target_img = target_img.to(device, non_blocking=True)
+    Dt = Dt.to(torch.float32).to(device, non_blocking=True)
+
+    C = target_img.shape[1]
+    in_vars = torch.arange(C, device=device)
+    out_vars = torch.arange(C, device=device)
+
+    pred_img = model(context_seq, in_vars, out_vars, Dt)
+
+    loss = loss_fn(pred_img, target_img)
+    per_sample_loss = loss.mean(dim=[1, 2, 3])
+
+    gathered_losses = [torch.zeros_like(per_sample_loss) for _ in range(world_size)]
+    dist.all_gather(gathered_losses, per_sample_loss)
+
+    if rank == 0:
+        all_losses = torch.cat(gathered_losses, dim=0)
+    else:
+        all_losses = None
+
+    return target_img, pred_img, all_losses
+
+
+def eval_DDP_loderunner_seq_context_datastep(
+    data,
+    model,
+    loss_fn,
+    device,
+    rank,
+    world_size,
+):
+    """
+    DDP eval step for TemporalLodeRunner / channel-stacked context model.
+
+    Expected data:
+        context_seq, target_img, Dt = data
+
+    Shapes:
+        context_seq: [B, K, C, H, W]
+        target_img:  [B, C, H, W]
+        Dt:          [B] or [B, 1]
+    """
+    import torch
+    import torch.distributed as dist
+
+    model.eval()
+
+    context_seq, target_img, Dt = data
+
+    context_seq = context_seq.to(device, non_blocking=True)
+    target_img = target_img.to(device, non_blocking=True)
+    Dt = Dt.to(torch.float32).to(device, non_blocking=True)
+
+    C = target_img.shape[1]
+    in_vars = torch.arange(C, device=device)
+    out_vars = torch.arange(C, device=device)
+
+    pred_img = model(context_seq, in_vars, out_vars, Dt)
+
+    loss = loss_fn(pred_img, target_img)
+
+    if loss.ndim == 0:
+        per_sample_loss = loss.repeat(target_img.shape[0])
+    else:
+        per_sample_loss = loss.mean(dim=tuple(range(1, loss.ndim)))
+
+    gathered_losses = [torch.zeros_like(per_sample_loss) for _ in range(world_size)]
+    dist.all_gather(gathered_losses, per_sample_loss)
+
+    if rank == 0:
+        all_losses = torch.cat(gathered_losses, dim=0)
+    else:
+        all_losses = None
+
+    return target_img, pred_img, all_losses

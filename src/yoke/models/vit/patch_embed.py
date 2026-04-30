@@ -141,6 +141,9 @@ class ParallelVarPatchEmbed(nn.Module):
         groups = in_vars.shape[0]
         proj = F.conv2d(x, weights, biases, groups=groups, stride=self.patch_size)
 
+        print("proj:", proj.shape)
+        print("tokens per embed:", proj.shape[2] * proj.shape[3])
+
         # Flatten the patch arrays and separate the variables and embeddings.
         proj = rearrange(
             proj, "b (v e) h1 h2 -> b v (h1 h2) e", v=groups, e=self.embed_dim

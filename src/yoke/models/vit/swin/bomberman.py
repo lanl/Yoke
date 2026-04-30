@@ -187,6 +187,9 @@ class LodeRunner(nn.Module):
         # Aggregate variables
         x = self.agg_vars(x)
 
+        print("x before pos_embed:", x.shape)                 # expect [B, L, D]
+        print("pos_embed param:", self.pos_embed.pos_embed.shape)  # likely [1, L0, D]
+
         # Encode patch positions, spatial information
         x = self.pos_embed(x)
 
