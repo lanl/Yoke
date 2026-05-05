@@ -23,6 +23,12 @@ from torch.utils.data import Dataset, DataLoader, random_split
 import glob
 import random
 
+#MEAN = 24.694652705328807
+#STD = 4.67030961432848
+
+GLOBAL_GMAG_MEAN = 24.694652705328807
+GLOBAL_GMAG_STD  = 4.67030961432848
+EPS = 1e-6
 
 #############################################
 # Inputs
@@ -244,8 +250,14 @@ class Kilonova_lc_img_DataSet_channels_context(Dataset):
         data = np.load(fn, allow_pickle=True)
         arr = data["arr_ztfg"]
 
+        #mjd = arr[:, 0]
+        #g_mag = arr[:, 1]
+
         mjd = arr[:, 0]
-        g_mag = arr[:, 1]
+        g_mag = arr[:, 1].astype(np.float32)
+
+        # GLOBAL NORMALIZATION
+        g_mag = (g_mag - GLOBAL_GMAG_MEAN) / (GLOBAL_GMAG_STD + EPS)
 
         t0 = mjd.min()
         t_obs = mjd - t0
