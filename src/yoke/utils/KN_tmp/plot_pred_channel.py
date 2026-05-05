@@ -23,7 +23,7 @@ def get_args():
         type=str,
         #default="runs/study_007/study007_modelState_epoch0100.pth",
         #default="runs/study_010/study010_modelState_epoch0100.pth",
-        default="runs/study_011/study011_modelState_epoch0100.pth",
+        default="runs/study_012/study012_modelState_epoch0100.pth",
 
     )
     parser.add_argument("--N_imgs", type=int, default=1)
@@ -70,7 +70,7 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Using device:", device)
 
-    context_len = 3
+    context_len = 5
     model = load_channel_model(args.ckpt, device)
 
     eval_dataset = Kilonova_lc_img_DataSet_channels_context(
@@ -121,7 +121,7 @@ def main():
     plt.xlabel("Sample index")
     plt.ylabel("Mean magnitude/image value")
     plt.tight_layout()
-    plt.savefig("pred_vs_truth_channel.png", dpi=200)
+    plt.savefig("pred_vs_truth_channel_norm.png", dpi=200)
 
 
 
@@ -172,7 +172,7 @@ def main():
     plt.xlabel("Autoregressive step")
     plt.ylabel("Mean magnitude/image value")
     plt.tight_layout()
-    plt.savefig("pred_vs_truth_channel_autoreg.png", dpi=200)
+    plt.savefig("pred_vs_truth_channel_norm_autoreg.png", dpi=200)
 
 
     # ------------------------------------------------------------
@@ -207,7 +207,7 @@ def main():
         ax.axis("off")
 
     plt.tight_layout()
-    plt.savefig("img_comp_channel.png", bbox_inches="tight", dpi=200)
+    plt.savefig("img_comp_channel_norm.png", bbox_inches="tight", dpi=200)
 
 
 if __name__ == "__main__":

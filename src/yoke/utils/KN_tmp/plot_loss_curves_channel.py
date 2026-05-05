@@ -55,20 +55,20 @@ def main():
     "--train_pattern",
     type=str,
     #default="runs/study_010/training_study010_epoch*.csv",
-    default="runs/study_011/training_study011_epoch*.csv",
+    default="runs/study_012/training_study012_epoch*.csv",
     )
 
     parser.add_argument(
         "--val_pattern",
         type=str,
         #default="runs/study_010/validation_study010_epoch*.csv",
-        default="runs/study_011/validation_study011_epoch*.csv",
+        default="runs/study_012/validation_study012_epoch*.csv",
     )
 
     parser.add_argument(
         "--out",
         type=str,
-        default="loss_curves_study011.png",
+        default="loss_curves_study012.png",
     )
 
     parser.add_argument(
