@@ -300,8 +300,10 @@ class Kilonova_lc_img_DataSet_channels_context(Dataset):
             self.W,
         )
 
-        target_mag = float(g_mag[target_idx])
-        target_val = torch.tensor(target_mag, dtype=torch.float32)
+        # Predict DELTA (next - previous) rather than absolute next value
+        prev_mag = float(g_mag[target_idx - 1])
+        delta_mag = float(g_mag[target_idx] - g_mag[target_idx - 1])
+        target_val = torch.tensor(delta_mag, dtype=torch.float32)
 
         target_img = target_val.view(1, 1, 1).expand(
             self.n_channels,
@@ -791,6 +793,9 @@ def main(args, rank, world_size, local_rank, device):
                     "model_state_dict": model.module.state_dict(),
                     "optimizer_state_dict": optimizer.state_dict(),
                     "noise_scale": noise_scale,
+                    "predicts_delta": True,
+                    "target_type": "delta",
+                    "context_len": CONTEXT_LEN,
                 },
                 new_chkpt_path,
             )
