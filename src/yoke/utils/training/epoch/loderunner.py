@@ -14,11 +14,12 @@ from yoke.utils.training.datastep.loderunner import (
     train_DDP_loderunner_seq_datastep,
     train_DDP_loderunner_seq_channel_datastep,
     train_DDP_temporal_loderunner_datastep,
+    train_DDP_scalar_temporal_loderunner_datastep,
     eval_DDP_loderunner_datastep,
     eval_DDP_loderunner_seq_datastep,
     eval_DDP_loderunner_seq_context_datastep,
     eval_DDP_loderunner_seq_channel_datastep,
-
+    eval_DDP_scalar_temporal_loderunner_datastep,
 )
 
 
@@ -334,6 +335,92 @@ def train_LRsched_loderunner_epoch(
                         ]
                     )
 
+                    np.savetxt(val_rcrd_file, batch_records, fmt="%d, %d, %.8f")
+
+
+def train_DDP_scalar_temporal_loderunner_epoch(
+    training_data: torch.utils.data.DataLoader,
+    validation_data: torch.utils.data.DataLoader,
+    num_train_batches: int,
+    num_val_batches: int,
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    loss_fn: torch.nn.Module,
+    LRsched: torch.optim.lr_scheduler._LRScheduler,
+    epochIDX: int,
+    train_per_val: int,
+    train_rcrd_filename: str,
+    val_rcrd_filename: str,
+    device: torch.device,
+    rank: int,
+    world_size: int,
+) -> None:
+    trainbatch_ID = 0
+    valbatch_ID = 0
+
+    model.train()
+
+    train_rcrd_filename = train_rcrd_filename.replace("<epochIDX>", f"{epochIDX:04d}")
+
+    with (
+        open(train_rcrd_filename, "a") if rank == 0 else nullcontext()
+    ) as train_rcrd_file:
+        for trainbatch_ID, traindata in enumerate(training_data):
+            if trainbatch_ID >= num_train_batches:
+                break
+
+            truth, pred, train_losses = train_DDP_scalar_temporal_loderunner_datastep(
+                traindata,
+                model,
+                optimizer,
+                loss_fn,
+                device,
+                rank,
+                world_size,
+            )
+
+            LRsched.step()
+
+            if rank == 0:
+                batch_records = np.column_stack(
+                    [
+                        np.full(len(train_losses), epochIDX),
+                        np.full(len(train_losses), trainbatch_ID),
+                        train_losses.cpu().numpy().flatten(),
+                    ]
+                )
+                np.savetxt(train_rcrd_file, batch_records, fmt="%d, %d, %.8f")
+
+    if epochIDX % train_per_val == 0:
+        print("Validating...", epochIDX)
+
+        val_rcrd_filename = val_rcrd_filename.replace("<epochIDX>", f"{epochIDX:04d}")
+        model.eval()
+
+        with (
+            open(val_rcrd_filename, "a") if rank == 0 else nullcontext()
+        ) as val_rcrd_file:
+            for valbatch_ID, valdata in enumerate(validation_data):
+                if valbatch_ID >= num_val_batches:
+                    break
+
+                truth, pred, val_losses = eval_DDP_scalar_temporal_loderunner_datastep(
+                    valdata,
+                    model,
+                    loss_fn,
+                    device,
+                    rank,
+                    world_size,
+                )
+
+                if rank == 0:
+                    batch_records = np.column_stack(
+                        [
+                            np.full(len(val_losses), epochIDX),
+                            np.full(len(val_losses), valbatch_ID),
+                            val_losses.cpu().numpy().flatten(),
+                        ]
+                    )
                     np.savetxt(val_rcrd_file, batch_records, fmt="%d, %d, %.8f")
 
 

@@ -9,7 +9,7 @@ design_lsc240420_MASTER.csv
 --LSC_NPZ_DIR
 /data2/lsc240420/
 --checkpoint
-study011_modelState_epoch0090.hdf5
+/net/sescratch1/atoivonen/projects/yoke_runs/KN_loderunner_fine_tune/runs/study_005/study005_modelState_epoch0100.pth
 --sampIDX
-3914
+10
 -S

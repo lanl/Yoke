@@ -153,8 +153,8 @@ for Vcsv in val_csv_list:
 # trn_idxlist = trn_DF.index.values
 # val_idxlist = val_DF.index.values
 
-trn_csv_list = ["train.csv"]
-val_csv_list = ["valcsv"]
+#trn_csv_list = [] #["train.csv"]
+#val_csv_list = [] #["valcsv"]
 
 # Plot loss for training over all steps and epochs
 fig1 = plt.figure(num=1, figsize=(6, 6))
@@ -275,5 +275,5 @@ if SAVEFIG:
     plt.figure(fig1.number)
     filenameA = f"{savedir}/study{IDX:03d}_TandV_curve.png"
     plt.savefig(filenameA, bbox_inches="tight")
-else:
+    #else:
     plt.show()

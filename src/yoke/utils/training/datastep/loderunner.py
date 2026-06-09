@@ -740,6 +740,49 @@ def train_DDP_temporal_loderunner_datastep(
     return target_img, pred_img, all_losses
 
 
+def train_DDP_scalar_temporal_loderunner_datastep(
+    data,
+    model,
+    optimizer,
+    loss_fn,
+    device,
+    rank,
+    world_size,
+):
+    model.train()
+
+    x, target, Dt = data
+
+    x = x.to(torch.float32).to(device, non_blocking=True)          # [B, 2 * context_len]
+    target = target.to(torch.float32).to(device, non_blocking=True) # [B]
+    Dt = Dt.to(torch.float32).to(device, non_blocking=True)         # [B]
+
+    C = 8
+    in_vars = torch.arange(C, device=device)
+    out_vars = torch.arange(C, device=device)
+
+    pred = model(x, in_vars, out_vars, Dt)  # [B]
+
+    pred = pred.view_as(target)
+
+    loss = loss_fn(pred, target)            # [B] if reduction="none"
+    per_sample_loss = loss.view(loss.shape[0], -1).mean(dim=1)
+
+    optimizer.zero_grad(set_to_none=True)
+    per_sample_loss.mean().backward()
+    optimizer.step()
+
+    gathered_losses = [torch.zeros_like(per_sample_loss) for _ in range(world_size)]
+    dist.all_gather(gathered_losses, per_sample_loss)
+
+    if rank == 0:
+        all_losses = torch.cat(gathered_losses, dim=0)
+    else:
+        all_losses = None
+
+    return target, pred, all_losses
+
+
 def eval_DDP_temporal_loderunner_datastep(
     data,
     model,
@@ -774,6 +817,44 @@ def eval_DDP_temporal_loderunner_datastep(
         all_losses = None
 
     return target_img, pred_img, all_losses
+
+
+def eval_DDP_scalar_temporal_loderunner_datastep(
+    data,
+    model,
+    loss_fn,
+    device,
+    rank,
+    world_size,
+):
+    model.eval()
+
+    with torch.no_grad():
+        x, target, Dt = data
+
+        x = x.to(torch.float32).to(device, non_blocking=True)          # [B, 2 * context_len]
+        target = target.to(torch.float32).to(device, non_blocking=True) # [B]
+        Dt = Dt.to(torch.float32).to(device, non_blocking=True)         # [B]
+
+        C = 8
+        in_vars = torch.arange(C, device=device)
+        out_vars = torch.arange(C, device=device)
+
+        pred = model(x, in_vars, out_vars, Dt)  # [B]
+        pred = pred.view_as(target)
+
+        loss = loss_fn(pred, target)            # [B] if reduction="none"
+        per_sample_loss = loss.view(loss.shape[0], -1).mean(dim=1)
+
+        gathered_losses = [torch.zeros_like(per_sample_loss) for _ in range(world_size)]
+        dist.all_gather(gathered_losses, per_sample_loss)
+
+        if rank == 0:
+            all_losses = torch.cat(gathered_losses, dim=0)
+        else:
+            all_losses = None
+
+    return target, pred, all_losses
 
 
 def eval_DDP_loderunner_seq_context_datastep(

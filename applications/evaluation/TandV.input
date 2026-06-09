@@ -1,7 +1,7 @@
 --basedir
-/usr/projects/artimis/mpmm/hickmank/chicoma/ch_yoke/applications/harnesses/ch_DDP_loderunner/ddp_lrstudy1/
+/net/sescratch1/atoivonen/projects/yoke_runs/KN_loderunner_fine_tune/runs
 --IDX
-10
+5
 --Nsamps_per_trn_pt
 200
 --Nsamps_per_val_pt
@@ -9,5 +9,5 @@
 --ylim
 0.25
 --savedir
-./ch_ddp_lrstudy1/
+./KN_se_fine_tune/
 --savefig
