@@ -19,7 +19,7 @@ import numpy as np
 import torch
 
 from yoke.models.vit.swin.bomberman import LodeRunner
-from yoke.utils.checkpointing import load_model_and_optimizer_hdf5
+from yoke.utils.checkpointing import load_model_and_optimizer,load_model_and_optimizer_hdf5
 
 # Imports for plotting
 # To view possible matplotlib backends use
@@ -63,8 +63,8 @@ parser.add_argument(
     "--checkpoint",
     action="store",
     type=str,
-    default="./study018_modelState_epoch0100.hdf5",
-    help="Name of HDF5 model checkpoint to evaluate output for.",
+    default="./study018_modelState_epoch0100.pth",
+    help="Name of model checkpoint to evaluate output for.",
 )
 
 # indir
@@ -277,16 +277,36 @@ if __name__ == "__main__":
         ],
     )
 
-    # Load weights from checkpoint
-    optimizer = torch.optim.AdamW(
-        model.parameters(),
-        lr=1e-6,
-        betas=(0.9, 0.999),
-        eps=1e-08,
-        weight_decay=0.01,
-    )
+    if checkpoint.lower().endswith(".hdf5"):
+        # Load weights from checkpoint
+        optimizer = torch.optim.AdamW(
+            model.parameters(),
+            lr=1e-6,
+            betas=(0.9, 0.999),
+            eps=1e-08,
+            weight_decay=0.01,
+        )
 
-    checkpoint_epoch = load_model_and_optimizer_hdf5(model, optimizer, checkpoint)
+        checkpoint_epoch = load_model_and_optimizer_hdf5(model, optimizer, checkpoint)
+    
+    
+    elif checkpoint.lower().endswith(".pth"):
+        available_models = {
+            "LodeRunner": LodeRunner
+        }
+
+        model, optimizer, starting_epoch = load_model_and_optimizer(
+            checkpoint,
+            optimizer_class=torch.optim.AdamW,
+            optimizer_kwargs={
+                "lr": 1e-6,
+                "betas": (0.9, 0.999),
+                "eps": 1e-08,
+                "weight_decay": 0.01,
+            },
+            available_models=available_models,
+            device='cpu',
+        )
     model.eval()
 
     # Build input data
