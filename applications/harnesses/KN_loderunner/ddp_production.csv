@@ -1,0 +1,29 @@
+studyIDX,YOKE_TORCH_ENV,KNODES,NGPUS,EMBED_DIM,B0,B1,B2,B3,NUM_WORKERS,BATCH_SIZE,NTRN_BATCH,NVAL_BATCH,ANCHOR_LR,NUM_CYCLES,MIN_FRACTION,TERMINAL_STEPS,WARMUP_STEPS,NOISE_SCALE,train_script
+# This is a longer epoch production run after tuning.
+# Single epoch with validation should be ~30 mins
+#1,torch_ch_gpu_241112,4,4,128,1,1,9,1,2,10,1000,500,2.0e-3,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
+#2,torch_ch_gpu_241112,1,4,128,1,1,9,1,2,10,1000,500,2.0e-3,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
+#3,torch_ch_gpu_241112,1,4,128,1,1,9,1,2,10,200,500,2.0e-3,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
+#4,yoke311,1,4,128,1,1,9,1,2,10,200,500,2.0e-3,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
+#5,yoke311,1,4,128,1,1,9,1,2,10,200,500,2.0e-3,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
+#6,yoke311,1,4,128,1,1,9,1,2,10,200,500,2.0e-3,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
+#7,yoke311,1,4,128,1,1,9,1,2,10,200,500,2.0e-3,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
+#8,yoke311,1,4,128,1,1,9,1,2,10,200,500,2.0e-3,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
+#9,yoke311,1,4,128,1,1,9,1,1,1,5,0,2.0e-3,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.#py
+#10,yoke311,1,1,128,1,1,9,1,2,10,200,50,2.0e-3,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
+#11,yoke311,1,4,128,1,1,9,1,2,10,1000,500,1.0e-3,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
+#12,yoke311,1,4,128,1,1,9,1,2,10,1000,500,1.0e-3,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
+#13,yoke311,1,4,128,1,1,9,1,2,10,1000,500,1.0e-3,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
+#14,yoke311,1,4,128,1,1,9,1,2,10,1000,500,1.0e-3,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
+#15,yoke311,1,4,128,1,1,9,1,2,10,1000,500,2.0e-4,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
+#16,yoke311,1,4,128,1,1,9,1,2,10,1000,500,2.0e-4,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
+#17,yoke311,1,4,128,1,1,9,1,2,10,1000,500,2.0e-4,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
+#18,yoke311,1,1,128,1,1,9,1,2,10,1000,500,2.0e-4,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
+#19,yoke311,1,1,128,1,1,9,1,2,10,1000,500,2.0e-3,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
+#20,yoke311,1,1,128,1,1,9,1,2,10,1000,500,2.0e-3,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
+#21,yoke311,1,1,128,1,1,9,1,2,10,1000,500,2.0e-3,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
+#22,yoke311,1,1,128,1,1,9,1,2,10,1000,500,2.0e-3,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
+#23,yoke311,1,1,128,1,1,9,1,2,10,1000,500,2.0e-3,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
+24,yoke311,1,1,128,1,1,9,1,2,10,1000,500,2.0e-3,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
+
+
