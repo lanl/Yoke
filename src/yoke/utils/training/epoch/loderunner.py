@@ -14,12 +14,12 @@ from yoke.utils.training.datastep.loderunner import (
     train_DDP_loderunner_seq_datastep,
     train_DDP_loderunner_seq_channel_datastep,
     train_DDP_temporal_loderunner_datastep,
-    train_DDP_scalar_temporal_loderunner_datastep,
+    train_DDP_scalar_temporal_loderunner_datastep_gri,
     eval_DDP_loderunner_datastep,
     eval_DDP_loderunner_seq_datastep,
     eval_DDP_loderunner_seq_context_datastep,
     eval_DDP_loderunner_seq_channel_datastep,
-    eval_DDP_scalar_temporal_loderunner_datastep,
+    eval_DDP_scalar_temporal_loderunner_datastep_gri,
 )
 
 
@@ -338,6 +338,159 @@ def train_LRsched_loderunner_epoch(
                     np.savetxt(val_rcrd_file, batch_records, fmt="%d, %d, %.8f")
 
 
+def train_DDP_scalar_temporal_loderunner_epoch_gri(
+    training_data: torch.utils.data.DataLoader,
+    validation_data: torch.utils.data.DataLoader,
+    num_train_batches: int,
+    num_val_batches: int,
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    loss_fn: torch.nn.Module,
+    LRsched: torch.optim.lr_scheduler._LRScheduler,
+    epochIDX: int,
+    train_per_val: int,
+    train_rcrd_filename: str,
+    val_rcrd_filename: str,
+    device: torch.device,
+    rank: int,
+    world_size: int,
+) -> None:
+    """
+    DDP epoch function for scalar temporal LodeRunner training.
+
+    Expected dataset output:
+        x:      [B, input_dim]
+        target: [B, n_outputs]
+        Dt:     [B]
+
+    For the 3-band kilonova case:
+        x:      [B, 4 * context_len]
+                flattened [g, r, i] context plus relative times
+        target: [B, 3]
+                normalized delta_g, delta_r, delta_i
+        Dt:     [B]
+
+    Expected model output:
+        pred:   [B, 3]
+    """
+
+    train_rcrd_filename = train_rcrd_filename.replace(
+        "<epochIDX>",
+        f"{epochIDX:04d}",
+    )
+
+    model.train()
+
+    with (
+        open(train_rcrd_filename, "a") if rank == 0 else nullcontext()
+    ) as train_rcrd_file:
+
+        for trainbatch_ID, data in enumerate(training_data):
+            if trainbatch_ID >= num_train_batches:
+                break
+
+            x, target, Dt = data
+
+            x = x.to(device, non_blocking=True)
+            target = target.to(device, non_blocking=True)
+            Dt = Dt.to(torch.float32).to(device, non_blocking=True)
+
+            optimizer.zero_grad(set_to_none=True)
+
+            # These are kept for API compatibility with LodeRunner-style wrappers.
+            # ScalarTemporalConditionedLodeRunner may ignore them internally,
+            # or pass them to the backbone.
+            in_vars = torch.arange(8, device=device)
+            out_vars = torch.arange(8, device=device)
+
+            pred = model(x, in_vars, out_vars, Dt)
+
+            if pred.shape != target.shape:
+                raise RuntimeError(
+                    f"Prediction and target shapes do not match: "
+                    f"pred.shape={pred.shape}, target.shape={target.shape}"
+                )
+
+            loss = loss_fn(pred, target)
+
+            # Huber/MSE with reduction='none' gives [B, 3].
+            # Reduce over output channels, leaving one loss per sample.
+            if loss.ndim == 1:
+                per_sample_loss = loss
+            else:
+                per_sample_loss = loss.mean(dim=tuple(range(1, loss.ndim)))
+
+            batch_loss = per_sample_loss.mean()
+
+            batch_loss.backward()
+            optimizer.step()
+            LRsched.step()
+
+            if rank == 0:
+                batch_records = np.column_stack(
+                    [
+                        np.full(len(per_sample_loss), epochIDX),
+                        np.full(len(per_sample_loss), trainbatch_ID),
+                        per_sample_loss.detach().cpu().numpy().flatten(),
+                    ]
+                )
+                np.savetxt(train_rcrd_file, batch_records, fmt="%d, %d, %.8f")
+
+    if epochIDX % train_per_val == 0:
+        if rank == 0:
+            print("Validating...", epochIDX, flush=True)
+
+        val_rcrd_filename = val_rcrd_filename.replace(
+            "<epochIDX>",
+            f"{epochIDX:04d}",
+        )
+
+        model.eval()
+
+        with (
+            open(val_rcrd_filename, "a") if rank == 0 else nullcontext()
+        ) as val_rcrd_file:
+
+            with torch.no_grad():
+                for valbatch_ID, data in enumerate(validation_data):
+                    if valbatch_ID >= num_val_batches:
+                        break
+
+                    x, target, Dt = data
+
+                    x = x.to(device, non_blocking=True)
+                    target = target.to(device, non_blocking=True)
+                    Dt = Dt.to(torch.float32).to(device, non_blocking=True)
+
+                    in_vars = torch.arange(8, device=device)
+                    out_vars = torch.arange(8, device=device)
+
+                    pred = model(x, in_vars, out_vars, Dt)
+
+                    if pred.shape != target.shape:
+                        raise RuntimeError(
+                            f"Validation prediction and target shapes do not match: "
+                            f"pred.shape={pred.shape}, target.shape={target.shape}"
+                        )
+
+                    loss = loss_fn(pred, target)
+
+                    if loss.ndim == 1:
+                        per_sample_loss = loss
+                    else:
+                        per_sample_loss = loss.mean(dim=tuple(range(1, loss.ndim)))
+
+                    if rank == 0:
+                        batch_records = np.column_stack(
+                            [
+                                np.full(len(per_sample_loss), epochIDX),
+                                np.full(len(per_sample_loss), valbatch_ID),
+                                per_sample_loss.detach().cpu().numpy().flatten(),
+                            ]
+                        )
+                        np.savetxt(val_rcrd_file, batch_records, fmt="%d, %d, %.8f")
+
+
 def train_DDP_scalar_temporal_loderunner_epoch(
     training_data: torch.utils.data.DataLoader,
     validation_data: torch.utils.data.DataLoader,
@@ -369,7 +522,7 @@ def train_DDP_scalar_temporal_loderunner_epoch(
             if trainbatch_ID >= num_train_batches:
                 break
 
-            truth, pred, train_losses = train_DDP_scalar_temporal_loderunner_datastep(
+            truth, pred, train_losses = train_DDP_scalar_temporal_loderunner_datastep_gri(
                 traindata,
                 model,
                 optimizer,
@@ -404,13 +557,14 @@ def train_DDP_scalar_temporal_loderunner_epoch(
                 if valbatch_ID >= num_val_batches:
                     break
 
-                truth, pred, val_losses = eval_DDP_scalar_temporal_loderunner_datastep(
-                    valdata,
-                    model,
-                    loss_fn,
-                    device,
-                    rank,
-                    world_size,
+
+                truth, pred, val_losses = eval_DDP_scalar_temporal_loderunner_datastep_gri(
+                    data=data,
+                    model=model,
+                    loss_fn=loss_fn,
+                    device=device,
+                    rank=rank,
+                    world_size=world_size,
                 )
 
                 if rank == 0:

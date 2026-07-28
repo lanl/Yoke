@@ -10,6 +10,182 @@ import torch.distributed as dist
 import random
 
 
+def train_DDP_scalar_temporal_loderunner_datastep_gri(
+    data: tuple,
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    loss_fn: torch.nn.Module,
+    device: torch.device,
+    rank: int,
+    world_size: int,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """
+    DDP training datastep for scalar temporal LodeRunner wrapper.
+
+    Expected data:
+        x:      [B, input_dim]
+                for GRI with context_len=5, input_dim = 20
+
+        target: [B, 3]
+                normalized [delta_g, delta_r, delta_i]
+
+        Dt:     [B]
+
+    Expected model output:
+        pred:   [B, 3]
+    """
+
+    model.train()
+
+    x, target, Dt = data
+
+    x = x.to(device, non_blocking=True)
+    target = target.to(device, non_blocking=True)
+    Dt = Dt.to(torch.float32).to(device, non_blocking=True)
+
+    # Kept for LodeRunner-style API compatibility.
+    # The scalar wrapper can ignore these or internally override them.
+    in_vars = torch.arange(8, device=device)
+    out_vars = torch.arange(8, device=device)
+
+    pred = model(x, in_vars, out_vars, Dt)
+
+    if pred.shape != target.shape:
+        raise RuntimeError(
+            f"Prediction and target shapes do not match: "
+            f"pred.shape={pred.shape}, target.shape={target.shape}"
+        )
+
+    loss = loss_fn(pred, target)
+
+    # For HuberLoss/MSELoss with reduction='none':
+    # loss.shape == [B, 3]
+    #
+    # Reduce over output channels only, leaving one scalar loss per sample.
+    if loss.ndim == 1:
+        per_sample_loss = loss
+    else:
+        per_sample_loss = loss.mean(dim=tuple(range(1, loss.ndim)))
+
+    optimizer.zero_grad(set_to_none=True)
+    per_sample_loss.mean().backward()
+    optimizer.step()
+
+    # Do not all_gather here. DDP already synchronizes gradients.
+    # Returning local-rank losses avoids the all_gather hangs you saw before.
+    return target, pred, per_sample_loss.detach()
+
+
+def eval_DDP_scalar_temporal_loderunner_datastep_gri(
+    data,
+    model,
+    loss_fn,
+    device,
+    rank,
+    world_size,
+):
+    """
+    Evaluation datastep for ScalarTemporalConditionedLodeRunner.
+
+    Expected dataset output:
+        x:      [B, input_dim]
+                e.g. [B, 20] for context_len=5 with g/r/i + relative times
+
+        target: [B, 3]
+                normalized [delta_g, delta_r, delta_i]
+
+        Dt:     [B]
+
+    Expected model output:
+        pred:   [B, 3]
+    """
+
+    model.eval()
+
+    x, target, Dt = data
+
+    x = x.to(device, non_blocking=True)
+    target = target.to(device, non_blocking=True)
+    Dt = Dt.to(torch.float32).to(device, non_blocking=True)
+
+    # Kept for compatibility with the LodeRunner-style model call.
+    # The scalar wrapper internally uses 8 backbone channels.
+    in_vars = torch.arange(8, device=device)
+    out_vars = torch.arange(8, device=device)
+
+    with torch.no_grad():
+        pred = model(x, in_vars, out_vars, Dt)
+
+    if pred.shape != target.shape:
+        raise RuntimeError(
+            "Prediction and target shapes do not match in eval datastep: "
+            f"pred.shape={pred.shape}, target.shape={target.shape}"
+        )
+
+    loss = loss_fn(pred, target)
+
+    # For HuberLoss/MSELoss with reduction='none':
+    #   loss.shape == [B, 3]
+    #
+    # Reduce over output bands, leaving one scalar loss per sample.
+    if loss.ndim == 1:
+        per_sample_loss = loss
+    else:
+        per_sample_loss = loss.mean(dim=tuple(range(1, loss.ndim)))
+
+    return target, pred, per_sample_loss.detach()
+
+
+def eval_DDP_scalar_temporal_loderunner_datastep(
+    data: tuple,
+    model: torch.nn.Module,
+    loss_fn: torch.nn.Module,
+    device: torch.device,
+    rank: int,
+    world_size: int,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """
+    DDP evaluation datastep for scalar temporal LodeRunner wrapper.
+
+    Expected data:
+        x:      [B, input_dim]
+        target: [B, 3]
+        Dt:     [B]
+
+    Expected model output:
+        pred:   [B, 3]
+    """
+
+    model.eval()
+
+    x, target, Dt = data
+
+    x = x.to(device, non_blocking=True)
+    target = target.to(device, non_blocking=True)
+    Dt = Dt.to(torch.float32).to(device, non_blocking=True)
+
+    in_vars = torch.arange(8, device=device)
+    out_vars = torch.arange(8, device=device)
+
+    with torch.no_grad():
+        pred = model(x, in_vars, out_vars, Dt)
+
+    if pred.shape != target.shape:
+        raise RuntimeError(
+            f"Validation prediction and target shapes do not match: "
+            f"pred.shape={pred.shape}, target.shape={target.shape}"
+        )
+
+    loss = loss_fn(pred, target)
+
+    if loss.ndim == 1:
+        per_sample_loss = loss
+    else:
+        per_sample_loss = loss.mean(dim=tuple(range(1, loss.ndim)))
+
+    return target, pred, per_sample_loss.detach()
+
+
 def train_loderunner_datastep(
     data: tuple,
     model: torch.nn.Module,
