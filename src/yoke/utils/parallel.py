@@ -5,8 +5,53 @@ training utilities.
 
 """
 
+import os
+
 import torch
 import torch.nn as nn
+import torch.distributed as dist
+
+
+def setup_distributed() -> tuple[int, int, int, torch.device]:
+    """Initialize the DDP process group from Slurm environment variables.
+
+    Relies on the Slurm-provided variables SLURM_PROCID, SLURM_NTASKS, and
+    SLURM_LOCALID, along with MASTER_ADDR and MASTER_PORT, to set up an NCCL
+    process group and select this process's GPU.
+
+    Returns:
+        rank (int): Global rank of this process.
+        world_size (int): Total number of processes.
+        local_rank (int): Local rank (GPU index) on this node.
+        device (torch.device): CUDA device for this process.
+    """
+    # ----- 1) Basic setup & environment variables -----
+    # Rely on Slurm variables: SLURM_PROCID, SLURM_NTASKS, SLURM_LOCALID, etc.
+    rank = int(os.environ["SLURM_PROCID"])  # global rank
+    world_size = int(os.environ["SLURM_NTASKS"])  # total number of processes
+    local_rank = int(os.environ["SLURM_LOCALID"])  # local rank (GPU index on node)
+
+    master_addr = os.environ["MASTER_ADDR"]
+    master_port = os.environ["MASTER_PORT"]
+
+    # ----- 2) Set the current GPU device for this process -----
+    torch.cuda.set_device(local_rank)
+    device = torch.device(f"cuda:{local_rank}")
+
+    # ----- 3) Initialize the process group -----
+    dist.init_process_group(
+        backend="nccl",
+        init_method=f"tcp://{master_addr}:{master_port}",
+        world_size=world_size,
+        rank=rank,
+    )
+
+    return rank, world_size, local_rank, device
+
+
+def cleanup_distributed() -> None:
+    """Destroy the DDP process group."""
+    dist.destroy_process_group()
 
 
 # Custom nn.DataParallel class to handle input to LodeRunner that should not be
