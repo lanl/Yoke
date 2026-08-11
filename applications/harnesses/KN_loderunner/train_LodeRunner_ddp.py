@@ -10,14 +10,15 @@ from torch.optim.lr_scheduler import LambdaLR
 
 from yoke.models.vit.swin.bomberman import (
     LodeRunner,
-    ScalarTemporalConditionedLodeRunner_gri,
+    ScalarTemporalConditionedLodeRunner_9band,
 )
 from yoke.datasets.kilonova_dataset import (
-    Kilonova_lc_scalar_context_DataSet_gri,
+    Kilonova_lc_scalar_context_DataSet_9band,
+    NINE_BAND_KEYS,
     load_or_compute_band_normalization,
 )
 from yoke.utils.training.epoch.loderunner import (
-    train_DDP_scalar_temporal_loderunner_epoch_gri,
+    train_DDP_scalar_temporal_loderunner_epoch_9band,
 )
 from yoke.utils.restart import continuation_setup
 from yoke.utils.dataload import make_distributed_dataloader
@@ -140,6 +141,11 @@ def main(args, rank, world_size, local_rank, device):
     CONTEXT_LEN = 5 #3
     HIDDEN_CHANNELS = 64
 
+    # Nine-band merged event-stream setup (3 ZTF + 6 Rubin/LSST bands).
+    BAND_KEYS = NINE_BAND_KEYS
+    VALUE_COL = 1
+    N_BANDS = len(BAND_KEYS)
+
     optimizer_kwargs = {
         "lr": 1e-4,# 1e-4, #1e-5
         "betas": (0.9, 0.999),
@@ -208,11 +214,10 @@ def main(args, rank, world_size, local_rank, device):
 
             backbone = model
 
-            model = ScalarTemporalConditionedLodeRunner_gri(
+            model = ScalarTemporalConditionedLodeRunner_9band(
                 backbone=backbone,
                 context_len=CONTEXT_LEN,
-                n_input_channels=3,
-                n_output_channels=3,
+                n_bands=N_BANDS,
                 image_size=model_args["image_size"],
                 backbone_channels=8,
                 hidden=HIDDEN_CHANNELS,
@@ -316,11 +321,7 @@ def main(args, rank, world_size, local_rank, device):
     )
     '''
 
-    BAND_KEYS = ("arr_ztfg", "arr_ztfr", "arr_ztfi")
-    VALUE_COL = 1
-    N_BANDS = len(BAND_KEYS)
-
-    norm_stats_path = "kilonova_gri_norm_stats.npz"
+    norm_stats_path = "kilonova_9band_norm_stats.npz"
 
     if rank == 0:
         band_means, band_stds = load_or_compute_band_normalization(
@@ -342,7 +343,7 @@ def main(args, rank, world_size, local_rank, device):
         print("band_means:", band_means)
         print("band_stds:", band_stds)
 
-    train_dataset = Kilonova_lc_scalar_context_DataSet_gri(
+    train_dataset = Kilonova_lc_scalar_context_DataSet_9band(
         context_len=CONTEXT_LEN,
         band_keys=BAND_KEYS,
         value_col=VALUE_COL,
@@ -350,7 +351,7 @@ def main(args, rank, world_size, local_rank, device):
         stds=band_stds,
     )
 
-    val_dataset = Kilonova_lc_scalar_context_DataSet_gri(
+    val_dataset = Kilonova_lc_scalar_context_DataSet_9band(
         context_len=CONTEXT_LEN,
         band_keys=BAND_KEYS,
         value_col=VALUE_COL,
@@ -403,7 +404,7 @@ def main(args, rank, world_size, local_rank, device):
 
 
         #train_DDP_loderunner_epoch(
-        train_DDP_scalar_temporal_loderunner_epoch_gri(
+        train_DDP_scalar_temporal_loderunner_epoch_9band(
             training_data=train_dataloader,
             validation_data=val_dataloader,
             num_train_batches=train_batches,
@@ -451,19 +452,19 @@ def main(args, rank, world_size, local_rank, device):
             torch.save(
                 {
                     "epoch": epochIDX,
-                    "model_class": "ScalarTemporalConditionedLodeRunner_gri",
+                    "model_class": "ScalarTemporalConditionedLodeRunner_9band",
                     "backbone_class": "LodeRunner",
                     "model_args": model_args,
                     "model_state_dict": model.module.state_dict(),
                     "optimizer_state_dict": optimizer.state_dict(),
                     "noise_scale": noise_scale,
-                    "predicts_delta": True,
-                    "target_type": "delta_gri",
+                    "predicts_delta": False,
+                    "target_type": "value_9band",
                     "context_len": CONTEXT_LEN,
-                    "n_input_channels": 3,
-                    "n_output_channels": 3,
+                    "n_bands": N_BANDS,
+                    "band_keys": list(BAND_KEYS),
                     "backbone_channels": 8,
-                    "hidden": 64,
+                    "hidden": HIDDEN_CHANNELS,
                 },
                 new_chkpt_path,
             )

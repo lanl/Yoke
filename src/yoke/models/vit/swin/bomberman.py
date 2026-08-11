@@ -451,6 +451,124 @@ class ScalarTemporalConditionedLodeRunner_gri(nn.Module):
         return pred
 
 
+class ScalarTemporalConditionedLodeRunner_9band(nn.Module):
+    """Scalar-temporal wrapper for sparse, irregular 9-band light curves.
+
+    Like ``ScalarTemporalConditionedLodeRunner_gri`` this maps a scalar temporal
+    context into the pseudo-channel image expected by a pretrained LodeRunner
+    backbone and collapses the backbone output back to per-band predictions.
+    Unlike the g/r/i wrapper, the context is a merged event stream where each
+    event carries its own band identity (via a one-hot encoding), so the model
+    handles sparse and irregular sampling with missing bands. The output head
+    emits a prediction for every band at the requested lead time, which supports
+    forecasting all observatories' future observations from real data.
+
+    Args:
+        backbone (nn.Module): Pretrained LodeRunner backbone.
+        context_len (int): Number of context events.
+        n_bands (int): Number of bands (input band identities and output
+            predictions), e.g. 9.
+        image_size (tuple): Spatial size (H, W) fed to the backbone.
+        backbone_channels (int): Number of pseudo-channels the backbone expects.
+        hidden (int): Hidden width of the conditioner/output-head MLPs.
+    """
+
+    def __init__(
+        self,
+        backbone: nn.Module,
+        context_len: int = 5,
+        n_bands: int = 9,
+        image_size: tuple[int, int] = (1120, 400),
+        backbone_channels: int = 8,
+        hidden: int = 64,
+    ) -> None:
+        """Initialize conditioner and output-head around the backbone."""
+        super().__init__()
+
+        self.backbone = backbone
+        self.context_len = context_len
+        self.n_bands = n_bands
+        self.image_size = image_size
+        self.backbone_channels = backbone_channels
+
+        # Dataset x layout, flattened per event:
+        #   [value, rel_t, one_hot_band(n_bands)] * context_len
+        #
+        # input_dim = context_len * (2 + n_bands)
+        input_dim = context_len * (2 + n_bands)
+
+        # Maps the scalar temporal event stream into the pseudo-channels
+        # expected by the pretrained LodeRunner backbone.
+        self.conditioner = nn.Sequential(
+            nn.Linear(input_dim, hidden),
+            nn.GELU(),
+            nn.Linear(hidden, hidden),
+            nn.GELU(),
+            nn.Linear(hidden, backbone_channels),
+        )
+
+        # Maps the backbone-channel summary back to one prediction per band.
+        self.output_head = nn.Sequential(
+            nn.Linear(backbone_channels, hidden),
+            nn.GELU(),
+            nn.Linear(hidden, n_bands),
+        )
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        in_vars: torch.Tensor,
+        out_vars: torch.Tensor,
+        Dt: torch.Tensor,
+    ) -> torch.Tensor:
+        """Forward pass.
+
+        Args:
+            x (torch.Tensor): Merged event-stream context of shape
+                [B, context_len * (2 + n_bands)].
+            in_vars (torch.Tensor): Kept for LodeRunner API compatibility.
+            out_vars (torch.Tensor): Kept for LodeRunner API compatibility.
+            Dt (torch.Tensor): Lead-time tensor passed to the backbone.
+
+        Returns:
+            pred (torch.Tensor): Predictions of shape [B, n_bands].
+        """
+        B = x.shape[0]
+        H, W = self.image_size
+
+        channel_vals = self.conditioner(x)  # [B, backbone_channels]
+
+        pseudo_img = channel_vals.view(
+            B,
+            self.backbone_channels,
+            1,
+            1,
+        ).expand(
+            B,
+            self.backbone_channels,
+            H,
+            W,
+        )
+
+        backbone_in_vars = torch.arange(self.backbone_channels, device=x.device)
+        backbone_out_vars = torch.arange(self.backbone_channels, device=x.device)
+
+        pred_img = self.backbone(
+            pseudo_img,
+            backbone_in_vars,
+            backbone_out_vars,
+            Dt,
+        )  # [B, backbone_channels, H, W]
+
+        # Collapse spatial dimensions to backbone-channel summaries.
+        pred_channel_vals = pred_img.mean(dim=(2, 3))  # [B, backbone_channels]
+
+        # Convert backbone channels to per-band predictions.
+        pred = self.output_head(pred_channel_vals)  # [B, n_bands]
+
+        return pred
+
+
 if __name__ == "__main__":
     from yoke.utils.parameters import count_torch_params
 

@@ -132,6 +132,109 @@ def eval_DDP_scalar_temporal_loderunner_datastep_gri(
     return target, pred, per_sample_loss.detach()
 
 
+def train_DDP_scalar_temporal_loderunner_datastep_9band(
+    data: tuple,
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    loss_fn: torch.nn.Module,
+    device: torch.device,
+    rank: int,
+    world_size: int,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """DDP training datastep for the masked 9-band scalar temporal wrapper.
+
+    The model predicts all bands, but each sample only observes one future band,
+    so the loss is masked to the observed band. Averaging over the mask gives one
+    scalar loss per sample.
+
+    Expected data:
+        x:      [B, context_len * (2 + n_bands)]
+        target: [B, n_bands]   normalized value, only observed band meaningful
+        mask:   [B, n_bands]   1.0 for observed band, 0.0 elsewhere
+        Dt:     [B]
+
+    Expected model output:
+        pred:   [B, n_bands]
+    """
+    model.train()
+
+    x, target, mask, Dt = data
+
+    x = x.to(device, non_blocking=True)
+    target = target.to(device, non_blocking=True)
+    mask = mask.to(device, non_blocking=True)
+    Dt = Dt.to(torch.float32).to(device, non_blocking=True)
+
+    # Kept for LodeRunner-style API compatibility.
+    in_vars = torch.arange(8, device=device)
+    out_vars = torch.arange(8, device=device)
+
+    pred = model(x, in_vars, out_vars, Dt)
+
+    if pred.shape != target.shape:
+        raise RuntimeError(
+            f"Prediction and target shapes do not match: "
+            f"pred.shape={pred.shape}, target.shape={target.shape}"
+        )
+
+    # loss_fn uses reduction='none' -> [B, n_bands]. Mask to the observed band
+    # and average per sample over the observed entries.
+    loss = loss_fn(pred, target) * mask
+    per_sample_loss = loss.sum(dim=1) / (mask.sum(dim=1) + 1e-8)
+
+    optimizer.zero_grad(set_to_none=True)
+    per_sample_loss.mean().backward()
+    optimizer.step()
+
+    return target, pred, per_sample_loss.detach()
+
+
+def eval_DDP_scalar_temporal_loderunner_datastep_9band(
+    data,
+    model,
+    loss_fn,
+    device,
+    rank,
+    world_size,
+):
+    """Evaluation datastep for the masked 9-band scalar temporal wrapper.
+
+    Expected data:
+        x:      [B, context_len * (2 + n_bands)]
+        target: [B, n_bands]   normalized value, only observed band meaningful
+        mask:   [B, n_bands]   1.0 for observed band, 0.0 elsewhere
+        Dt:     [B]
+
+    Expected model output:
+        pred:   [B, n_bands]
+    """
+    model.eval()
+
+    x, target, mask, Dt = data
+
+    x = x.to(device, non_blocking=True)
+    target = target.to(device, non_blocking=True)
+    mask = mask.to(device, non_blocking=True)
+    Dt = Dt.to(torch.float32).to(device, non_blocking=True)
+
+    in_vars = torch.arange(8, device=device)
+    out_vars = torch.arange(8, device=device)
+
+    with torch.no_grad():
+        pred = model(x, in_vars, out_vars, Dt)
+
+    if pred.shape != target.shape:
+        raise RuntimeError(
+            "Prediction and target shapes do not match in eval datastep: "
+            f"pred.shape={pred.shape}, target.shape={target.shape}"
+        )
+
+    loss = loss_fn(pred, target) * mask
+    per_sample_loss = loss.sum(dim=1) / (mask.sum(dim=1) + 1e-8)
+
+    return target, pred, per_sample_loss.detach()
+
+
 ####################################
 # Evaluating on a Datastep
 ####################################

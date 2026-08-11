@@ -481,6 +481,148 @@ def train_DDP_scalar_temporal_loderunner_epoch_gri(
                         np.savetxt(val_rcrd_file, batch_records, fmt="%d, %d, %.8f")
 
 
+def train_DDP_scalar_temporal_loderunner_epoch_9band(
+    training_data: torch.utils.data.DataLoader,
+    validation_data: torch.utils.data.DataLoader,
+    num_train_batches: int,
+    num_val_batches: int,
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    loss_fn: torch.nn.Module,
+    LRsched: torch.optim.lr_scheduler._LRScheduler,
+    epochIDX: int,
+    train_per_val: int,
+    train_rcrd_filename: str,
+    val_rcrd_filename: str,
+    device: torch.device,
+    rank: int,
+    world_size: int,
+) -> None:
+    """DDP epoch function for the masked 9-band scalar temporal LodeRunner.
+
+    The dataloader yields a merged event-stream context plus a masked, per-band
+    target. The model predicts all bands; the loss is masked to the single band
+    observed at the target event.
+
+    Expected dataset output:
+        x:      [B, context_len * (2 + n_bands)]
+        target: [B, n_bands]   normalized value, only observed band meaningful
+        mask:   [B, n_bands]   1.0 for observed band, 0.0 elsewhere
+        Dt:     [B]
+
+    Expected model output:
+        pred:   [B, n_bands]
+    """
+    train_rcrd_filename = train_rcrd_filename.replace(
+        "<epochIDX>",
+        f"{epochIDX:04d}",
+    )
+
+    model.train()
+
+    with (
+        open(train_rcrd_filename, "a") if rank == 0 else nullcontext()
+    ) as train_rcrd_file:
+
+        for trainbatch_ID, data in enumerate(training_data):
+            if trainbatch_ID >= num_train_batches:
+                break
+
+            x, target, mask, Dt = data
+
+            x = x.to(device, non_blocking=True)
+            target = target.to(device, non_blocking=True)
+            mask = mask.to(device, non_blocking=True)
+            Dt = Dt.to(torch.float32).to(device, non_blocking=True)
+
+            optimizer.zero_grad(set_to_none=True)
+
+            # Kept for API compatibility with LodeRunner-style wrappers.
+            in_vars = torch.arange(8, device=device)
+            out_vars = torch.arange(8, device=device)
+
+            pred = model(x, in_vars, out_vars, Dt)
+
+            if pred.shape != target.shape:
+                raise RuntimeError(
+                    f"Prediction and target shapes do not match: "
+                    f"pred.shape={pred.shape}, target.shape={target.shape}"
+                )
+
+            # loss_fn uses reduction='none' -> [B, n_bands]. Mask to the
+            # observed band and average per sample over observed entries.
+            loss = loss_fn(pred, target) * mask
+            per_sample_loss = loss.sum(dim=1) / (mask.sum(dim=1) + 1e-8)
+
+            batch_loss = per_sample_loss.mean()
+
+            batch_loss.backward()
+            optimizer.step()
+            LRsched.step()
+
+            if rank == 0:
+                batch_records = np.column_stack(
+                    [
+                        np.full(len(per_sample_loss), epochIDX),
+                        np.full(len(per_sample_loss), trainbatch_ID),
+                        per_sample_loss.detach().cpu().numpy().flatten(),
+                    ]
+                )
+                np.savetxt(train_rcrd_file, batch_records, fmt="%d, %d, %.8f")
+
+    if epochIDX % train_per_val == 0:
+        if rank == 0:
+            print("Validating...", epochIDX, flush=True)
+
+        val_rcrd_filename = val_rcrd_filename.replace(
+            "<epochIDX>",
+            f"{epochIDX:04d}",
+        )
+
+        model.eval()
+
+        with (
+            open(val_rcrd_filename, "a") if rank == 0 else nullcontext()
+        ) as val_rcrd_file:
+
+            with torch.no_grad():
+                for valbatch_ID, data in enumerate(validation_data):
+                    if valbatch_ID >= num_val_batches:
+                        break
+
+                    x, target, mask, Dt = data
+
+                    x = x.to(device, non_blocking=True)
+                    target = target.to(device, non_blocking=True)
+                    mask = mask.to(device, non_blocking=True)
+                    Dt = Dt.to(torch.float32).to(device, non_blocking=True)
+
+                    in_vars = torch.arange(8, device=device)
+                    out_vars = torch.arange(8, device=device)
+
+                    pred = model(x, in_vars, out_vars, Dt)
+
+                    if pred.shape != target.shape:
+                        raise RuntimeError(
+                            f"Validation prediction and target shapes do not "
+                            f"match: pred.shape={pred.shape}, "
+                            f"target.shape={target.shape}"
+                        )
+
+                    loss = loss_fn(pred, target) * mask
+                    per_sample_loss = loss.sum(dim=1) / (mask.sum(dim=1) + 1e-8)
+
+                    if rank == 0:
+                        batch_records = np.column_stack(
+                            [
+                                np.full(len(per_sample_loss), epochIDX),
+                                np.full(len(per_sample_loss), valbatch_ID),
+                                per_sample_loss.detach().cpu().numpy().flatten(),
+                            ]
+                        )
+                        np.savetxt(val_rcrd_file, batch_records, fmt="%d, %d, %.8f")
+
+
 def train_DDP_loderunner_epoch(
     training_data: torch.utils.data.DataLoader,
     validation_data: torch.utils.data.DataLoader,
