@@ -241,6 +241,19 @@ class LodeRunnerViT(nn.Module):
         The backbone embedding dimension is fixed by ``num_attention_heads *
         attention_head_dim``; this product must equal ``embed_dim``.
 
+    .. note::
+        **Scaling.** Because the backbone is isotropic (constant token count and
+        embedding dimension through all blocks), scaling is simpler than the
+        SWIN-V2 U-Net. Grow *depth* by increasing ``num_layers`` (each unit adds
+        one transformer block) and grow *width* by increasing ``embed_dim``,
+        keeping ``embed_dim == num_attention_heads * attention_head_dim``.
+        Parameter count is roughly linear in ``num_layers`` and quadratic in
+        ``embed_dim``. This approximately mirrors SWIN-V2 LodeRunner scaling,
+        where ``block_structure`` played the role of ``num_layers`` (per-stage
+        depth) and ``embed_dim``/``emb_factor`` played the role of ``embed_dim``
+        (width); the ViT path collapses the per-stage structure into a single
+        uniform depth so there are no stage counts or merge scales to balance.
+
     Args:
         default_vars (list[str]): List of default variables to be used for training.
         image_size (tuple[int, int]): Height and width, in pixels, of input image.
