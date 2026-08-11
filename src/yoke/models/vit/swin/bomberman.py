@@ -18,6 +18,7 @@ from torch.optim.lr_scheduler import _LRScheduler
 from lightning.pytorch import LightningModule
 
 from yoke.models.vit.swin.unet import SwinUnetBackbone
+from yoke.models.vit.plain_vit import PlainViTBackbone
 from yoke.models.vit.patch_embed import ParallelVarPatchEmbed
 from yoke.models.vit.patch_manipulation import Unpatchify
 from yoke.models.vit.aggregate_variables import AggVars
@@ -204,6 +205,187 @@ class LodeRunner(nn.Module):
 
         # Select only entries corresponding to out_vars for loss
         # out_var_ids = self.var_embed_layer.get_var_ids(tuple(out_vars), x.device)
+        preds = x[:, out_vars]
+
+        return preds
+
+
+class LodeRunnerViT(nn.Module):
+    """LodeRunner neural network with a plain-ViT backbone.
+
+    Variant of :class:`LodeRunner` that replaces the SWIN-V2 U-Net backbone
+    with an isotropic plain Vision-Transformer backbone
+    (:class:`~yoke.models.vit.plain_vit.PlainViTBackbone`). The architecture of
+    the transformer backbone follows the UMich WAMRViT regular-grid plain-ViT
+    path: continuous 2-D rotary positional encoding from patch centers, per-head
+    QK RMSNorm, global attention, and parallel SwiGLU-MLP blocks.
+
+    The input/output interface and the ``forward`` signature are identical to
+    :class:`LodeRunner`, so this model is a drop-in replacement in training and
+    rollout loops.
+
+    The remaining LodeRunner-specific machinery is reused unchanged:
+
+    - :class:`ParallelVarPatchEmbed` for per-variable patch embedding,
+    - :class:`VarEmbed` for learnable variable tags,
+    - :class:`AggVars` for attention-based variable aggregation,
+    - :class:`TimeEmbed` for lead-time encoding,
+    - a linear head + :class:`Unpatchify` for image reconstruction.
+
+    .. note::
+        The additive 2-D sincos ``PosEmbed`` used by :class:`LodeRunner` is
+        intentionally omitted here: spatial position is instead injected inside
+        attention through RoPE built from the patch centers.
+
+    .. note::
+        The backbone embedding dimension is fixed by ``num_attention_heads *
+        attention_head_dim``; this product must equal ``embed_dim``.
+
+    Args:
+        default_vars (list[str]): List of default variables to be used for training.
+        image_size (tuple[int, int]): Height and width, in pixels, of input image.
+        patch_size (tuple[int, int]): Height and width pixel dimensions of patch in
+                                      initial embedding.
+        embed_dim (int): Token embedding dimension. Must equal
+                         ``num_attention_heads * attention_head_dim``.
+        num_heads (int): Number of heads used in variable aggregation.
+        num_attention_heads (int): Number of attention heads in each ViT block.
+        attention_head_dim (int): Feature dimension per ViT attention head.
+        num_layers (int): Number of transformer blocks in the backbone.
+        mlp_ratio (float): MLP hidden width as a multiple of the embedding dim.
+        rope_theta (float): Base period for the rotary frequency progression.
+        rope_scale (tuple[float, float]): Per-axis coordinate scaling for the
+                                          ``(x, y)`` patch centers.
+        concat_mlp (bool): Concatenate-then-project (True) or sum (False) fusion
+                           of the attention and MLP branches.
+        noise_scale (float): Relative magnitude of input noise injection.
+        verbose (bool): When TRUE, backbone dimensions are printed during
+                        initialization.
+
+    """
+
+    def __init__(
+        self,
+        default_vars: list[str],
+        image_size: Iterable[int, int] = (1120, 800),
+        patch_size: Iterable[int, int] = (10, 10),
+        embed_dim: int = 128,
+        num_heads: int = 8,
+        num_attention_heads: int = 8,
+        attention_head_dim: int = 16,
+        num_layers: int = 6,
+        mlp_ratio: float = 4.0,
+        rope_theta: float = 10000.0,
+        rope_scale: Iterable[float, float] = (1.0, 1.0),
+        concat_mlp: bool = True,
+        noise_scale: float = 0.0,
+        verbose: bool = False,
+    ) -> None:
+        """Initialization for class."""
+        super().__init__()
+
+        self.default_vars = default_vars
+        self.max_vars = len(self.default_vars)
+        self.image_size = image_size
+        self.patch_size = patch_size
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        self.num_attention_heads = num_attention_heads
+        self.attention_head_dim = attention_head_dim
+        self.num_layers = num_layers
+        self.mlp_ratio = mlp_ratio
+        self.noise_scale = noise_scale
+
+        # The isotropic backbone fixes the embedding dimension.
+        assert embed_dim == num_attention_heads * attention_head_dim, (
+            "embed_dim must equal num_attention_heads * attention_head_dim for "
+            f"the isotropic ViT backbone; got embed_dim={embed_dim}, "
+            f"num_attention_heads={num_attention_heads}, "
+            f"attention_head_dim={attention_head_dim}."
+        )
+
+        # First embed the image as a sequence of tokenized patches. Each
+        # channel is embedded independently.
+        self.parallel_embed = ParallelVarPatchEmbed(
+            max_vars=self.max_vars,
+            img_size=self.image_size,
+            patch_size=self.patch_size,
+            embed_dim=self.embed_dim,
+            norm_layer=None,
+        )
+
+        # Encode tokens corresponding to each variable with a learnable tag.
+        self.var_embed_layer = VarEmbed(self.default_vars, self.embed_dim)
+
+        # Aggregate variable tokenizations using an attention mechanism.
+        self.agg_vars = AggVars(self.embed_dim, self.num_heads)
+
+        # NOTE: No additive PosEmbed here. Spatial position is injected inside
+        # the ViT attention via RoPE built from the patch centers.
+
+        # Encode temporal-offset information using a linear mapping.
+        self.temporal_encoding = TimeEmbed(self.embed_dim)
+
+        # Pass encoded patch tokens through the plain-ViT backbone.
+        self.backbone = PlainViTBackbone(
+            patch_grid_size=self.parallel_embed.grid_size,
+            num_attention_heads=self.num_attention_heads,
+            attention_head_dim=self.attention_head_dim,
+            num_layers=self.num_layers,
+            mlp_ratio=self.mlp_ratio,
+            rope_theta=rope_theta,
+            rope_scale=rope_scale,
+            concat_mlp=concat_mlp,
+            verbose=verbose,
+        )
+
+        # Linear embed the last dimension into V*p_h*p_w.
+        self.linear4unpatch = nn.Linear(
+            self.embed_dim, self.max_vars * self.patch_size[0] * self.patch_size[1]
+        )
+
+        # Unmap the tokenized embeddings to variables and images.
+        self.unpatch = Unpatchify(
+            total_num_vars=self.max_vars,
+            patch_grid_size=self.parallel_embed.grid_size,
+            patch_size=self.patch_size,
+        )
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        in_vars: torch.Tensor,
+        out_vars: torch.Tensor,
+        lead_times: torch.Tensor,
+    ) -> torch.Tensor:
+        """Forward method for LodeRunnerViT."""
+        # Noise injection:
+        l2_norm = torch.sqrt((x * x).sum(dim=(1, 2, 3), keepdim=True))
+        noise = torch.randn_like(x)
+        x = x + self.noise_scale * l2_norm * noise
+
+        # Embed input.
+        x = self.parallel_embed(x, in_vars)
+
+        # Encode variables.
+        x = self.var_embed_layer(x, in_vars)
+
+        # Aggregate variables.
+        x = self.agg_vars(x)
+
+        # Encode temporal information.
+        x = self.temporal_encoding(x, lead_times)
+
+        # Pass through the plain-ViT backbone (position via RoPE inside attn).
+        x = self.backbone(x)
+
+        # Use linear map to remap to correct variable and patchsize dimension.
+        x = self.linear4unpatch(x)
+
+        # Unpatchify back to original shape.
+        x = self.unpatch(x)
+
+        # Select only entries corresponding to out_vars for loss.
         preds = x[:, out_vars]
 
         return preds
@@ -462,6 +644,37 @@ if __name__ == "__main__":
         ).to(device)
         param_count = count_torch_params(lode_runner, trainable=True)
         print(f"\nLodeRunner-{size_name} parameters: {param_count:,}")
+
+    # Test LodeRunnerViT architecture
+    print("\n" + "=" * 60)
+    print("Testing LodeRunnerViT Architecture")
+    print("=" * 60)
+
+    vit_num_attention_heads = 8
+    vit_attention_head_dim = 16
+    vit_embed_dim = vit_num_attention_heads * vit_attention_head_dim  # 128
+
+    lode_runner_vit = LodeRunnerViT(
+        default_vars=default_vars,
+        image_size=image_size,
+        patch_size=patch_size,
+        embed_dim=vit_embed_dim,
+        num_heads=num_heads,
+        num_attention_heads=vit_num_attention_heads,
+        attention_head_dim=vit_attention_head_dim,
+        num_layers=6,
+        mlp_ratio=4.0,
+        concat_mlp=True,
+        verbose=True,
+    ).to(device)
+
+    vit_out = lode_runner_vit(x, x_vars, out_vars, lead_times)
+    print(f"\nLodeRunnerViT output shape: {vit_out.shape}")
+    print(f"LodeRunnerViT output has NaNs: {torch.isnan(vit_out).any()}")
+    print(
+        f"LodeRunnerViT parameters: "
+        f"{count_torch_params(lode_runner_vit, trainable=True):,}"
+    )
 
     print("\n" + "=" * 60)
     print("All tests completed successfully!")
