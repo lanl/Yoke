@@ -35,9 +35,6 @@ parser = cli.add_model_args(parser=parser)
 parser = cli.add_training_args(parser=parser)
 parser = cli.add_cosine_lr_scheduler_args(parser=parser)
 
-# We use the anchor-LR for the fixed learning rate parameter
-parser = cli.add_cosine_lr_scheduler_args(parser=parser)
-
 # DPOT‐style noise parameter
 parser.add_argument(
     "--noise_scale",
