@@ -15,11 +15,13 @@ the model is actually trained on.
 import argparse
 import csv
 import os
+import time
 
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+from torch.utils.data import DataLoader, Subset
 
 from yoke.models.vit.swin.bomberman import (
     LodeRunner,
@@ -66,6 +68,22 @@ def get_args():
     parser.add_argument("--ckpt", type=str, default=None)
 
     parser.add_argument("--N_imgs", type=int, default=50)
+
+    parser.add_argument(
+        "--batch_size",
+        type=int,
+        default=32,
+        help="Batch size for running the backbone over eval samples. Larger is "
+        "faster; the backbone forward dominates runtime.",
+    )
+    parser.add_argument(
+        "--max_samples",
+        type=int,
+        default=0,
+        help="Cap on the number of eval samples actually run through the model "
+        "(0 = all). The full 1120x400 backbone runs once per batch, so on CPU "
+        "this bounds runtime.",
+    )
 
     parser.add_argument("--outdir", type=str, default=None)
     parser.add_argument(
@@ -177,8 +195,15 @@ def make_eval_dataset(args, context_len):
     return dataset
 
 
-def collect_next_event_predictions(dataset, model, device, n_bands):
-    """Run the direct next-event prediction over every sample.
+def collect_next_event_predictions(
+    dataset, model, device, n_bands, batch_size=32, max_samples=0
+):
+    """Run the direct next-event prediction over the eval samples.
+
+    Samples are batched through the model so the (expensive) backbone forward
+    runs once per batch rather than once per sample. This is the difference
+    between the script appearing to hang and finishing quickly, especially on
+    CPU where a single 1120x400 backbone pass is not cheap.
 
     Returns a dict of per-band arrays of (pred, truth) for the observed band of
     each sample, plus the residuals.
@@ -186,25 +211,56 @@ def collect_next_event_predictions(dataset, model, device, n_bands):
     preds_by_band = [[] for _ in range(n_bands)]
     truths_by_band = [[] for _ in range(n_bands)]
 
-    with torch.no_grad():
-        for idx in range(len(dataset)):
-            x, target, mask, Dt = dataset[idx]
+    # Optionally cap the number of samples so runtime is bounded and visible.
+    if max_samples and max_samples < len(dataset):
+        eval_dataset = Subset(dataset, list(range(max_samples)))
+    else:
+        eval_dataset = dataset
 
-            x = torch.as_tensor(x, dtype=torch.float32, device=device).unsqueeze(0)
-            target = torch.as_tensor(target, dtype=torch.float32)
-            mask = torch.as_tensor(mask, dtype=torch.float32)
-            Dt = torch.as_tensor(Dt, dtype=torch.float32, device=device)
+    loader = DataLoader(
+        eval_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=0,
+    )
+
+    n_samples = len(eval_dataset)
+    n_batches = len(loader)
+    print(
+        f"Running {n_samples} samples through the model in {n_batches} "
+        f"batches of up to {batch_size}...",
+        flush=True,
+    )
+
+    start = time.time()
+    seen = 0
+
+    with torch.no_grad():
+        for batch_idx, (x, target, mask, Dt) in enumerate(loader):
+            x = x.to(device=device, dtype=torch.float32)
+            Dt = Dt.to(device=device, dtype=torch.float32)
 
             if Dt.ndim == 0:
                 Dt = Dt.unsqueeze(0)
 
             pred = model(x, in_vars=None, out_vars=None, Dt=Dt)
-            pred = pred.reshape(n_bands).detach().cpu()
+            pred = pred.detach().cpu()  # [B, n_bands]
 
-            band_idx = int(torch.argmax(mask).item())
+            # Observed band per sample (mask is one-hot over bands).
+            band_idx = torch.argmax(mask, dim=1)  # [B]
 
-            preds_by_band[band_idx].append(float(pred[band_idx]))
-            truths_by_band[band_idx].append(float(target[band_idx]))
+            for i in range(pred.shape[0]):
+                b = int(band_idx[i].item())
+                preds_by_band[b].append(float(pred[i, b]))
+                truths_by_band[b].append(float(target[i, b]))
+
+            seen += x.shape[0]
+            elapsed = time.time() - start
+            print(
+                f"  batch {batch_idx + 1}/{n_batches}  "
+                f"({seen}/{n_samples} samples, {elapsed:.1f}s)",
+                flush=True,
+            )
 
     results = []
     for band_idx in range(n_bands):
@@ -331,6 +387,8 @@ def main():
         model=model,
         device=device,
         n_bands=n_bands,
+        batch_size=args.batch_size,
+        max_samples=args.max_samples,
     )
 
     pred_truth_path = os.path.join(
