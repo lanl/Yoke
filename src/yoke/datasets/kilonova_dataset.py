@@ -137,8 +137,7 @@ def load_or_compute_band_normalization(
     # library function does not depend on a user-specific filesystem location.
     file_prefix_list = sorted(
         glob.glob(
-            "/net/sescratch1/atoivonen/data/KN_lightcurves/uniform_dataset_20000/lc_*.npz"
-        )
+        "/net/sescratch1/atoivonen/data/KN_lightcurves/rubin_ztf_10000_dataset/lc_*.npz")
     )
 
     if os.path.exists(stats_path):
