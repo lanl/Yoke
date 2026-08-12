@@ -1,33 +1,42 @@
-"""Next-event prediction diagnostics for the 9-band scalar temporal LodeRunner.
+"""Autoregressive rollout diagnostics for the 9-band scalar temporal LodeRunner.
 
-The 9-band model is trained on a merged event stream: each sample is a window of
-``context_len`` consecutive observations (across all bands) plus a lead time, and
-the model predicts the value in every band at that lead time. Each training
-target only observes one band, so diagnostics here compare the model's prediction
-for the observed target band against the truth, aggregated per band.
+This is the 9-band analogue of ``plot_pred_diagnostics_gri.py``. Rather than
+scoring a single next-event prediction, it produces an autoregressive forecast of
+the next several observations and feeds the model's own predictions back into the
+context, exactly like the g/r/i rollout.
 
-Unlike the g/r/i diagnostics this script does NOT roll out autoregressively.
-Autoregression is ill-defined for a mixed-band event stream (each future event
-belongs to a single band), so we evaluate the direct one-step-ahead prediction
-the model is actually trained on.
+The 9-band data is a merged, time-sorted event stream where each observation
+belongs to a single filter. The model, however, emits a prediction for ALL nine
+bands at any requested lead time. So a rollout proceeds as:
+
+  1. Start from a context window of ``context_len`` true events.
+  2. Predict all 9 bands at the next event's lead time Dt.
+  3. The next true event is in one filter; take the model's prediction for that
+     filter as the forecast value, append it (with the event's true time and
+     band) back into the context, and drop the oldest event.
+  4. Repeat for ``n_future_steps``, so later predictions are conditioned on
+     earlier predictions.
+
+Because the observation schedule (times + which filter is seen next) is taken
+from the truth while the values are fed back from the model, this measures how
+well the model forecasts future observations in each filter over a rollout.
 """
 
 import argparse
 import csv
 import os
-import time
 
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from torch.utils.data import DataLoader, Subset
 
 from yoke.models.vit.swin.bomberman import (
     LodeRunner,
     ScalarTemporalConditionedLodeRunner_9band,
 )
 from yoke.datasets.kilonova_dataset import (
+    EPS,
     NINE_BAND_KEYS,
     Kilonova_lc_scalar_context_DataSet_9band,
     load_or_compute_band_normalization,
@@ -42,6 +51,17 @@ plt.rcParams["figure.figsize"] = (7, 5)
 
 BAND_KEYS = NINE_BAND_KEYS
 BAND_NAMES = ("ztfg", "ztfr", "ztfi", "u", "g", "r", "i", "z", "y")
+BAND_COLORS = (
+    "#2A9D8F",  # ztfg
+    "#E63946",  # ztfr
+    "#F4A261",  # ztfi
+    "#457B9D",  # u
+    "#1B9E77",  # g
+    "#D62828",  # r
+    "#E9C46A",  # i
+    "#8338EC",  # z
+    "#264653",  # y
+)
 VALUE_COL = 1
 ERROR_COL = 2
 N_BANDS = len(BAND_KEYS)
@@ -58,8 +78,8 @@ def study_tag(study):
 def get_args():
     parser = argparse.ArgumentParser(
         description=(
-            "Next-event prediction diagnostics for scalar temporal LodeRunner "
-            "9-band runs."
+            "Autoregressive rollout diagnostics for the scalar temporal "
+            "LodeRunner 9-band model."
         )
     )
 
@@ -67,22 +87,23 @@ def get_args():
     parser.add_argument("--epoch", type=int, default=500)
     parser.add_argument("--ckpt", type=str, default=None)
 
-    parser.add_argument("--N_imgs", type=int, default=50)
-
     parser.add_argument(
-        "--batch_size",
+        "--N_imgs",
         type=int,
-        default=32,
-        help="Batch size for running the backbone over eval samples. Larger is "
-        "faster; the backbone forward dominates runtime.",
+        default=50,
+        help="Number of light-curve files to load into the eval dataset.",
     )
     parser.add_argument(
-        "--max_samples",
+        "--n_future_steps",
         type=int,
-        default=0,
-        help="Cap on the number of eval samples actually run through the model "
-        "(0 = all). The full 1120x400 backbone runs once per batch, so on CPU "
-        "this bounds runtime.",
+        default=15,
+        help="Number of future events to forecast autoregressively per series.",
+    )
+    parser.add_argument(
+        "--n_series",
+        type=int,
+        default=10,
+        help="Number of light curves to roll out.",
     )
 
     parser.add_argument("--outdir", type=str, default=None)
@@ -104,7 +125,7 @@ def resolve_paths(args):
         )
 
     if args.outdir is None:
-        args.outdir = f"runs/study_{tag}/next_event_diagnostics_9band"
+        args.outdir = f"runs/study_{tag}/autoreg_diagnostics_9band"
 
     return tag
 
@@ -192,176 +213,355 @@ def make_eval_dataset(args, context_len):
         stds=band_stds,
     )
 
-    return dataset
+    return dataset, np.asarray(band_means), np.asarray(band_stds)
 
 
-def collect_next_event_predictions(
-    dataset, model, device, n_bands, batch_size=32, max_samples=0
-):
-    """Run the direct next-event prediction over the eval samples.
+def build_context_input(win_v, win_t, win_b, context_len, n_bands, device):
+    """Build the flattened per-event context input for the model.
 
-    Samples are batched through the model so the (expensive) backbone forward
-    runs once per batch rather than once per sample. This is the difference
-    between the script appearing to hang and finishing quickly, especially on
-    CPU where a single 1120x400 backbone pass is not cheap.
-
-    Returns a dict of per-band arrays of (pred, truth) for the observed band of
-    each sample, plus the residuals.
+    Layout per event: [value, rel_t, one_hot_band(n_bands)], relative time
+    measured from the first event in the window, matching the dataset.
     """
-    preds_by_band = [[] for _ in range(n_bands)]
-    truths_by_band = [[] for _ in range(n_bands)]
+    win_v = np.asarray(win_v, dtype=np.float32)
+    win_t = np.asarray(win_t, dtype=np.float32)
+    win_b = np.asarray(win_b, dtype=np.int64)
 
-    # Optionally cap the number of samples so runtime is bounded and visible.
-    if max_samples and max_samples < len(dataset):
-        eval_dataset = Subset(dataset, list(range(max_samples)))
-    else:
-        eval_dataset = dataset
+    rel_t = (win_t - win_t[0]).astype(np.float32)
 
-    loader = DataLoader(
-        eval_dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=0,
+    band_onehot = np.zeros((context_len, n_bands), dtype=np.float32)
+    band_onehot[np.arange(context_len), win_b] = 1.0
+
+    per_event = np.concatenate(
+        [win_v[:, None], rel_t[:, None], band_onehot],
+        axis=1,
     )
 
-    n_samples = len(eval_dataset)
-    n_batches = len(loader)
-    print(
-        f"Running {n_samples} samples through the model in {n_batches} "
-        f"batches of up to {batch_size}...",
-        flush=True,
-    )
+    return torch.tensor(
+        per_event.reshape(-1),
+        dtype=torch.float32,
+        device=device,
+    ).unsqueeze(0)
 
-    start = time.time()
-    seen = 0
+
+def get_rollout_from_stream(
+    times,
+    values,
+    bands,
+    model,
+    device,
+    start_idx,
+    n_future_steps,
+    context_len,
+    n_bands,
+    means,
+    stds,
+):
+    """Autoregressively forecast the next events of one merged event stream.
+
+    Args:
+        times (np.ndarray): Relative event times for the file [N].
+        values (np.ndarray): Normalized event values [N].
+        bands (np.ndarray): Band index per event [N].
+        start_idx (int): Index of the first context event.
+        n_future_steps (int): Number of future events to forecast.
+        context_len (int): Context window length.
+        n_bands (int): Number of bands.
+        means, stds (np.ndarray): Per-band normalization for denormalizing.
+
+    Returns:
+        dict describing the rollout (context, per-step forecasts, per-band MSE).
+    """
+    t_ref = float(times[start_idx])
+
+    # Running context window; values are fed back from predictions as we roll
+    # out, while times and band identities follow the true observation schedule.
+    ctx_t = list(times[start_idx : start_idx + context_len].astype(np.float32))
+    ctx_v = list(values[start_idx : start_idx + context_len].astype(np.float32))
+    ctx_b = list(bands[start_idx : start_idx + context_len].astype(np.int64))
+
+    context = {
+        "t_rel": np.asarray(ctx_t, dtype=np.float32) - t_ref,
+        "v_norm": np.asarray(ctx_v, dtype=np.float32),
+        "band": np.asarray(ctx_b, dtype=np.int64),
+    }
+
+    steps = []
+    band_sq_err = [[] for _ in range(n_bands)]
 
     with torch.no_grad():
-        for batch_idx, (x, target, mask, Dt) in enumerate(loader):
-            x = x.to(device=device, dtype=torch.float32)
-            Dt = Dt.to(device=device, dtype=torch.float32)
+        for step in range(n_future_steps):
+            target_idx = start_idx + context_len + step
 
-            if Dt.ndim == 0:
-                Dt = Dt.unsqueeze(0)
+            if target_idx >= len(times):
+                break
 
-            pred = model(x, in_vars=None, out_vars=None, Dt=Dt)
-            pred = pred.detach().cpu()  # [B, n_bands]
+            win_v = ctx_v[-context_len:]
+            win_t = ctx_t[-context_len:]
+            win_b = ctx_b[-context_len:]
 
-            # Observed band per sample (mask is one-hot over bands).
-            band_idx = torch.argmax(mask, dim=1)  # [B]
-
-            for i in range(pred.shape[0]):
-                b = int(band_idx[i].item())
-                preds_by_band[b].append(float(pred[i, b]))
-                truths_by_band[b].append(float(target[i, b]))
-
-            seen += x.shape[0]
-            elapsed = time.time() - start
-            print(
-                f"  batch {batch_idx + 1}/{n_batches}  "
-                f"({seen}/{n_samples} samples, {elapsed:.1f}s)",
-                flush=True,
+            x = build_context_input(
+                win_v=win_v,
+                win_t=win_t,
+                win_b=win_b,
+                context_len=context_len,
+                n_bands=n_bands,
+                device=device,
             )
 
-    results = []
-    for band_idx in range(n_bands):
-        p = np.asarray(preds_by_band[band_idx], dtype=np.float32)
-        t = np.asarray(truths_by_band[band_idx], dtype=np.float32)
-        r = p - t
+            # Lead time from the last context event to the next true event.
+            Dt = torch.tensor(
+                [float(times[target_idx]) - win_t[-1]],
+                dtype=torch.float32,
+                device=device,
+            )
 
-        if len(r) > 0:
-            mse = float(np.mean(r**2))
-        else:
-            mse = np.nan
+            pred_all = model(x, in_vars=None, out_vars=None, Dt=Dt)
+            pred_all = pred_all.reshape(n_bands).detach().cpu().numpy()
 
-        results.append(
-            {
-                "band_idx": band_idx,
-                "band_name": BAND_NAMES[band_idx],
-                "pred": p,
-                "truth": t,
-                "residual": r,
-                "n": len(r),
-                "mse": mse,
-            }
-        )
+            target_band = int(bands[target_idx])
 
-    return results
+            pred_norm = float(pred_all[target_band])
+            true_norm = float(values[target_idx])
+            residual = pred_norm - true_norm
+
+            pred_mag = pred_norm * (stds[target_band] + EPS) + means[target_band]
+            true_mag = true_norm * (stds[target_band] + EPS) + means[target_band]
+
+            band_sq_err[target_band].append(residual**2)
+
+            steps.append(
+                {
+                    "step": step,
+                    "t_rel": float(times[target_idx]) - t_ref,
+                    "band": target_band,
+                    "pred_norm": pred_norm,
+                    "true_norm": true_norm,
+                    "pred_mag": float(pred_mag),
+                    "true_mag": float(true_mag),
+                    "residual": residual,
+                }
+            )
+
+            # Feed the prediction back in as the newest context event, following
+            # the true schedule (time + band) for the observation just forecast.
+            ctx_t.append(float(times[target_idx]))
+            ctx_v.append(pred_norm)
+            ctx_b.append(target_band)
+
+    residuals = np.asarray([s["residual"] for s in steps], dtype=np.float32)
+    total_mse = float(np.mean(residuals**2)) if len(residuals) else np.nan
+
+    band_mse = np.full(n_bands, np.nan, dtype=np.float32)
+    for b in range(n_bands):
+        if band_sq_err[b]:
+            band_mse[b] = float(np.mean(band_sq_err[b]))
+
+    return {
+        "start_idx": start_idx,
+        "context": context,
+        "steps": steps,
+        "mse": total_mse,
+        "band_mse": band_mse,
+        "n_steps": len(steps),
+    }
 
 
-def plot_pred_vs_truth(results, outpath):
-    fig, axes = plt.subplots(3, 3, figsize=(12, 12))
+def select_series(dataset, context_len, n_future_steps, n_series):
+    """Pick files with enough events for a rollout, longest first.
+
+    Returns a list of (times, values, bands, start_idx) tuples.
+    """
+    min_events = context_len + 1  # need at least one future step
+
+    eligible = []
+    for times, values, bands in dataset.events_per_file:
+        if len(times) >= min_events:
+            eligible.append((times, values, bands))
+
+    # Prefer the longest streams so rollouts have the most future steps.
+    eligible.sort(key=lambda tvb: len(tvb[0]), reverse=True)
+
+    selected = []
+    for times, values, bands in eligible[:n_series]:
+        # Start at the beginning; the rollout naturally stops at the end of the
+        # stream if fewer than n_future_steps events remain.
+        selected.append((times, values, bands, 0))
+
+    return selected
+
+
+def plot_series_lightcurves(rollout, means, stds, outpath):
+    """Plot one rollout's context, truth, and forecast per band (3x3 grid)."""
+    fig, axes = plt.subplots(3, 3, figsize=(14, 12))
     axes = axes.flatten()
 
-    for band_idx, res in enumerate(results):
+    context = rollout["context"]
+    steps = rollout["steps"]
+
+    for band_idx in range(N_BANDS):
         ax = axes[band_idx]
+        color = BAND_COLORS[band_idx]
 
-        if res["n"] == 0:
-            ax.set_title(f"{res['band_name']} (no samples)")
-            ax.axis("off")
-            continue
+        def denorm(v):
+            return v * (stds[band_idx] + EPS) + means[band_idx]
 
-        ax.scatter(res["truth"], res["pred"], s=8, alpha=0.5)
+        # Context observations that belong to this band.
+        ctx_mask = context["band"] == band_idx
+        if np.any(ctx_mask):
+            ax.scatter(
+                context["t_rel"][ctx_mask],
+                denorm(context["v_norm"][ctx_mask]),
+                s=30,
+                color=color,
+                marker="o",
+                label="context",
+            )
 
-        lo = float(min(res["truth"].min(), res["pred"].min()))
-        hi = float(max(res["truth"].max(), res["pred"].max()))
-        ax.plot([lo, hi], [lo, hi], linestyle="--", linewidth=1, color="k")
+        # Future truth and forecast for this band.
+        b_steps = [s for s in steps if s["band"] == band_idx]
+        if b_steps:
+            t = np.asarray([s["t_rel"] for s in b_steps])
+            true_mag = np.asarray([s["true_mag"] for s in b_steps])
+            pred_mag = np.asarray([s["pred_mag"] for s in b_steps])
 
-        ax.set_xlabel("truth (norm)")
-        ax.set_ylabel("pred (norm)")
-        ax.set_title(f"{res['band_name']}  (n={res['n']}, MSE={res['mse']:.3g})")
+            order = np.argsort(t)
+            t = t[order]
+            true_mag = true_mag[order]
+            pred_mag = pred_mag[order]
 
-    fig.suptitle("Next-event prediction vs truth (normalized), per band", y=1.01)
+            ax.plot(
+                t, true_mag, "-o", color=color, alpha=0.8, label="truth"
+            )
+            ax.plot(
+                t,
+                pred_mag,
+                "--s",
+                color="k",
+                alpha=0.8,
+                markerfacecolor="none",
+                label="forecast",
+            )
+
+        ax.axvline(0.0, color="gray", linewidth=1, linestyle=":", alpha=0.7)
+        ax.invert_yaxis()
+        ax.set_xlabel("Relative time (days)")
+        ax.set_ylabel("Magnitude")
+        ax.set_title(BAND_NAMES[band_idx])
+
+        # Only add a legend if this band actually plotted labeled artists.
+        if ax.get_legend_handles_labels()[1]:
+            ax.legend(fontsize=7, loc="best")
+
+    fig.suptitle(
+        f"Autoregressive forecast (start_idx={rollout['start_idx']}, "
+        f"{rollout['n_steps']} steps)",
+        y=1.01,
+    )
     fig.tight_layout()
     fig.savefig(outpath, dpi=200, bbox_inches="tight")
     plt.close(fig)
 
 
-def plot_residual_histograms(results, outpath):
-    fig, axes = plt.subplots(3, 3, figsize=(12, 12))
-    axes = axes.flatten()
+def plot_residuals_vs_step(rollouts, outpath):
+    """Residual vs autoregressive step, colored by band, across all series."""
+    plt.figure(figsize=(10, 6))
 
-    for band_idx, res in enumerate(results):
-        ax = axes[band_idx]
+    for band_idx in range(N_BANDS):
+        xs = []
+        ys = []
+        for rollout in rollouts:
+            for s in rollout["steps"]:
+                if s["band"] == band_idx:
+                    xs.append(s["step"])
+                    ys.append(s["residual"])
+        if xs:
+            plt.scatter(
+                xs,
+                ys,
+                s=20,
+                alpha=0.6,
+                color=BAND_COLORS[band_idx],
+                label=BAND_NAMES[band_idx],
+            )
 
-        if res["n"] == 0:
-            ax.set_title(f"{res['band_name']} (no samples)")
-            ax.axis("off")
-            continue
-
-        ax.hist(res["residual"], bins=min(30, max(1, res["n"])))
-        ax.axvline(0.0, linestyle="--", linewidth=1, color="k")
-        ax.set_xlabel("pred - truth (norm)")
-        ax.set_ylabel("count")
-        ax.set_title(f"{res['band_name']}  (n={res['n']})")
-
-    fig.suptitle("Next-event residual distributions, per band", y=1.01)
-    fig.tight_layout()
-    fig.savefig(outpath, dpi=200, bbox_inches="tight")
-    plt.close(fig)
+    plt.axhline(0.0, linestyle="--", linewidth=1, color="k")
+    plt.xlabel("Autoregressive step")
+    plt.ylabel("pred - truth (normalized)")
+    plt.title("Autoregressive residuals vs step, by band")
+    plt.legend(fontsize=7, ncol=3, loc="best")
+    plt.tight_layout()
+    plt.savefig(outpath, dpi=200, bbox_inches="tight")
+    plt.close()
 
 
-def plot_band_mse_bar(results, outpath):
-    names = [res["band_name"] for res in results]
-    mses = [res["mse"] if np.isfinite(res["mse"]) else 0.0 for res in results]
+def plot_band_mse_bar(rollouts, outpath):
+    """Per-band MSE aggregated over all rollout steps and series."""
+    band_sq = [[] for _ in range(N_BANDS)]
+    for rollout in rollouts:
+        for s in rollout["steps"]:
+            band_sq[s["band"]].append(s["residual"] ** 2)
+
+    mses = [float(np.mean(band_sq[b])) if band_sq[b] else 0.0 for b in range(N_BANDS)]
 
     plt.figure(figsize=(9, 5))
-    plt.bar(names, mses)
-    plt.ylabel("Next-event MSE (normalized)")
+    plt.bar(list(BAND_NAMES), mses, color=list(BAND_COLORS))
+    plt.ylabel("Autoregressive MSE (normalized)")
     plt.xlabel("Band")
-    plt.title("Per-band next-event MSE")
+    plt.title("Per-band autoregressive rollout MSE")
     plt.tight_layout()
     plt.savefig(outpath, dpi=200)
     plt.close()
 
 
-def save_band_mse_csv(results, outpath):
+def save_mse_csv(rollouts, outpath):
     with open(outpath, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["band_idx", "band_name", "n_samples", "mse"])
-        for res in results:
+        writer.writerow(
+            ["series", "start_idx", "n_steps", "mse_total"]
+            + [f"mse_{n}" for n in BAND_NAMES]
+        )
+        for i, rollout in enumerate(rollouts):
             writer.writerow(
-                [res["band_idx"], res["band_name"], res["n"], res["mse"]]
+                [i, rollout["start_idx"], rollout["n_steps"], rollout["mse"]]
+                + [rollout["band_mse"][b] for b in range(N_BANDS)]
             )
+
+
+def save_step_csv(rollouts, outpath):
+    with open(outpath, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(
+            [
+                "series",
+                "start_idx",
+                "step",
+                "t_rel",
+                "band_idx",
+                "band_name",
+                "pred_norm",
+                "true_norm",
+                "pred_mag",
+                "true_mag",
+                "residual",
+            ]
+        )
+        for i, rollout in enumerate(rollouts):
+            for s in rollout["steps"]:
+                writer.writerow(
+                    [
+                        i,
+                        rollout["start_idx"],
+                        s["step"],
+                        s["t_rel"],
+                        s["band"],
+                        BAND_NAMES[s["band"]],
+                        s["pred_norm"],
+                        s["true_norm"],
+                        s["pred_mag"],
+                        s["true_mag"],
+                        s["residual"],
+                    ]
+                )
 
 
 def main():
@@ -375,45 +575,83 @@ def main():
 
     model, context_len, n_bands = load_9band_model(args.ckpt, device)
 
-    eval_dataset = make_eval_dataset(args=args, context_len=context_len)
+    eval_dataset, means, stds = make_eval_dataset(
+        args=args,
+        context_len=context_len,
+    )
 
-    print("Dataset length:", len(eval_dataset))
+    print("Dataset files with events:", len(eval_dataset.events_per_file))
 
-    if len(eval_dataset) == 0:
-        raise RuntimeError("Empty eval dataset. Check data path and N_imgs.")
-
-    results = collect_next_event_predictions(
+    series = select_series(
         dataset=eval_dataset,
-        model=model,
-        device=device,
-        n_bands=n_bands,
-        batch_size=args.batch_size,
-        max_samples=args.max_samples,
+        context_len=context_len,
+        n_future_steps=args.n_future_steps,
+        n_series=args.n_series,
     )
 
-    pred_truth_path = os.path.join(
-        args.outdir, f"study{run_id}_9band_next_event_pred_vs_truth.png"
-    )
-    resid_path = os.path.join(
-        args.outdir, f"study{run_id}_9band_next_event_residual_hist.png"
+    if not series:
+        raise RuntimeError(
+            "No eval series with enough events for a rollout. Check data path, "
+            "N_imgs, and context_len."
+        )
+
+    print(f"Rolling out {len(series)} series, up to {args.n_future_steps} "
+          f"steps each.")
+
+    rollouts = []
+    for i, (times, values, bands, start_idx) in enumerate(series):
+        rollout = get_rollout_from_stream(
+            times=times,
+            values=values,
+            bands=bands,
+            model=model,
+            device=device,
+            start_idx=start_idx,
+            n_future_steps=args.n_future_steps,
+            context_len=context_len,
+            n_bands=n_bands,
+            means=means,
+            stds=stds,
+        )
+        rollouts.append(rollout)
+        print(
+            f"  series {i + 1}/{len(series)}: {rollout['n_steps']} steps, "
+            f"mse={rollout['mse']:.4g}",
+            flush=True,
+        )
+
+    # Per-series forecast light curves.
+    for i, rollout in enumerate(rollouts):
+        series_path = os.path.join(
+            args.outdir,
+            f"study{run_id}_9band_autoreg_series{i:02d}.png",
+        )
+        plot_series_lightcurves(rollout, means, stds, series_path)
+
+    residual_path = os.path.join(
+        args.outdir, f"study{run_id}_9band_autoreg_residuals_vs_step.png"
     )
     mse_bar_path = os.path.join(
-        args.outdir, f"study{run_id}_9band_next_event_band_mse.png"
+        args.outdir, f"study{run_id}_9band_autoreg_band_mse.png"
     )
-    csv_path = os.path.join(
-        args.outdir, f"study{run_id}_9band_next_event_band_mse.csv"
+    mse_csv_path = os.path.join(
+        args.outdir, f"study{run_id}_9band_autoreg_mse_by_series.csv"
+    )
+    step_csv_path = os.path.join(
+        args.outdir, f"study{run_id}_9band_autoreg_step_predictions.csv"
     )
 
-    plot_pred_vs_truth(results, pred_truth_path)
-    plot_residual_histograms(results, resid_path)
-    plot_band_mse_bar(results, mse_bar_path)
-    save_band_mse_csv(results, csv_path)
+    plot_residuals_vs_step(rollouts, residual_path)
+    plot_band_mse_bar(rollouts, mse_bar_path)
+    save_mse_csv(rollouts, mse_csv_path)
+    save_step_csv(rollouts, step_csv_path)
 
     print("Saved:")
-    print(" ", pred_truth_path)
-    print(" ", resid_path)
+    print("  per-series light curves in", args.outdir)
+    print(" ", residual_path)
     print(" ", mse_bar_path)
-    print(" ", csv_path)
+    print(" ", mse_csv_path)
+    print(" ", step_csv_path)
 
 
 if __name__ == "__main__":
