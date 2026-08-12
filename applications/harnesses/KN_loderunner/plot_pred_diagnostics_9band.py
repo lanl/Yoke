@@ -20,6 +20,11 @@ bands at any requested lead time. So a rollout proceeds as:
 Because the observation schedule (times + which filter is seen next) is taken
 from the truth while the values are fed back from the model, this measures how
 well the model forecasts future observations in each filter over a rollout.
+
+At every step the model emits a prediction for ALL nine bands, including bands
+with no context and bands not observed at that step. The per-series plots show
+this full all-band forecast, overlaid with truth wherever an observation exists.
+Only the observed band is fed back into the context and scored against truth.
 """
 
 import argparse
@@ -318,6 +323,14 @@ def get_rollout_from_stream(
             pred_all = model(x, in_vars=None, out_vars=None, Dt=Dt)
             pred_all = pred_all.reshape(n_bands).detach().cpu().numpy()
 
+            # The model predicts every band at this lead time, including bands
+            # with no context and bands not observed at this step. Keep the full
+            # 9-band prediction (normalized and denormalized) for plotting.
+            pred_all_norm = pred_all.astype(np.float32)
+            pred_all_mag = (
+                pred_all_norm * (stds + EPS) + means
+            ).astype(np.float32)
+
             target_band = int(bands[target_idx])
 
             pred_norm = float(pred_all[target_band])
@@ -339,6 +352,9 @@ def get_rollout_from_stream(
                     "pred_mag": float(pred_mag),
                     "true_mag": float(true_mag),
                     "residual": residual,
+                    # Full all-band prediction at this step's lead time.
+                    "pred_all_norm": pred_all_norm,
+                    "pred_all_mag": pred_all_mag,
                 }
             )
 
@@ -417,29 +433,40 @@ def plot_series_lightcurves(rollout, means, stds, outpath):
                 label="context",
             )
 
-        # Future truth and forecast for this band.
-        b_steps = [s for s in steps if s["band"] == band_idx]
-        if b_steps:
-            t = np.asarray([s["t_rel"] for s in b_steps])
-            true_mag = np.asarray([s["true_mag"] for s in b_steps])
-            pred_mag = np.asarray([s["pred_mag"] for s in b_steps])
-
-            order = np.argsort(t)
-            t = t[order]
-            true_mag = true_mag[order]
-            pred_mag = pred_mag[order]
-
-            ax.plot(
-                t, true_mag, "-o", color=color, alpha=0.8, label="truth"
+        # Full forecast for this band at EVERY rollout step, whether or not this
+        # band was observed at that step and whether or not it had any context.
+        if steps:
+            t_all = np.asarray([s["t_rel"] for s in steps])
+            pred_all = np.asarray(
+                [s["pred_all_mag"][band_idx] for s in steps]
             )
+
+            order = np.argsort(t_all)
+            t_all = t_all[order]
+            pred_all = pred_all[order]
+
             ax.plot(
-                t,
-                pred_mag,
+                t_all,
+                pred_all,
                 "--s",
                 color="k",
                 alpha=0.8,
                 markerfacecolor="none",
-                label="forecast",
+                label="forecast (all steps)",
+            )
+
+        # Truth for this band, at the steps where it was actually observed.
+        b_steps = [s for s in steps if s["band"] == band_idx]
+        if b_steps:
+            t = np.asarray([s["t_rel"] for s in b_steps])
+            true_mag = np.asarray([s["true_mag"] for s in b_steps])
+
+            order = np.argsort(t)
+            t = t[order]
+            true_mag = true_mag[order]
+
+            ax.plot(
+                t, true_mag, "-o", color=color, alpha=0.8, label="truth (obs)"
             )
 
         ax.axvline(0.0, color="gray", linewidth=1, linestyle=":", alpha=0.7)
@@ -544,6 +571,8 @@ def save_step_csv(rollouts, outpath):
                 "true_mag",
                 "residual",
             ]
+            # Full all-band predicted magnitude at this step's lead time.
+            + [f"pred_mag_{n}" for n in BAND_NAMES]
         )
         for i, rollout in enumerate(rollouts):
             for s in rollout["steps"]:
@@ -561,6 +590,7 @@ def save_step_csv(rollouts, outpath):
                         s["true_mag"],
                         s["residual"],
                     ]
+                    + [float(s["pred_all_mag"][b]) for b in range(N_BANDS)]
                 )
 
 
