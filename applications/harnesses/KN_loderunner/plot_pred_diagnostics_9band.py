@@ -110,6 +110,13 @@ def get_args():
         default=10,
         help="Number of light curves to roll out.",
     )
+    parser.add_argument(
+        "--teacher_forced",
+        action="store_true",
+        help="Also compute a teacher-forced rollout (true values fed back "
+        "instead of predictions) and overlay it on the free-running rollout to "
+        "diagnose compounding rollout error. Off by default.",
+    )
 
     parser.add_argument("--outdir", type=str, default=None)
     parser.add_argument(
@@ -260,6 +267,7 @@ def get_rollout_from_stream(
     n_bands,
     means,
     stds,
+    teacher_forced=False,
 ):
     """Autoregressively forecast the next events of one merged event stream.
 
@@ -272,6 +280,11 @@ def get_rollout_from_stream(
         context_len (int): Context window length.
         n_bands (int): Number of bands.
         means, stds (np.ndarray): Per-band normalization for denormalizing.
+        teacher_forced (bool): If True, feed the TRUE observed value back into
+            the context at each step instead of the model's own prediction. This
+            isolates one-step-ahead skill from compounding rollout error: a model
+            that tracks truth when teacher-forced but drifts when free-running is
+            suffering from exposure bias, not a failure to learn the dynamics.
 
     Returns:
         dict describing the rollout (context, per-step forecasts, per-band MSE).
@@ -358,10 +371,12 @@ def get_rollout_from_stream(
                 }
             )
 
-            # Feed the prediction back in as the newest context event, following
-            # the true schedule (time + band) for the observation just forecast.
+            # Feed the newest context event, following the true schedule (time +
+            # band) for the observation just forecast. Free-running rollout feeds
+            # the model's own prediction back in; teacher forcing feeds the true
+            # value instead, so errors do not compound down the rollout.
             ctx_t.append(float(times[target_idx]))
-            ctx_v.append(pred_norm)
+            ctx_v.append(true_norm if teacher_forced else pred_norm)
             ctx_b.append(target_band)
 
     residuals = np.asarray([s["residual"] for s in steps], dtype=np.float32)
@@ -406,13 +421,28 @@ def select_series(dataset, context_len, n_future_steps, n_series):
     return selected
 
 
-def plot_series_lightcurves(rollout, means, stds, outpath):
-    """Plot one rollout's context, truth, and forecast per band (3x3 grid)."""
+def _band_forecast_curve(steps, band_idx):
+    """Return (t_rel, pred_mag) for a band across all steps, sorted by time."""
+    t_all = np.asarray([s["t_rel"] for s in steps])
+    pred_all = np.asarray([s["pred_all_mag"][band_idx] for s in steps])
+    order = np.argsort(t_all)
+    return t_all[order], pred_all[order]
+
+
+def plot_series_lightcurves(rollout, means, stds, outpath, tf_rollout=None):
+    """Plot one rollout's context, truth, and forecast per band (3x3 grid).
+
+    If ``tf_rollout`` (the teacher-forced rollout for the same series) is given,
+    its forecast is overlaid so free-running vs teacher-forced can be compared
+    directly: divergence between the two indicates compounding rollout error
+    (exposure bias) rather than a failure to learn one-step dynamics.
+    """
     fig, axes = plt.subplots(3, 3, figsize=(14, 12))
     axes = axes.flatten()
 
     context = rollout["context"]
     steps = rollout["steps"]
+    tf_steps = tf_rollout["steps"] if tf_rollout is not None else None
 
     for band_idx in range(N_BANDS):
         ax = axes[band_idx]
@@ -433,18 +463,10 @@ def plot_series_lightcurves(rollout, means, stds, outpath):
                 label="context",
             )
 
-        # Full forecast for this band at EVERY rollout step, whether or not this
-        # band was observed at that step and whether or not it had any context.
+        # Free-running forecast for this band at EVERY rollout step, whether or
+        # not this band was observed and whether or not it had any context.
         if steps:
-            t_all = np.asarray([s["t_rel"] for s in steps])
-            pred_all = np.asarray(
-                [s["pred_all_mag"][band_idx] for s in steps]
-            )
-
-            order = np.argsort(t_all)
-            t_all = t_all[order]
-            pred_all = pred_all[order]
-
+            t_all, pred_all = _band_forecast_curve(steps, band_idx)
             ax.plot(
                 t_all,
                 pred_all,
@@ -452,7 +474,20 @@ def plot_series_lightcurves(rollout, means, stds, outpath):
                 color="k",
                 alpha=0.8,
                 markerfacecolor="none",
-                label="forecast (all steps)",
+                label="forecast (free-run)",
+            )
+
+        # Teacher-forced forecast for the same band and steps.
+        if tf_steps:
+            t_tf, pred_tf = _band_forecast_curve(tf_steps, band_idx)
+            ax.plot(
+                t_tf,
+                pred_tf,
+                "--^",
+                color="tab:purple",
+                alpha=0.8,
+                markerfacecolor="none",
+                label="forecast (teacher-forced)",
             )
 
         # Truth for this band, at the steps where it was actually observed.
@@ -521,17 +556,45 @@ def plot_residuals_vs_step(rollouts, outpath):
     plt.close()
 
 
-def plot_band_mse_bar(rollouts, outpath):
-    """Per-band MSE aggregated over all rollout steps and series."""
+def _per_band_mse(rollouts):
+    """Aggregate per-band MSE over all steps and series."""
     band_sq = [[] for _ in range(N_BANDS)]
     for rollout in rollouts:
         for s in rollout["steps"]:
             band_sq[s["band"]].append(s["residual"] ** 2)
+    return np.asarray(
+        [float(np.mean(band_sq[b])) if band_sq[b] else 0.0 for b in range(N_BANDS)]
+    )
 
-    mses = [float(np.mean(band_sq[b])) if band_sq[b] else 0.0 for b in range(N_BANDS)]
 
-    plt.figure(figsize=(9, 5))
-    plt.bar(list(BAND_NAMES), mses, color=list(BAND_COLORS))
+def plot_band_mse_bar(rollouts, outpath, tf_rollouts=None):
+    """Per-band MSE aggregated over all rollout steps and series.
+
+    If ``tf_rollouts`` is given, free-running and teacher-forced MSE are shown as
+    grouped bars per band. A large free-run bar next to a small teacher-forced
+    bar is the signature of compounding rollout error (exposure bias).
+    """
+    mses = _per_band_mse(rollouts)
+
+    plt.figure(figsize=(10, 5))
+    x = np.arange(N_BANDS)
+
+    if tf_rollouts is not None:
+        tf_mses = _per_band_mse(tf_rollouts)
+        width = 0.4
+        plt.bar(x - width / 2, mses, width, color="tab:gray", label="free-run")
+        plt.bar(
+            x + width / 2,
+            tf_mses,
+            width,
+            color="tab:purple",
+            label="teacher-forced",
+        )
+        plt.legend(fontsize=9)
+    else:
+        plt.bar(x, mses, color=list(BAND_COLORS))
+
+    plt.xticks(x, list(BAND_NAMES))
     plt.ylabel("Autoregressive MSE (normalized)")
     plt.xlabel("Band")
     plt.title("Per-band autoregressive rollout MSE")
@@ -628,7 +691,10 @@ def main():
     print(f"Rolling out {len(series)} series, up to {args.n_future_steps} "
           f"steps each.")
 
+    teacher_forced = args.teacher_forced
+
     rollouts = []
+    tf_rollouts = [] if teacher_forced else None
     for i, (times, values, bands, start_idx) in enumerate(series):
         rollout = get_rollout_from_stream(
             times=times,
@@ -642,13 +708,39 @@ def main():
             n_bands=n_bands,
             means=means,
             stds=stds,
+            teacher_forced=False,
         )
         rollouts.append(rollout)
-        print(
-            f"  series {i + 1}/{len(series)}: {rollout['n_steps']} steps, "
-            f"mse={rollout['mse']:.4g}",
-            flush=True,
-        )
+
+        if teacher_forced:
+            tf_rollout = get_rollout_from_stream(
+                times=times,
+                values=values,
+                bands=bands,
+                model=model,
+                device=device,
+                start_idx=start_idx,
+                n_future_steps=args.n_future_steps,
+                context_len=context_len,
+                n_bands=n_bands,
+                means=means,
+                stds=stds,
+                teacher_forced=True,
+            )
+            tf_rollouts.append(tf_rollout)
+
+            print(
+                f"  series {i + 1}/{len(series)}: {rollout['n_steps']} steps, "
+                f"free-run mse={rollout['mse']:.4g}, "
+                f"teacher-forced mse={tf_rollout['mse']:.4g}",
+                flush=True,
+            )
+        else:
+            print(
+                f"  series {i + 1}/{len(series)}: {rollout['n_steps']} steps, "
+                f"mse={rollout['mse']:.4g}",
+                flush=True,
+            )
 
     # Per-series forecast light curves.
     for i, rollout in enumerate(rollouts):
@@ -656,7 +748,10 @@ def main():
             args.outdir,
             f"study{run_id}_9band_autoreg_series{i:02d}.png",
         )
-        plot_series_lightcurves(rollout, means, stds, series_path)
+        tf_rollout = tf_rollouts[i] if teacher_forced else None
+        plot_series_lightcurves(
+            rollout, means, stds, series_path, tf_rollout=tf_rollout
+        )
 
     residual_path = os.path.join(
         args.outdir, f"study{run_id}_9band_autoreg_residuals_vs_step.png"
@@ -672,9 +767,23 @@ def main():
     )
 
     plot_residuals_vs_step(rollouts, residual_path)
-    plot_band_mse_bar(rollouts, mse_bar_path)
+    plot_band_mse_bar(rollouts, mse_bar_path, tf_rollouts=tf_rollouts)
     save_mse_csv(rollouts, mse_csv_path)
     save_step_csv(rollouts, step_csv_path)
+
+    if teacher_forced:
+        tf_mse_csv_path = os.path.join(
+            args.outdir, f"study{run_id}_9band_autoreg_mse_by_series_tf.csv"
+        )
+        save_mse_csv(tf_rollouts, tf_mse_csv_path)
+
+        overall_free = np.nanmean([r["mse"] for r in rollouts])
+        overall_tf = np.nanmean([r["mse"] for r in tf_rollouts])
+        print(
+            f"Overall free-run MSE: {overall_free:.4g}  |  "
+            f"teacher-forced MSE: {overall_tf:.4g}",
+            flush=True,
+        )
 
     print("Saved:")
     print("  per-series light curves in", args.outdir)
