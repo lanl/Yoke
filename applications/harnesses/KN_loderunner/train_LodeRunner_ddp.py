@@ -19,6 +19,7 @@ from yoke.datasets.kilonova_dataset import (
 )
 from yoke.utils.training.epoch.loderunner import (
     train_DDP_scalar_temporal_loderunner_epoch_9band,
+    train_DDP_scalar_temporal_loderunner_epoch_9band_rollout,
 )
 from yoke.utils.restart import continuation_setup
 from yoke.utils.dataload import make_distributed_dataloader
@@ -52,6 +53,37 @@ parser.add_argument(
     type=float,
     default=0.0,
     help="Relative magnitude ε for Gaussian noise injection (e.g. 5e-5).",
+)
+
+# Multi-step rollout training (scheduled sampling) to address exposure bias.
+parser.add_argument(
+    "--n_rollout_steps",
+    type=int,
+    default=1,
+    help="Number of future events supervised per sample. 1 uses the standard "
+    "single-step teacher-forced training; >1 enables scheduled-sampling "
+    "rollout training.",
+)
+parser.add_argument(
+    "--tf_start",
+    type=float,
+    default=1.0,
+    help="Teacher-forcing ratio at epoch 0 (probability of feeding the true "
+    "value back at each rollout step). Only used when --n_rollout_steps > 1.",
+)
+parser.add_argument(
+    "--tf_end",
+    type=float,
+    default=0.0,
+    help="Teacher-forcing ratio the schedule anneals down to. Only used when "
+    "--n_rollout_steps > 1.",
+)
+parser.add_argument(
+    "--tf_ramp_epochs",
+    type=int,
+    default=50,
+    help="Number of epochs over which the teacher-forcing ratio decays linearly "
+    "from --tf_start to --tf_end. Only used when --n_rollout_steps > 1.",
 )
 
 # Change some default filepaths.
@@ -140,6 +172,13 @@ def main(args, rank, world_size, local_rank, device):
 
     CONTEXT_LEN = 5 #3
     HIDDEN_CHANNELS = 64
+
+    # Multi-step rollout training config (scheduled sampling). n_rollout_steps=1
+    # falls back to the standard single-step teacher-forced training.
+    n_rollout_steps = args.n_rollout_steps
+    tf_start = args.tf_start
+    tf_end = args.tf_end
+    tf_ramp_epochs = max(1, args.tf_ramp_epochs)
 
     # Nine-band merged event-stream setup (3 ZTF + 6 Rubin/LSST bands).
     BAND_KEYS = NINE_BAND_KEYS
@@ -359,6 +398,7 @@ def main(args, rank, world_size, local_rank, device):
         drop_upper_limits=DROP_UPPER_LIMITS,
         means=band_means,
         stds=band_stds,
+        n_rollout_steps=n_rollout_steps,
     )
 
     val_dataset = Kilonova_lc_scalar_context_DataSet_9band(
@@ -369,6 +409,7 @@ def main(args, rank, world_size, local_rank, device):
         drop_upper_limits=DROP_UPPER_LIMITS,
         means=band_means,
         stds=band_stds,
+        n_rollout_steps=n_rollout_steps,
     )
 
 
@@ -415,24 +456,57 @@ def main(args, rank, world_size, local_rank, device):
             startTime = time.time()
 
 
-        #train_DDP_loderunner_epoch(
-        train_DDP_scalar_temporal_loderunner_epoch_9band(
-            training_data=train_dataloader,
-            validation_data=val_dataloader,
-            num_train_batches=train_batches,
-            num_val_batches=val_batches,
-            model=model,
-            optimizer=optimizer,
-            loss_fn=loss_fn,
-            LRsched=LRsched,
-            epochIDX=epochIDX,
-            train_per_val=train_per_val,
-            train_rcrd_filename=trn_rcrd_filename,
-            val_rcrd_filename=val_rcrd_filename,
-            device=device,
-            rank=rank,
-            world_size=world_size,
-        )
+        if n_rollout_steps > 1:
+            # Linearly anneal the teacher-forcing ratio from tf_start to tf_end
+            # over tf_ramp_epochs, then hold at tf_end.
+            frac = min(1.0, (epochIDX - 1) / tf_ramp_epochs)
+            teacher_forcing_ratio = tf_start + (tf_end - tf_start) * frac
+
+            if rank == 0:
+                print(
+                    f"Rollout training: n_rollout_steps={n_rollout_steps}, "
+                    f"teacher_forcing_ratio={teacher_forcing_ratio:.4f}",
+                    flush=True,
+                )
+
+            train_DDP_scalar_temporal_loderunner_epoch_9band_rollout(
+                training_data=train_dataloader,
+                validation_data=val_dataloader,
+                num_train_batches=train_batches,
+                num_val_batches=val_batches,
+                model=model,
+                optimizer=optimizer,
+                loss_fn=loss_fn,
+                LRsched=LRsched,
+                epochIDX=epochIDX,
+                train_per_val=train_per_val,
+                train_rcrd_filename=trn_rcrd_filename,
+                val_rcrd_filename=val_rcrd_filename,
+                device=device,
+                rank=rank,
+                world_size=world_size,
+                n_bands=N_BANDS,
+                teacher_forcing_ratio=teacher_forcing_ratio,
+            )
+        else:
+            #train_DDP_loderunner_epoch(
+            train_DDP_scalar_temporal_loderunner_epoch_9band(
+                training_data=train_dataloader,
+                validation_data=val_dataloader,
+                num_train_batches=train_batches,
+                num_val_batches=val_batches,
+                model=model,
+                optimizer=optimizer,
+                loss_fn=loss_fn,
+                LRsched=LRsched,
+                epochIDX=epochIDX,
+                train_per_val=train_per_val,
+                train_rcrd_filename=trn_rcrd_filename,
+                val_rcrd_filename=val_rcrd_filename,
+                device=device,
+                rank=rank,
+                world_size=world_size,
+            )
 
         print(f"[rank {rank}] finished epoch", flush=True)
 
@@ -477,6 +551,7 @@ def main(args, rank, world_size, local_rank, device):
                     "band_keys": list(BAND_KEYS),
                     "backbone_channels": 8,
                     "hidden": HIDDEN_CHANNELS,
+                    "n_rollout_steps": n_rollout_steps,
                 },
                 new_chkpt_path,
             )

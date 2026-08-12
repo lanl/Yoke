@@ -386,6 +386,7 @@ class Kilonova_lc_scalar_context_DataSet_9band(Dataset):
         drop_upper_limits: bool = True,
         means: np.ndarray = None,
         stds: np.ndarray = None,
+        n_rollout_steps: int = 1,
     ) -> None:
         """Initialize the dataset and build the merged-event sample index.
 
@@ -403,6 +404,12 @@ class Kilonova_lc_scalar_context_DataSet_9band(Dataset):
                 the model only sees real detections.
             means (np.ndarray): Per-band means for normalization, shape [n_bands].
             stds (np.ndarray): Per-band stds for normalization, shape [n_bands].
+            n_rollout_steps (int): Number of future events supervised per sample.
+                When 1 (default) ``__getitem__`` returns the single-step
+                ``(x, target, mask, Dt)`` tuple. When >1 it returns a rollout
+                tuple carrying the initial context window plus the next
+                ``n_rollout_steps`` true events, for scheduled-sampling /
+                multi-step rollout training (see ``__getitem__``).
         """
         # FIXME: hardcoded scratch path. Should be passed in as an argument so
         # this dataset does not depend on a user-specific filesystem location.
@@ -428,6 +435,12 @@ class Kilonova_lc_scalar_context_DataSet_9band(Dataset):
         self.error_col = error_col
         self.drop_upper_limits = drop_upper_limits
         self.n_channels = len(self.band_keys)
+
+        if n_rollout_steps < 1:
+            raise ValueError(
+                f"n_rollout_steps must be >= 1, got {n_rollout_steps}"
+            )
+        self.n_rollout_steps = n_rollout_steps
 
         if means is None:
             raise ValueError(
@@ -529,7 +542,26 @@ class Kilonova_lc_scalar_context_DataSet_9band(Dataset):
         """Return the number of samples in the dataset."""
         return len(self.samples)
 
-    def __getitem__(
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, ...]:
+        """Return the sample for ``index``.
+
+        When ``n_rollout_steps == 1`` this returns the single-step
+        ``(x, target, mask, Dt)`` tuple. When ``n_rollout_steps > 1`` it returns
+        the rollout tuple ``(ctx_v, ctx_t, ctx_b, future_v, future_b, future_dt,
+        future_valid)`` described in :meth:`_getitem_rollout`.
+
+        Args:
+            index (int): Sample index.
+
+        Returns:
+            tuple[torch.Tensor, ...]: Single-step or rollout sample.
+        """
+        if self.n_rollout_steps > 1:
+            return self._getitem_rollout(index)
+
+        return self._getitem_single(index)
+
+    def _getitem_single(
         self, index: int
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """Return the (input, target, mask, Dt) tuple for a given sample index.
@@ -595,3 +627,81 @@ class Kilonova_lc_scalar_context_DataSet_9band(Dataset):
         )
 
         return x, target, mask, Dt
+
+    def _getitem_rollout(
+        self, index: int
+    ) -> tuple[
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+    ]:
+        """Return a multi-step rollout sample for scheduled-sampling training.
+
+        The initial context window is returned in a structured form so the
+        training loop can rebuild the model input after feeding predictions back
+        in, and the next ``n_rollout_steps`` true events are returned as
+        fixed-length arrays. When the stream ends before ``n_rollout_steps``
+        future events are available, the remaining steps are padded and flagged
+        invalid via ``future_valid`` so the default collate can still stack
+        samples and the loss can ignore the padding.
+
+        Args:
+            index (int): Sample index.
+
+        Returns:
+            ctx_v (torch.Tensor): Normalized context values, shape [context_len].
+            ctx_t (torch.Tensor): Relative context times (relative to the first
+                context event), shape [context_len].
+            ctx_b (torch.Tensor): Context band indices (long), shape [context_len].
+            future_v (torch.Tensor): Normalized true value of each future event,
+                shape [n_rollout_steps]; padded steps are 0.
+            future_b (torch.Tensor): Band index of each future event (long),
+                shape [n_rollout_steps]; padded steps are 0.
+            future_dt (torch.Tensor): Lead time from the previous event to each
+                future event, shape [n_rollout_steps]; padded steps are 0.
+            future_valid (torch.Tensor): 1.0 for real future events, 0.0 for
+                padded steps, shape [n_rollout_steps].
+        """
+        file_idx, startIDX = self.samples[index]
+        times, values, bands = self.events_per_file[file_idx]
+
+        target_start = startIDX + self.context_len
+
+        # Initial context window, relative to its own first event so no absolute
+        # MJD offset leaks in (matching the single-step encoding).
+        ctx_t = (
+            times[startIDX:target_start] - times[startIDX]
+        ).astype(np.float32)
+        ctx_v = values[startIDX:target_start].astype(np.float32)
+        ctx_b = bands[startIDX:target_start].astype(np.int64)
+
+        n = self.n_rollout_steps
+        future_v = np.zeros(n, dtype=np.float32)
+        future_b = np.zeros(n, dtype=np.int64)
+        future_dt = np.zeros(n, dtype=np.float32)
+        future_valid = np.zeros(n, dtype=np.float32)
+
+        n_events = times.shape[0]
+        for step in range(n):
+            target_idx = target_start + step
+            if target_idx >= n_events:
+                break
+
+            future_v[step] = values[target_idx]
+            future_b[step] = bands[target_idx]
+            future_dt[step] = times[target_idx] - times[target_idx - 1]
+            future_valid[step] = 1.0
+
+        return (
+            torch.tensor(ctx_v, dtype=torch.float32),
+            torch.tensor(ctx_t, dtype=torch.float32),
+            torch.tensor(ctx_b, dtype=torch.long),
+            torch.tensor(future_v, dtype=torch.float32),
+            torch.tensor(future_b, dtype=torch.long),
+            torch.tensor(future_dt, dtype=torch.float32),
+            torch.tensor(future_valid, dtype=torch.float32),
+        )

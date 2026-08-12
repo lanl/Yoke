@@ -623,6 +623,282 @@ def train_DDP_scalar_temporal_loderunner_epoch_9band(
                         np.savetxt(val_rcrd_file, batch_records, fmt="%d, %d, %.8f")
 
 
+def _rollout_pass_9band(
+    ctx_v: torch.Tensor,
+    ctx_t: torch.Tensor,
+    ctx_b: torch.Tensor,
+    future_v: torch.Tensor,
+    future_b: torch.Tensor,
+    future_dt: torch.Tensor,
+    future_valid: torch.Tensor,
+    model: torch.nn.Module,
+    loss_fn: torch.nn.Module,
+    n_bands: int,
+    teacher_forcing_ratio: float,
+    device: torch.device,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Unroll the 9-band model over a batch of rollouts with scheduled sampling.
+
+    Maintains a batched sliding context window seeded from the initial context.
+    At each step the model predicts all bands at the true lead time; the loss is
+    taken on the single observed band (padding steps ignored via
+    ``future_valid``). The value fed back into the context is the true value with
+    probability ``teacher_forcing_ratio`` and the model's own (detached)
+    prediction otherwise, so gradients never flow through the rollout.
+
+    Args:
+        ctx_v (torch.Tensor): Initial context values [B, context_len].
+        ctx_t (torch.Tensor): Initial context relative times [B, context_len].
+        ctx_b (torch.Tensor): Initial context band indices [B, context_len].
+        future_v (torch.Tensor): True future values [B, n_rollout_steps].
+        future_b (torch.Tensor): Future band indices [B, n_rollout_steps].
+        future_dt (torch.Tensor): Future lead times [B, n_rollout_steps].
+        future_valid (torch.Tensor): Valid-step mask [B, n_rollout_steps].
+        model (torch.nn.Module): The 9-band wrapper model.
+        loss_fn (torch.nn.Module): Elementwise loss (reduction='none').
+        n_bands (int): Number of bands.
+        teacher_forcing_ratio (float): Probability of feeding the true value back
+            at each step (1.0 = fully teacher-forced, 0.0 = fully free-running).
+        device (torch.device): Compute device.
+
+    Returns:
+        per_sample_loss (torch.Tensor): Mean rollout loss per sample [B].
+        total_loss (torch.Tensor): Scalar mean loss over all valid steps.
+    """
+    B, context_len = ctx_v.shape
+    n_steps = future_v.shape[1]
+
+    # Running window; cloned so we can slide in-place without touching inputs.
+    win_v = ctx_v.clone()
+    win_t = ctx_t.clone()
+    win_b = ctx_b.clone()
+
+    batch_arange = torch.arange(B, device=device)
+
+    # Kept for API compatibility with the LodeRunner-style wrapper.
+    in_vars = torch.arange(8, device=device)
+    out_vars = torch.arange(8, device=device)
+
+    step_losses = []  # [B] per valid step
+    step_valid = []  # [B] per step
+
+    for step in range(n_steps):
+        # Build the flattened per-event input from the current window, with
+        # times made relative to the window's first event (matching the dataset
+        # encoding and the inference rollout).
+        rel_t = win_t - win_t[:, :1]
+        band_onehot = torch.zeros(
+            B, context_len, n_bands, device=device, dtype=win_v.dtype
+        )
+        band_onehot.scatter_(2, win_b.unsqueeze(-1), 1.0)
+
+        per_event = torch.cat(
+            [win_v.unsqueeze(-1), rel_t.unsqueeze(-1), band_onehot],
+            dim=-1,
+        )  # [B, context_len, 2 + n_bands]
+        x_step = per_event.reshape(B, -1)
+
+        Dt = future_dt[:, step]
+        pred_all = model(x_step, in_vars, out_vars, Dt)  # [B, n_bands]
+
+        tgt_band = future_b[:, step]
+        pred_obs = pred_all[batch_arange, tgt_band]  # [B]
+        true_obs = future_v[:, step]  # [B]
+        valid = future_valid[:, step]  # [B]
+
+        step_loss = loss_fn(pred_obs, true_obs) * valid
+        step_losses.append(step_loss)
+        step_valid.append(valid)
+
+        # Scheduled sampling: choose true vs own (detached) prediction per sample.
+        use_true = (
+            torch.rand(B, device=device) < teacher_forcing_ratio
+        )
+        fed = torch.where(use_true, true_obs, pred_obs.detach())
+
+        # For padded steps there is no real event to advance to; feeding the true
+        # (zero) value with a zero dt is harmless since their loss is masked out
+        # and later steps are also padded/masked.
+        new_t = win_t[:, -1] + Dt
+
+        # Slide the window: drop the oldest event, append the new one.
+        win_v = torch.cat([win_v[:, 1:], fed.unsqueeze(1)], dim=1)
+        win_t = torch.cat([win_t[:, 1:], new_t.unsqueeze(1)], dim=1)
+        win_b = torch.cat([win_b[:, 1:], tgt_band.unsqueeze(1)], dim=1)
+
+    step_losses = torch.stack(step_losses, dim=1)  # [B, n_steps]
+    step_valid = torch.stack(step_valid, dim=1)  # [B, n_steps]
+
+    per_sample_loss = step_losses.sum(dim=1) / (step_valid.sum(dim=1) + 1e-8)
+    total_loss = step_losses.sum() / (step_valid.sum() + 1e-8)
+
+    return per_sample_loss, total_loss
+
+
+def train_DDP_scalar_temporal_loderunner_epoch_9band_rollout(
+    training_data: torch.utils.data.DataLoader,
+    validation_data: torch.utils.data.DataLoader,
+    num_train_batches: int,
+    num_val_batches: int,
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    loss_fn: torch.nn.Module,
+    LRsched: torch.optim.lr_scheduler._LRScheduler,
+    epochIDX: int,
+    train_per_val: int,
+    train_rcrd_filename: str,
+    val_rcrd_filename: str,
+    device: torch.device,
+    rank: int,
+    world_size: int,
+    n_bands: int = 9,
+    teacher_forcing_ratio: float = 1.0,
+) -> None:
+    """Multi-step rollout DDP epoch for the masked 9-band scalar temporal model.
+
+    Trains the model on autoregressive rollouts with scheduled sampling to
+    address exposure bias: instead of a single teacher-forced next-event step,
+    the model unrolls ``n_rollout_steps`` events, feeding its own (detached)
+    predictions back into the context with probability
+    ``1 - teacher_forcing_ratio`` at each step. Validation always uses a fully
+    free-running rollout (ratio 0.0) so the recorded metric reflects real
+    rollout skill.
+
+    Expected dataset output (per sample, from
+    ``Kilonova_lc_scalar_context_DataSet_9band`` with ``n_rollout_steps > 1``):
+        ctx_v, ctx_t, ctx_b:  [B, context_len]
+        future_v, future_b, future_dt, future_valid:  [B, n_rollout_steps]
+
+    Args:
+        n_bands (int): Number of bands the model predicts.
+        teacher_forcing_ratio (float): Per-epoch probability of feeding the true
+            value back at each rollout step during training.
+    """
+    train_rcrd_filename = train_rcrd_filename.replace(
+        "<epochIDX>",
+        f"{epochIDX:04d}",
+    )
+
+    model.train()
+
+    with (
+        open(train_rcrd_filename, "a") if rank == 0 else nullcontext()
+    ) as train_rcrd_file:
+
+        for trainbatch_ID, data in enumerate(training_data):
+            if trainbatch_ID >= num_train_batches:
+                break
+
+            ctx_v, ctx_t, ctx_b, future_v, future_b, future_dt, future_valid = (
+                data
+            )
+
+            ctx_v = ctx_v.to(device, non_blocking=True)
+            ctx_t = ctx_t.to(device, non_blocking=True)
+            ctx_b = ctx_b.to(device, non_blocking=True)
+            future_v = future_v.to(device, non_blocking=True)
+            future_b = future_b.to(device, non_blocking=True)
+            future_dt = future_dt.to(torch.float32).to(device, non_blocking=True)
+            future_valid = future_valid.to(device, non_blocking=True)
+
+            optimizer.zero_grad(set_to_none=True)
+
+            per_sample_loss, batch_loss = _rollout_pass_9band(
+                ctx_v=ctx_v,
+                ctx_t=ctx_t,
+                ctx_b=ctx_b,
+                future_v=future_v,
+                future_b=future_b,
+                future_dt=future_dt,
+                future_valid=future_valid,
+                model=model,
+                loss_fn=loss_fn,
+                n_bands=n_bands,
+                teacher_forcing_ratio=teacher_forcing_ratio,
+                device=device,
+            )
+
+            batch_loss.backward()
+            optimizer.step()
+            LRsched.step()
+
+            if rank == 0:
+                batch_records = np.column_stack(
+                    [
+                        np.full(len(per_sample_loss), epochIDX),
+                        np.full(len(per_sample_loss), trainbatch_ID),
+                        per_sample_loss.detach().cpu().numpy().flatten(),
+                    ]
+                )
+                np.savetxt(train_rcrd_file, batch_records, fmt="%d, %d, %.8f")
+
+    if epochIDX % train_per_val == 0:
+        if rank == 0:
+            print("Validating...", epochIDX, flush=True)
+
+        val_rcrd_filename = val_rcrd_filename.replace(
+            "<epochIDX>",
+            f"{epochIDX:04d}",
+        )
+
+        model.eval()
+
+        with (
+            open(val_rcrd_filename, "a") if rank == 0 else nullcontext()
+        ) as val_rcrd_file:
+
+            with torch.no_grad():
+                for valbatch_ID, data in enumerate(validation_data):
+                    if valbatch_ID >= num_val_batches:
+                        break
+
+                    (
+                        ctx_v,
+                        ctx_t,
+                        ctx_b,
+                        future_v,
+                        future_b,
+                        future_dt,
+                        future_valid,
+                    ) = data
+
+                    ctx_v = ctx_v.to(device, non_blocking=True)
+                    ctx_t = ctx_t.to(device, non_blocking=True)
+                    ctx_b = ctx_b.to(device, non_blocking=True)
+                    future_v = future_v.to(device, non_blocking=True)
+                    future_b = future_b.to(device, non_blocking=True)
+                    future_dt = future_dt.to(torch.float32).to(
+                        device, non_blocking=True
+                    )
+                    future_valid = future_valid.to(device, non_blocking=True)
+
+                    # Validation is always a pure free-running rollout.
+                    per_sample_loss, _ = _rollout_pass_9band(
+                        ctx_v=ctx_v,
+                        ctx_t=ctx_t,
+                        ctx_b=ctx_b,
+                        future_v=future_v,
+                        future_b=future_b,
+                        future_dt=future_dt,
+                        future_valid=future_valid,
+                        model=model,
+                        loss_fn=loss_fn,
+                        n_bands=n_bands,
+                        teacher_forcing_ratio=0.0,
+                        device=device,
+                    )
+
+                    if rank == 0:
+                        batch_records = np.column_stack(
+                            [
+                                np.full(len(per_sample_loss), epochIDX),
+                                np.full(len(per_sample_loss), valbatch_ID),
+                                per_sample_loss.detach().cpu().numpy().flatten(),
+                            ]
+                        )
+                        np.savetxt(val_rcrd_file, batch_records, fmt="%d, %d, %.8f")
+
+
 def train_DDP_loderunner_epoch(
     training_data: torch.utils.data.DataLoader,
     validation_data: torch.utils.data.DataLoader,
