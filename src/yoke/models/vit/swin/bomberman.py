@@ -577,117 +577,101 @@ if __name__ == "__main__":
     window_sizes = [(8, 8), (8, 8), (4, 4), (2, 2)]
     patch_merge_scales = [(2, 2), (2, 2), (2, 2)]
 
-    # Tiny size
-    embed_dim = 96
-    block_structure = (1, 1, 3, 1)
-
     # Test LodeRunner architecture
     print("\n" + "=" * 60)
     print("Testing LodeRunner Architecture")
     print("=" * 60)
 
-    lode_runner = LodeRunner(
-        default_vars=default_vars,
-        image_size=image_size,
-        patch_size=patch_size,
-        embed_dim=embed_dim,
-        emb_factor=emb_factor,
-        num_heads=num_heads,
-        block_structure=block_structure,
-        window_sizes=window_sizes,
-        patch_merge_scales=patch_merge_scales,
-        verbose=False,
-    ).to(device)
+    # # Test Lightning wrapper initialization
+    # print("\n" + "-" * 60)
+    # print("Testing Lightning Wrapper")
+    # print("-" * 60)
 
-    loderunner_out = lode_runner(x, x_vars, out_vars, lead_times)
-    print(f"\nLodeRunner-tiny output shape: {loderunner_out.shape}")
-    print(f"LodeRunner-tiny output has NaNs: {torch.isnan(loderunner_out).any()}")
-    print(
-        f"LodeRunner-tiny parameters: "
-        f"{count_torch_params(lode_runner, trainable=True):,}"
-    )
-
-    # Test Lightning wrapper initialization
-    print("\n" + "-" * 60)
-    print("Testing Lightning Wrapper")
-    print("-" * 60)
-
-    L_loderunner = Lightning_LodeRunner(
-        lode_runner,
-        in_vars=x_vars,
-        out_vars=out_vars,
-        lr_scheduler=CosineWithWarmupScheduler,
-        scheduler_params={
-            "warmup_steps": 500,
-            "anchor_lr": 1e-3,
-            "terminal_steps": 1000,
-            "num_cycles": 0.5,
-            "min_fraction": 0.5,
-            "last_epoch": 0,
-        },
-    )
-    L_loderunner_out = L_loderunner(x, lead_times)
-    print(f"\nLightning LodeRunner-tiny output shape: {L_loderunner_out.shape}")
+    # L_loderunner = Lightning_LodeRunner(
+    #     lode_runner,
+    #     in_vars=x_vars,
+    #     out_vars=out_vars,
+    #     lr_scheduler=CosineWithWarmupScheduler,
+    #     scheduler_params={
+    #         "warmup_steps": 500,
+    #         "anchor_lr": 1e-3,
+    #         "terminal_steps": 1000,
+    #         "num_cycles": 0.5,
+    #         "min_fraction": 0.5,
+    #         "last_epoch": 0,
+    #     },
+    # )
+    # L_loderunner_out = L_loderunner(x, lead_times)
+    # print(f"\nLightning LodeRunner-tiny output shape: {L_loderunner_out.shape}")
 
     # Test different model sizes
     print("\n" + "=" * 60)
     print("Testing Different Model Sizes")
     print("=" * 60)
 
-    sizes = [
-        ("small", 96, (1, 1, 9, 1)),
-        ("big", 128, (1, 1, 9, 1)),
-        ("large", 192, (1, 1, 9, 1)),
-        ("huge", 352, (1, 1, 9, 1)),
-        ("giant", 512, (1, 1, 11, 2)),
-    ]
+    # sizes = [
+    #     ("tiny", 96, (1, 1, 3, 1)),
+    #     ("small", 96, (1, 1, 9, 1)),
+    #     ("big", 128, (1, 1, 9, 1)),
+    #     ("large", 192, (1, 1, 9, 1)),
+    #     ("huge", 352, (1, 1, 9, 1)),
+    #     ("giant", 512, (1, 1, 11, 2)),
+    # ]
 
-    for size_name, embed_dim, block_structure in sizes:
-        lode_runner = LodeRunner(
-            default_vars=default_vars,
-            image_size=image_size,
-            patch_size=patch_size,
-            embed_dim=embed_dim,
-            emb_factor=emb_factor,
-            num_heads=num_heads,
-            block_structure=block_structure,
-            window_sizes=window_sizes,
-            patch_merge_scales=patch_merge_scales,
-            verbose=False,
-        ).to(device)
-        param_count = count_torch_params(lode_runner, trainable=True)
-        print(f"\nLodeRunner-{size_name} parameters: {param_count:,}")
+    # for size_name, embed_dim, block_structure in sizes:
+    #     lode_runner = LodeRunner(
+    #         default_vars=default_vars,
+    #         image_size=image_size,
+    #         patch_size=patch_size,
+    #         embed_dim=embed_dim,
+    #         emb_factor=emb_factor,
+    #         num_heads=num_heads,
+    #         block_structure=block_structure,
+    #         window_sizes=window_sizes,
+    #         patch_merge_scales=patch_merge_scales,
+    #         verbose=False,
+    #     ).to(device)
+    #     param_count = count_torch_params(lode_runner, trainable=True)
+    #     print(f"\nLodeRunner-{size_name} parameters: {param_count:,}")
 
     # Test LodeRunnerViT architecture
     print("\n" + "=" * 60)
     print("Testing LodeRunnerViT Architecture")
     print("=" * 60)
 
-    vit_num_attention_heads = 8
-    vit_attention_head_dim = 16
-    vit_embed_dim = vit_num_attention_heads * vit_attention_head_dim  # 128
+    sizes = [
+        ("baseline", 512, 12, 8),
+        ("narrower", 384, 12, 6),
+        ("wider", 768, 12, 12),
+        ("shallower", 512, 8, 8),
+        ("deeper", 512, 16, 8),
+        ("headier", 512, 12, 16),
+        ("wide-shallow", 768, 8, 12),
+        #("wide-deep", 768, 16, 12),  # Cuda OOM
+    ]
 
-    lode_runner_vit = LodeRunnerViT(
-        default_vars=default_vars,
-        image_size=image_size,
-        patch_size=patch_size,
-        embed_dim=vit_embed_dim,
-        num_heads=num_heads,
-        num_attention_heads=vit_num_attention_heads,
-        attention_head_dim=vit_attention_head_dim,
-        num_layers=6,
-        mlp_ratio=4.0,
-        concat_mlp=True,
-        verbose=True,
-    ).to(device)
+    for size_name, vit_embed_dim, vit_num_layers, vit_num_attention_heads in sizes:
+        lode_runner_vit = LodeRunnerViT(
+            default_vars=default_vars,
+            image_size=image_size,
+            patch_size=patch_size,
+            embed_dim=vit_embed_dim,
+            num_heads=num_heads,
+            num_attention_heads=vit_num_attention_heads,
+            attention_head_dim=int(vit_embed_dim/vit_num_attention_heads),
+            num_layers=vit_num_layers,
+            mlp_ratio=4.0,
+            concat_mlp=True,
+            verbose=False,
+        ).to(device)
 
-    vit_out = lode_runner_vit(x, x_vars, out_vars, lead_times)
-    print(f"\nLodeRunnerViT output shape: {vit_out.shape}")
-    print(f"LodeRunnerViT output has NaNs: {torch.isnan(vit_out).any()}")
-    print(
-        f"LodeRunnerViT parameters: "
-        f"{count_torch_params(lode_runner_vit, trainable=True):,}"
-    )
+        vit_out = lode_runner_vit(x, x_vars, out_vars, lead_times)
+        print(f"\nLodeRunnerViT output shape: {vit_out.shape}")
+        print(f"LodeRunnerViT output has NaNs: {torch.isnan(vit_out).any()}")
+        print(
+            f"\nLodeRunnerViT-{size_name} parameters: "
+            f"{count_torch_params(lode_runner_vit, trainable=True):,}"
+        )
 
     print("\n" + "=" * 60)
     print("All tests completed successfully!")
