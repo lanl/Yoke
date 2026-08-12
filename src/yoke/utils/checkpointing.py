@@ -13,6 +13,7 @@ import h5py
 from yoke.models.vit.swin.bomberman import (
     LodeRunner,
     ScalarTemporalConditionedLodeRunner_gri,
+    ScalarTemporalConditionedLodeRunner_9band,
 )
 
 
@@ -411,6 +412,136 @@ def load_direct_loderunner_checkpoint(
 
     # Train conditioner
     for p in model.conditioner.parameters():
+        p.requires_grad = True
+
+    optimizer = torch.optim.AdamW(
+        list(model.conditioner.parameters())
+        + list(model.output_head.parameters()),
+        **optimizer_kwargs,
+    )
+
+    # Only restore optimizer for TRUE continuation checkpoints
+    if (
+        is_wrapper_checkpoint
+        and "optimizer_state_dict" in checkpoint_data
+    ):
+        optimizer.load_state_dict(
+            checkpoint_data["optimizer_state_dict"]
+        )
+
+        for state in optimizer.state.values():
+            for key, value in state.items():
+                if isinstance(value, torch.Tensor):
+                    state[key] = value.to(device)
+
+    return model, optimizer, starting_epoch
+
+
+def load_direct_loderunner_checkpoint_9band(
+    checkpoint_path: str,
+    model_args: dict,
+    optimizer_kwargs: dict,
+    device: torch.device,
+) -> tuple[torch.nn.Module, torch.optim.Optimizer, int]:
+    """Load a ScalarTemporalConditionedLodeRunner_9band model from a checkpoint.
+
+    The 9-band analogue of ``load_direct_loderunner_checkpoint``. Handles two
+    checkpoint types:
+      - An old plain LodeRunner checkpoint, whose weights are loaded into the
+        wrapper's backbone (conditioner/output-head are freshly initialized and
+        this is not treated as a true continuation).
+      - A ScalarTemporalConditionedLodeRunner_9band wrapper checkpoint, which is
+        loaded in full and treated as a continuation.
+
+    The backbone is frozen and only the conditioner and output-head parameters
+    are trainable.
+
+    Args:
+        checkpoint_path (str): Path to the checkpoint file.
+        model_args (dict): Fallback LodeRunner init args if the checkpoint has
+            none stored.
+        optimizer_kwargs (dict): Kwargs for the AdamW optimizer.
+        device (torch.device): Device to load the model/optimizer onto.
+
+    Returns:
+        model (torch.nn.Module): The wrapper model.
+        optimizer (torch.optim.Optimizer): Optimizer over trainable parameters.
+        starting_epoch (int): Epoch to continue training from.
+    """
+    checkpoint_data = torch.load(
+        checkpoint_path,
+        map_location=device,
+        weights_only=False,
+    )
+
+    saved_model_args = checkpoint_data.get("model_args", model_args)
+    context_len = checkpoint_data.get("context_len", 5)
+
+    backbone = LodeRunner(**saved_model_args).to(device)
+
+    model = ScalarTemporalConditionedLodeRunner_9band(
+        backbone=backbone,
+        context_len=context_len,
+        n_bands=checkpoint_data.get("n_bands", 9),
+        image_size=saved_model_args["image_size"],
+        backbone_channels=checkpoint_data.get("backbone_channels", 8),
+        hidden=checkpoint_data.get("hidden", 64),
+    ).to(device)
+
+    state_dict = checkpoint_data["model_state_dict"]
+
+    # Remove DDP prefix if present
+    if any(k.startswith("module.") for k in state_dict.keys()):
+        state_dict = {
+            k.replace("module.", "", 1): v
+            for k, v in state_dict.items()
+        }
+
+    # Detect checkpoint type
+    is_wrapper_checkpoint = any(
+        k.startswith("backbone.") for k in state_dict.keys()
+    )
+
+    # -------------------------------------------------
+    # OLD plain LodeRunner checkpoint
+    # -------------------------------------------------
+    if not is_wrapper_checkpoint:
+        missing_keys, unexpected_keys = model.backbone.load_state_dict(
+            state_dict,
+            strict=False,
+        )
+
+        print("Loaded old LodeRunner checkpoint into model.backbone")
+        print("Missing backbone keys:", missing_keys)
+        print("Unexpected backbone keys:", unexpected_keys)
+
+        # This is NOT a true continuation.
+        # Conditioner is newly initialized.
+        starting_epoch = 0
+
+    # -------------------------------------------------
+    # NEW ScalarTemporalConditionedLodeRunner_9band checkpoint
+    # -------------------------------------------------
+    else:
+        model.load_state_dict(state_dict, strict=True)
+
+        print("Loaded ScalarTemporalConditionedLodeRunner_9band checkpoint")
+
+        starting_epoch = checkpoint_data.get("epoch", 0)
+
+    noise_scale = checkpoint_data.get("noise_scale", 0.0)
+    model.backbone.noise_scale = noise_scale
+
+    # Freeze pretrained backbone
+    for p in model.backbone.parameters():
+        p.requires_grad = False
+
+    # Train conditioner
+    for p in model.conditioner.parameters():
+        p.requires_grad = True
+
+    # Train output head
+    for p in model.output_head.parameters():
         p.requires_grad = True
 
     optimizer = torch.optim.AdamW(

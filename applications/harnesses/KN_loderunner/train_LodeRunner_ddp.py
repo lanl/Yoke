@@ -24,7 +24,7 @@ from yoke.utils.restart import continuation_setup
 from yoke.utils.dataload import make_distributed_dataloader
 from yoke.utils.checkpointing import load_model_and_optimizer
 from yoke.utils.checkpointing import save_model_and_optimizer
-from yoke.utils.checkpointing import load_direct_loderunner_checkpoint
+from yoke.utils.checkpointing import load_direct_loderunner_checkpoint_9band
 from yoke.utils.parallel import setup_distributed, cleanup_distributed
 from yoke.lr_schedulers import CosineWithWarmupScheduler
 from yoke.helpers import cli
@@ -155,7 +155,7 @@ def main(args, rank, world_size, local_rank, device):
 
 
     if CONTINUATION:
-        model, optimizer, starting_epoch = load_direct_loderunner_checkpoint(
+        model, optimizer, starting_epoch = load_direct_loderunner_checkpoint_9band(
             checkpoint_path=checkpoint,
             model_args=model_args,
             optimizer_kwargs=optimizer_kwargs,
