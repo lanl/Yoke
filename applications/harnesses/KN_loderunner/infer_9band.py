@@ -56,7 +56,12 @@ BAND_COLORS = (
     "#264653",  # y
 )
 VALUE_COL = 1
+ERROR_COL = 2
 N_BANDS = len(BAND_KEYS)
+
+# Match training: drop upper-limit (non-detection) observations, flagged by a
+# non-finite uncertainty in ERROR_COL, from the context fed to the model.
+DROP_UPPER_LIMITS = True
 
 
 def study_tag(study):
@@ -207,6 +212,14 @@ def load_event_stream(fn, means, stds):
         arr = data[key]
         if arr.size == 0:
             continue
+
+        # Drop upper-limit (non-detection) rows, flagged by a non-finite
+        # uncertainty in ERROR_COL, matching how the model was trained.
+        if DROP_UPPER_LIMITS:
+            detected = np.isfinite(arr[:, ERROR_COL])
+            arr = arr[detected]
+            if arr.shape[0] == 0:
+                continue
 
         t = arr[:, 0].astype(np.float32)
         v = arr[:, VALUE_COL].astype(np.float32)
@@ -375,6 +388,8 @@ def main():
         stats_path=args.norm_stats_path,
         band_keys=BAND_KEYS,
         value_col=VALUE_COL,
+        error_col=ERROR_COL,
+        drop_upper_limits=DROP_UPPER_LIMITS,
     )
     means = np.asarray(means, dtype=np.float32)
     stds = np.asarray(stds, dtype=np.float32)

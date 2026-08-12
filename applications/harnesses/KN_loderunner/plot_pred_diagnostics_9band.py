@@ -41,7 +41,12 @@ plt.rcParams["figure.figsize"] = (7, 5)
 BAND_KEYS = NINE_BAND_KEYS
 BAND_NAMES = ("ztfg", "ztfr", "ztfi", "u", "g", "r", "i", "z", "y")
 VALUE_COL = 1
+ERROR_COL = 2
 N_BANDS = len(BAND_KEYS)
+
+# Match training: drop upper-limit (non-detection) observations, flagged by a
+# non-finite uncertainty in ERROR_COL.
+DROP_UPPER_LIMITS = True
 
 
 def study_tag(study):
@@ -150,6 +155,8 @@ def make_eval_dataset(args, context_len):
         stats_path=args.norm_stats_path,
         band_keys=BAND_KEYS,
         value_col=VALUE_COL,
+        error_col=ERROR_COL,
+        drop_upper_limits=DROP_UPPER_LIMITS,
     )
 
     print("Using band normalization:")
@@ -161,6 +168,8 @@ def make_eval_dataset(args, context_len):
         context_len=context_len,
         band_keys=BAND_KEYS,
         value_col=VALUE_COL,
+        error_col=ERROR_COL,
+        drop_upper_limits=DROP_UPPER_LIMITS,
         means=band_means,
         stds=band_stds,
     )

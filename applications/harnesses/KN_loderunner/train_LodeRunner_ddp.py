@@ -144,7 +144,13 @@ def main(args, rank, world_size, local_rank, device):
     # Nine-band merged event-stream setup (3 ZTF + 6 Rubin/LSST bands).
     BAND_KEYS = NINE_BAND_KEYS
     VALUE_COL = 1
+    ERROR_COL = 2
     N_BANDS = len(BAND_KEYS)
+
+    # Upper-limit (non-detection) observations are flagged by a non-finite
+    # uncertainty in ERROR_COL. Drop them so the model trains only on real
+    # detections; normalization statistics are computed the same way.
+    DROP_UPPER_LIMITS = True
 
     optimizer_kwargs = {
         "lr": 1e-4,# 1e-4, #1e-5
@@ -328,6 +334,8 @@ def main(args, rank, world_size, local_rank, device):
             stats_path=norm_stats_path,
             band_keys=BAND_KEYS,
             value_col=VALUE_COL,
+            error_col=ERROR_COL,
+            drop_upper_limits=DROP_UPPER_LIMITS,
         )
 
     dist.barrier()
@@ -347,6 +355,8 @@ def main(args, rank, world_size, local_rank, device):
         context_len=CONTEXT_LEN,
         band_keys=BAND_KEYS,
         value_col=VALUE_COL,
+        error_col=ERROR_COL,
+        drop_upper_limits=DROP_UPPER_LIMITS,
         means=band_means,
         stds=band_stds,
     )
@@ -355,6 +365,8 @@ def main(args, rank, world_size, local_rank, device):
         context_len=CONTEXT_LEN,
         band_keys=BAND_KEYS,
         value_col=VALUE_COL,
+        error_col=ERROR_COL,
+        drop_upper_limits=DROP_UPPER_LIMITS,
         means=band_means,
         stds=band_stds,
     )

@@ -41,6 +41,8 @@ def compute_band_normalization(
     file_prefix_list: list[str],
     band_keys: tuple[str, ...] = ("arr_ztfg", "arr_ztfr", "arr_ztfi"),
     value_col: int = 1,
+    error_col: int = 2,
+    drop_upper_limits: bool = False,
     stats_path: str = "kilonova_gri_norm_stats.npz",
 ) -> tuple[np.ndarray, np.ndarray]:
     """Compute global per-band mean/std over the training files only.
@@ -49,6 +51,11 @@ def compute_band_normalization(
         file_prefix_list (list[str]): List of npz files to accumulate stats over.
         band_keys (tuple[str, ...]): Keys of the bands to normalize.
         value_col (int): Column index of the value to accumulate per band.
+        error_col (int): Column index of the per-observation uncertainty. Only
+            used when drop_upper_limits is True.
+        drop_upper_limits (bool): If True, observations with a non-finite
+            uncertainty in error_col (upper limits / non-detections) are excluded
+            from the statistics, matching a dataset that drops them.
         stats_path (str): Path to save the computed statistics to.
 
     Returns:
@@ -66,6 +73,13 @@ def compute_band_normalization(
             vals = data[key][:, value_col].astype(np.float64)
 
             finite = np.isfinite(vals)
+
+            # Optionally exclude upper limits (non-finite uncertainty) so the
+            # normalization statistics match a dataset that drops them.
+            if drop_upper_limits:
+                errs = data[key][:, error_col].astype(np.float64)
+                finite = finite & np.isfinite(errs)
+
             vals = vals[finite]
 
             sums[b] += vals.sum()
@@ -101,6 +115,8 @@ def load_or_compute_band_normalization(
     stats_path: str = "kilonova_gri_norm_stats.npz",
     band_keys: tuple[str, ...] = ("arr_ztfg", "arr_ztfr", "arr_ztfi"),
     value_col: int = 1,
+    error_col: int = 2,
+    drop_upper_limits: bool = False,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Load cached per-band normalization stats or compute them if missing.
 
@@ -108,6 +124,10 @@ def load_or_compute_band_normalization(
         stats_path (str): Path to load/save the statistics.
         band_keys (tuple[str, ...]): Keys of the bands to normalize.
         value_col (int): Column index of the value to accumulate per band.
+        error_col (int): Column index of the per-observation uncertainty. Only
+            used when drop_upper_limits is True.
+        drop_upper_limits (bool): If True, exclude upper limits (non-finite
+            uncertainty) from the statistics, matching a dataset that drops them.
 
     Returns:
         means (np.ndarray): Per-band means, shape [n_bands].
@@ -137,6 +157,8 @@ def load_or_compute_band_normalization(
         file_prefix_list=file_prefix_list,
         band_keys=band_keys,
         value_col=value_col,
+        error_col=error_col,
+        drop_upper_limits=drop_upper_limits,
         stats_path=stats_path,
     )
 
@@ -361,6 +383,8 @@ class Kilonova_lc_scalar_context_DataSet_9band(Dataset):
         context_len: int = 5,
         band_keys: tuple[str, ...] = NINE_BAND_KEYS,
         value_col: int = 1,
+        error_col: int = 2,
+        drop_upper_limits: bool = True,
         means: np.ndarray = None,
         stds: np.ndarray = None,
     ) -> None:
@@ -372,6 +396,12 @@ class Kilonova_lc_scalar_context_DataSet_9band(Dataset):
             band_keys (tuple[str, ...]): Keys of the bands to load. Their order
                 defines the band index used in the one-hot encoding and target.
             value_col (int): Column index of the value to load per band.
+            error_col (int): Column index of the per-observation uncertainty.
+                Upper-limit (non-detection) rows are flagged by a non-finite
+                (e.g. inf) uncertainty in this column.
+            drop_upper_limits (bool): If True, observations with a non-finite
+                uncertainty in ``error_col`` are dropped from the event stream so
+                the model only sees real detections.
             means (np.ndarray): Per-band means for normalization, shape [n_bands].
             stds (np.ndarray): Per-band stds for normalization, shape [n_bands].
         """
@@ -396,6 +426,8 @@ class Kilonova_lc_scalar_context_DataSet_9band(Dataset):
         self.context_len = context_len
         self.band_keys = tuple(band_keys)
         self.value_col = value_col
+        self.error_col = error_col
+        self.drop_upper_limits = drop_upper_limits
         self.n_channels = len(self.band_keys)
 
         if means is None:
@@ -450,6 +482,15 @@ class Kilonova_lc_scalar_context_DataSet_9band(Dataset):
                 arr = data[key]
                 if arr.size == 0:
                     continue
+
+                # Drop upper-limit (non-detection) rows, which are flagged by a
+                # non-finite uncertainty (e.g. inf) in error_col. This keeps only
+                # real detections in the merged event stream.
+                if self.drop_upper_limits:
+                    detected = np.isfinite(arr[:, self.error_col])
+                    arr = arr[detected]
+                    if arr.shape[0] == 0:
+                        continue
 
                 times.append(arr[:, 0].astype(np.float32))
                 values.append(arr[:, value_col].astype(np.float32))
