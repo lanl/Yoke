@@ -647,6 +647,7 @@ if __name__ == "__main__":
         ("deeper", 512, 16, 8),
         ("headier", 512, 12, 16),
         ("wide-shallow", 768, 8, 12),
+        ("wide-deep", 640, 16, 10),
         #("wide-deep", 768, 16, 12),  # Cuda OOM
     ]
 
