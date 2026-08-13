@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --job-name=ddp_s<studyIDX>_e0001
+#SBATCH --job-name=ldrViT_LR_s<studyIDX>_e0001
 #SBATCH --account=<allocation>
 #PRODUCTION  
 #SBATCH --partition=gpu
