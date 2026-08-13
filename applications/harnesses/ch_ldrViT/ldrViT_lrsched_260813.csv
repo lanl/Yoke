@@ -1,0 +1,33 @@
+studyIDX,KNODES,NGPUS,VIT_EMBED_DIM,VIT_NUM_LAYERS,VIT_NUM_HEADS,MAX_TIME_OFFSET,NUM_WORKERS,BATCH_SIZE,NTRN_BATCH,NVAL_BATCH,ANCHOR_LR,NUM_CYCLES,MIN_FRACTION,TERMINAL_STEPS,WARMUP_STEPS,train_script,allocation
+# Chicoma accounts
+# hickmank              y26_artimis_ddc      debug                            debug 
+# hickmank              y26_artimis_ddc  gpu_debug                            debug 
+# hickmank              y26_artimis_ddc   standard           debug,standard,standby 
+# hickmank           y26_artimis-fmod_g      debug                            debug 
+# hickmank           y26_artimis-fmod_g        gpu           debug,standard,standby 
+# hickmank           y26_artimis-fmod_g  gpu_debug                            debug 
+# hickmank           y26_artimis-test_g      debug                            debug 
+# hickmank           y26_artimis-test_g        gpu           debug,standard,standby 
+# hickmank           y26_artimis-test_g  gpu_debug                            debug 
+# hickmank            y26_artimis_ddc_g      debug                            debug 
+# hickmank            y26_artimis_ddc_g        gpu           debug,standard,standby 
+# hickmank            y26_artimis_ddc_g  gpu_debug                            debug 
+# hickmank                  t26_ai4vv_g      debug                            debug 
+# hickmank                  t26_ai4vv_g        gpu           debug,standard,standby 
+# hickmank                  t26_ai4vv_g  gpu_debug                            debug 
+# hickmank               t26_hrznshld_g      debug                            debug 
+# hickmank               t26_hrznshld_g        gpu           debug,standard,standby 
+# hickmank               t26_hrznshld_g  gpu_debug                            debug
+#
+# This is a set of training runs for the LodeRunnerViT-20channel
+#
+# Model scalings found within smoketest in bomberman.py
+#
+# Here we study the effect of an LR schedule on the baseline model architecture
+#
+# Baseline
+1,1,4,512,12,8,1,2,8,1000,500,1.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-test_g
+#2,1,4,512,12,8,1,2,8,1000,500,2.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-test_g
+#3,1,4,512,12,8,1,2,8,1000,500,5.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-test_g
+#4,1,4,512,12,8,1,2,8,1000,500,1.0e-3,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-test_g
+#5,1,4,512,12,8,1,2,8,1000,500,2.0e-3,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-test_g
