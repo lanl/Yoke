@@ -85,6 +85,16 @@ parser.add_argument(
     help="Number of epochs over which the teacher-forcing ratio decays linearly "
     "from --tf_start to --tf_end. Only used when --n_rollout_steps > 1.",
 )
+parser.add_argument(
+    "--tf_ramp_start_epoch",
+    type=int,
+    default=0,
+    help="Absolute epoch at which the teacher-forcing anneal begins. Because "
+    "epoch numbering continues across restarts, set this to the checkpoint "
+    "epoch when starting rollout training as a continuation (e.g. 50 when "
+    "continuing from epoch 50) so the ramp is measured from there rather than "
+    "from epoch 0. Only used when --n_rollout_steps > 1.",
+)
 
 # Change some default filepaths.
 parser.set_defaults(
@@ -179,6 +189,7 @@ def main(args, rank, world_size, local_rank, device):
     tf_start = args.tf_start
     tf_end = args.tf_end
     tf_ramp_epochs = max(1, args.tf_ramp_epochs)
+    tf_ramp_start_epoch = args.tf_ramp_start_epoch
 
     # Nine-band merged event-stream setup (3 ZTF + 6 Rubin/LSST bands).
     BAND_KEYS = NINE_BAND_KEYS
@@ -458,8 +469,16 @@ def main(args, rank, world_size, local_rank, device):
 
         if n_rollout_steps > 1:
             # Linearly anneal the teacher-forcing ratio from tf_start to tf_end
-            # over tf_ramp_epochs, then hold at tf_end.
-            frac = min(1.0, (epochIDX - 1) / tf_ramp_epochs)
+            # over tf_ramp_epochs, then hold at tf_end. The ramp is measured from
+            # tf_ramp_start_epoch so it works correctly on a continuation, where
+            # epoch numbering carries over from the previous run.
+            frac = max(
+                0.0,
+                min(
+                    1.0,
+                    (epochIDX - 1 - tf_ramp_start_epoch) / tf_ramp_epochs,
+                ),
+            )
             teacher_forcing_ratio = tf_start + (tf_end - tf_start) * frac
 
             if rank == 0:
