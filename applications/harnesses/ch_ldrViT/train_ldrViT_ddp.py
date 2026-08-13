@@ -355,13 +355,6 @@ def main(args, rank, world_size, local_rank, device):
         last_epoch=last_epoch,
     )
 
-    LRsched = ConstantWithWarmupScheduler(
-        optimizer,
-        warmup_steps=0,
-        lr_constant=anchor_lr,
-        last_epoch=last_epoch,
-    )
-
     #############################################
     # Data Initialization (Distributed Dataloader)
     #############################################
