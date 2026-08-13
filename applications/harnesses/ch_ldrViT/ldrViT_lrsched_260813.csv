@@ -23,11 +23,34 @@ studyIDX,KNODES,NGPUS,VIT_EMBED_DIM,VIT_NUM_LAYERS,VIT_NUM_HEADS,MAX_TIME_OFFSET
 #
 # Model scalings found within smoketest in bomberman.py
 #
+# ("baseline", 512, 12, 8),
+# ("narrower", 384, 12, 6),
+# ("wider", 768, 12, 12),
+# ("shallower", 512, 8, 8),
+# ("deeper", 512, 16, 8),
+# ("headier", 512, 12, 16),
+# ("wide-shallow", 768, 8, 12),
+# ("wide-deep", 640, 16, 10),
+#
 # Here we study the effect of an LR schedule on the baseline model architecture
 #
 # Baseline
-1,1,4,512,12,8,1,2,8,1000,500,1.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-fmod_g
-#2,1,4,512,12,8,1,2,8,1000,500,2.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-test_g
-#3,1,4,512,12,8,1,2,8,1000,500,5.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-test_g
-#4,1,4,512,12,8,1,2,8,1000,500,1.0e-3,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-test_g
-#5,1,4,512,12,8,1,2,8,1000,500,2.0e-3,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-test_g
+1,1,4,512,12,8,1,2,4,1000,500,1.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-fmod_g
+#,1,4,512,12,8,1,2,8,1000,500,2.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-test_g
+#,1,4,512,12,8,1,2,8,1000,500,5.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-test_g
+#,1,4,512,12,8,1,2,8,1000,500,1.0e-3,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-test_g
+#,1,4,512,12,8,1,2,8,1000,500,2.0e-3,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-test_g
+# Narrower
+2,1,4,384,12,6,1,2,4,1000,500,1.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-fmod_g
+# Wider
+3,1,4,768,12,12,1,2,4,1000,500,1.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-fmod_g
+# Shallower
+4,1,4,512,8,8,1,2,4,1000,500,1.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-fmod_g
+# Deeper
+5,1,4,512,16,8,1,2,4,1000,500,1.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-fmod_g
+# Headier
+6,1,4,512,12,16,1,2,4,1000,500,1.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-fmod_g
+# Wide-shallow
+7,1,4,768,8,12,1,2,4,1000,500,1.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-fmod_g
+# Wide-deep
+8,1,4,640,16,10,1,2,4,1000,500,1.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-fmod_g
