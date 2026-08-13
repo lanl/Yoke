@@ -8,7 +8,7 @@ studyIDX,KNODES,NGPUS,EMBED_DIM,B0,B1,B2,B3,MAX_TIME_OFFSET,NUM_WORKERS,BATCH_SI
 3,1,4,128,1,1,9,1,1,2,10,1e-4,1000,500,train_LodeRunner_ddp.py
 # FTherm_PLI_large_DT1
 4,1,4,192,1,1,9,1,1,2,10,1e-4,1000,500,train_LodeRunner_ddp.py
-# FTherm_PLI_huge_DT1
+# FTherm_PLI_huge_DT1 - OOM on venadito
 5,1,4,352,1,1,9,1,1,2,10,1e-4,1000,500,train_LodeRunner_ddp.py
-# FTherm_PLI_giant_DT1
+# FTherm_PLI_giant_DT1 - OOM on venadito
 6,1,4,512,1,1,11,2,1,2,10,1e-4,1000,500,train_LodeRunner_ddp.py
