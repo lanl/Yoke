@@ -387,6 +387,49 @@ def get_rollout_from_stream(
         if band_sq_err[b]:
             band_mse[b] = float(np.mean(band_sq_err[b]))
 
+    # Smooth "forecast from now": hold the initial context window fixed and sweep
+    # a monotonic lead-time grid, predicting all bands at each lead time. This is
+    # the physically meaningful forecast (matches infer_9band.py) and, unlike the
+    # per-step autoregressive predictions, does not sawtooth, because the lead
+    # time increases monotonically instead of oscillating with the true event
+    # cadence. Computed only for the free-run rollout (teacher forcing has no
+    # meaning without feedback).
+    fixed_forecast = None
+    if not teacher_forced and steps:
+        win_t0 = times[start_idx : start_idx + context_len].astype(np.float32)
+        win_v0 = values[start_idx : start_idx + context_len].astype(np.float32)
+        win_b0 = bands[start_idx : start_idx + context_len].astype(np.int64)
+
+        x0 = build_context_input(
+            win_v=win_v0,
+            win_t=win_t0,
+            win_b=win_b0,
+            context_len=context_len,
+            n_bands=n_bands,
+            device=device,
+        )
+
+        last_ctx_t_rel = float(win_t0[-1]) - t_ref
+        max_step_t_rel = max(s["t_rel"] for s in steps)
+        horizon = max(1e-3, max_step_t_rel - last_ctx_t_rel)
+
+        n_lead = 60
+        lead_times = np.linspace(0.0, horizon, n_lead).astype(np.float32)
+        preds_norm = np.zeros((n_lead, n_bands), dtype=np.float32)
+
+        with torch.no_grad():
+            for k, dt in enumerate(lead_times):
+                Dt = torch.tensor([dt], dtype=torch.float32, device=device)
+                pred = model(x0, in_vars=None, out_vars=None, Dt=Dt)
+                preds_norm[k] = pred.reshape(n_bands).detach().cpu().numpy()
+
+        preds_mag = preds_norm * (stds[None, :] + EPS) + means[None, :]
+
+        fixed_forecast = {
+            "t_rel": last_ctx_t_rel + lead_times,
+            "preds_mag": preds_mag.astype(np.float32),
+        }
+
     return {
         "start_idx": start_idx,
         "context": context,
@@ -394,6 +437,7 @@ def get_rollout_from_stream(
         "mse": total_mse,
         "band_mse": band_mse,
         "n_steps": len(steps),
+        "fixed_forecast": fixed_forecast,
     }
 
 
@@ -443,6 +487,7 @@ def plot_series_lightcurves(rollout, means, stds, outpath, tf_rollout=None):
     context = rollout["context"]
     steps = rollout["steps"]
     tf_steps = tf_rollout["steps"] if tf_rollout is not None else None
+    fixed_forecast = rollout.get("fixed_forecast")
 
     for band_idx in range(N_BANDS):
         ax = axes[band_idx]
@@ -463,31 +508,50 @@ def plot_series_lightcurves(rollout, means, stds, outpath, tf_rollout=None):
                 label="context",
             )
 
-        # Free-running forecast for this band at EVERY rollout step, whether or
-        # not this band was observed and whether or not it had any context.
-        if steps:
-            t_all, pred_all = _band_forecast_curve(steps, band_idx)
+        # Headline forecast: smooth "forecast from now" over a monotonic lead
+        # time grid, holding the initial context fixed. This replaces the old
+        # per-step connected curve, whose sawtooth was an artifact of the lead
+        # time Dt oscillating with the true (nightly-clustered) event cadence
+        # rather than any model instability.
+        if fixed_forecast is not None:
             ax.plot(
-                t_all,
-                pred_all,
-                "--s",
+                fixed_forecast["t_rel"],
+                fixed_forecast["preds_mag"][:, band_idx],
+                "-",
                 color="k",
-                alpha=0.8,
-                markerfacecolor="none",
-                label="forecast (free-run)",
+                linewidth=1.8,
+                alpha=0.85,
+                label="forecast (fixed context)",
             )
 
-        # Teacher-forced forecast for the same band and steps.
+        # Per-step autoregressive predictions as UNCONNECTED markers. Each is
+        # made at that step's own lead time, so connecting them produces the
+        # sawtooth; shown as points they still reveal free-run bias vs truth
+        # without the misleading zigzag line.
+        if steps:
+            t_all, pred_all = _band_forecast_curve(steps, band_idx)
+            ax.scatter(
+                t_all,
+                pred_all,
+                s=22,
+                facecolors="none",
+                edgecolors="k",
+                alpha=0.6,
+                label="per-step pred (free-run)",
+            )
+
+        # Teacher-forced per-step predictions, also as unconnected markers.
         if tf_steps:
             t_tf, pred_tf = _band_forecast_curve(tf_steps, band_idx)
-            ax.plot(
+            ax.scatter(
                 t_tf,
                 pred_tf,
-                "--^",
-                color="tab:purple",
-                alpha=0.8,
-                markerfacecolor="none",
-                label="forecast (teacher-forced)",
+                s=22,
+                marker="^",
+                facecolors="none",
+                edgecolors="tab:purple",
+                alpha=0.6,
+                label="per-step pred (teacher-forced)",
             )
 
         # Truth for this band, at the steps where it was actually observed.

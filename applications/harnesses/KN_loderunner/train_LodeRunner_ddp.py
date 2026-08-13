@@ -266,34 +266,38 @@ def main(args, rank, world_size, local_rank, device):
             print("Missing keys:", missing_keys)
             print("Unexpected keys:", unexpected_keys)
 
-            model.noise_scale = noise_scale
+        # NOTE: model reconstruction and optimizer creation must run on ALL
+        # ranks. If gated behind `if rank == 0:` the non-zero ranks keep the bare
+        # LodeRunner and never define `optimizer`, which crashes DDP wrapping /
+        # the LR scheduler on multi-GPU runs.
+        model.noise_scale = noise_scale
 
-            backbone = model
+        backbone = model
 
-            model = ScalarTemporalConditionedLodeRunner_9band(
-                backbone=backbone,
-                context_len=CONTEXT_LEN,
-                n_bands=N_BANDS,
-                image_size=model_args["image_size"],
-                backbone_channels=8,
-                hidden=HIDDEN_CHANNELS,
-            ).to(device)
+        model = ScalarTemporalConditionedLodeRunner_9band(
+            backbone=backbone,
+            context_len=CONTEXT_LEN,
+            n_bands=N_BANDS,
+            image_size=model_args["image_size"],
+            backbone_channels=8,
+            hidden=HIDDEN_CHANNELS,
+        ).to(device)
 
-            # Stage 1: freeze pretrained LodeRunner, train only conditioner + output head
-            for p in model.backbone.parameters():
-                p.requires_grad = False
+        # Stage 1: freeze pretrained LodeRunner, train only conditioner + output head
+        for p in model.backbone.parameters():
+            p.requires_grad = False
 
-            for p in model.conditioner.parameters():
-                p.requires_grad = True
+        for p in model.conditioner.parameters():
+            p.requires_grad = True
 
-            for p in model.output_head.parameters():
-                p.requires_grad = True
+        for p in model.output_head.parameters():
+            p.requires_grad = True
 
-            optimizer = torch.optim.AdamW(
-                list(model.conditioner.parameters()) +
-                list(model.output_head.parameters()),
-                **optimizer_kwargs,
-            )
+        optimizer = torch.optim.AdamW(
+            list(model.conditioner.parameters()) +
+            list(model.output_head.parameters()),
+            **optimizer_kwargs,
+        )
 
     #loss_fn = nn.MSELoss(reduction="none")
     loss_fn = nn.HuberLoss(delta=0.1, reduction="none")

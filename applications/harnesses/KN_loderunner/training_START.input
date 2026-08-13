@@ -27,6 +27,16 @@ lsc240420_prefixes_validation_10pct.txt
 <WARMUP_STEPS>
 --noise_scale
 <NOISE_SCALE>
+--n_rollout_steps
+5
+--tf_start
+1.0
+--tf_end
+0.0
+--tf_ramp_start_epoch
+20
+--tf_ramp_epochs
+20
 --trn_rcrd_filename
 ./training_study<studyIDX>_epoch<epochIDX>.csv
 --val_rcrd_filename
@@ -40,7 +50,7 @@ lsc240420_prefixes_validation_10pct.txt
 --Knodes
 <KNODES>
 --total_epochs
-500
+90
 --cycle_epochs
 1
 --train_batches
