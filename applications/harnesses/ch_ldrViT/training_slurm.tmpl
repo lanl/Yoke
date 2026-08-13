@@ -3,13 +3,13 @@
 #SBATCH --job-name=ddp_s<studyIDX>_e0001
 #SBATCH --account=<allocation>
 #PRODUCTION  
-# #SBATCH --partition=gpu
-# #SBATCH --time=16:00:00
+#SBATCH --partition=gpu
+#SBATCH --time=16:00:00
 #DEBUG  
-#SBATCH --time=1:00:00
-#SBATCH --qos=debug
-#SBATCH --reservation=gpu_debug
-#SBATCH --partition=gpu_debug
+# #SBATCH --time=1:00:00
+# #SBATCH --qos=debug
+# #SBATCH --reservation=gpu_debug
+# #SBATCH --partition=gpu_debug
 #SBATCH --nodes=<KNODES>
 #SBATCH --ntasks-per-node=<NGPUS>
 #SBATCH --gpus-per-node=<NGPUS>

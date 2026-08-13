@@ -35,22 +35,53 @@ studyIDX,KNODES,NGPUS,VIT_EMBED_DIM,VIT_NUM_LAYERS,VIT_NUM_HEADS,MAX_TIME_OFFSET
 # Here we study the effect of an LR schedule on the baseline model architecture
 #
 # Baseline
-1,1,4,512,12,8,1,2,4,1000,500,1.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-fmod_g
-#,1,4,512,12,8,1,2,8,1000,500,2.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-test_g
-#,1,4,512,12,8,1,2,8,1000,500,5.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-test_g
-#,1,4,512,12,8,1,2,8,1000,500,1.0e-3,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-test_g
-#,1,4,512,12,8,1,2,8,1000,500,2.0e-3,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-test_g
+1,1,4,512,12,8,1,2,4,1000,500,1.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,t26_hrznshld_g
+2,1,4,512,12,8,1,2,4,1000,500,2.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,t26_hrznshld_g
+3,1,4,512,12,8,1,2,4,1000,500,5.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,t26_hrznshld_g
+4,1,4,512,12,8,1,2,4,1000,500,1.0e-3,0.5,0.5,1000,500,train_ldrViT_ddp.py,t26_hrznshld_g
+5,1,4,512,12,8,1,2,4,1000,500,2.0e-3,0.5,0.5,1000,500,train_ldrViT_ddp.py,t26_hrznshld_g
 # Narrower
-2,1,4,384,12,6,1,2,4,1000,500,1.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-fmod_g
+6,1,4,384,12,6,1,2,4,1000,500,1.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,t26_hrznshld_g
+7,1,4,384,12,6,1,2,4,1000,500,2.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,t26_hrznshld_g
+8,1,4,384,12,6,1,2,4,1000,500,5.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,t26_hrznshld_g
+9,1,4,384,12,6,1,2,4,1000,500,1.0e-3,0.5,0.5,1000,500,train_ldrViT_ddp.py,t26_hrznshld_g
+10,1,4,384,12,6,1,2,4,1000,500,2.0e-3,0.5,0.5,1000,500,train_ldrViT_ddp.py,t26_hrznshld_g
 # Wider
-3,1,4,768,12,12,1,2,4,1000,500,1.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-fmod_g
+# OOM at batchsize=4
+11,1,4,768,12,12,1,2,1,1000,500,1.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,t26_hrznshld_g
+12,1,4,768,12,12,1,2,1,1000,500,2.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,t26_hrznshld_g
+13,1,4,768,12,12,1,2,1,1000,500,5.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,t26_hrznshld_g
+14,1,4,768,12,12,1,2,1,1000,500,1.0e-3,0.5,0.5,1000,500,train_ldrViT_ddp.py,t26_hrznshld_g
+15,1,4,768,12,12,1,2,1,1000,500,2.0e-3,0.5,0.5,1000,500,train_ldrViT_ddp.py,t26_hrznshld_g
 # Shallower
-4,1,4,512,8,8,1,2,4,1000,500,1.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-fmod_g
+16,1,4,512,8,8,1,2,4,1000,500,1.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,t26_hrznshld_g
+17,1,4,512,8,8,1,2,4,1000,500,2.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,t26_hrznshld_g
+18,1,4,512,8,8,1,2,4,1000,500,5.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,t26_hrznshld_g
+19,1,4,512,8,8,1,2,4,1000,500,1.0e-3,0.5,0.5,1000,500,train_ldrViT_ddp.py,t26_hrznshld_g
+20,1,4,512,8,8,1,2,4,1000,500,2.0e-3,0.5,0.5,1000,500,train_ldrViT_ddp.py,t26_hrznshld_g
 # Deeper
-5,1,4,512,16,8,1,2,4,1000,500,1.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-fmod_g
+# OOM at batchsize=4
+21,1,4,512,16,8,1,2,1,1000,500,1.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis_ddc_g
+22,1,4,512,16,8,1,2,1,1000,500,2.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis_ddc_g
+23,1,4,512,16,8,1,2,1,1000,500,5.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis_ddc_g
+24,1,4,512,16,8,1,2,1,1000,500,1.0e-3,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis_ddc_g
+25,1,4,512,16,8,1,2,1,1000,500,2.0e-3,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis_ddc_g
 # Headier
-6,1,4,512,12,16,1,2,4,1000,500,1.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-fmod_g
+26,1,4,512,12,16,1,2,4,1000,500,1.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis_ddc_g
+27,1,4,512,12,16,1,2,4,1000,500,2.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis_ddc_g
+28,1,4,512,12,16,1,2,4,1000,500,5.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis_ddc_g
+29,1,4,512,12,16,1,2,4,1000,500,1.0e-3,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis_ddc_g
+30,1,4,512,12,16,1,2,4,1000,500,2.0e-3,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis_ddc_g
 # Wide-shallow
-7,1,4,768,8,12,1,2,4,1000,500,1.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-fmod_g
+31,1,4,768,8,12,1,2,4,1000,500,1.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-fmod_g
+32,1,4,768,8,12,1,2,4,1000,500,2.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-fmod_g
+33,1,4,768,8,12,1,2,4,1000,500,5.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-fmod_g
+34,1,4,768,8,12,1,2,4,1000,500,1.0e-3,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-fmod_g
+35,1,4,768,8,12,1,2,4,1000,500,2.0e-3,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-fmod_g
 # Wide-deep
-8,1,4,640,16,10,1,2,4,1000,500,1.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-fmod_g
+# OOM at batchsize=4
+36,1,4,640,16,10,1,2,1,1000,500,1.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-fmod_g
+37,1,4,640,16,10,1,2,1,1000,500,2.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-fmod_g
+38,1,4,640,16,10,1,2,1,1000,500,5.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-fmod_g
+39,1,4,640,16,10,1,2,1,1000,500,1.0e-3,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-fmod_g
+40,1,4,640,16,10,1,2,1,1000,500,2.0e-3,0.5,0.5,1000,500,train_ldrViT_ddp.py,y26_artimis-fmod_g
