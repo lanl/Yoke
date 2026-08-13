@@ -413,10 +413,15 @@ class Kilonova_lc_scalar_context_DataSet_9band(Dataset):
         """
         # FIXME: hardcoded scratch path. Should be passed in as an argument so
         # this dataset does not depend on a user-specific filesystem location.
+        # NOTE: must point at the SAME dataset as
+        # load_or_compute_band_normalization (the rubin_ztf_10000 set). The old
+        # uniform_dataset_20000 set is ZTF-only, so training on it left the six
+        # Rubin output heads without any targets (never trained) while the norm
+        # stats were computed over Rubin+ZTF -- a silent train/stats mismatch.
         file_prefix_list = sorted(
             glob.glob(
                 "/net/sescratch1/atoivonen/data/KN_lightcurves/"
-                "uniform_dataset_20000/lc_*.npz"
+                "rubin_ztf_10000_dataset/lc_*.npz"
             )
         )
 
