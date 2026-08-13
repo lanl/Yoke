@@ -4,7 +4,7 @@
 #SBATCH --account=<allocation>
 #PRODUCTION  
 #SBATCH --partition=gpu
-#SBATCH --time=16:00:00
+#SBATCH --time=08:00:00
 #DEBUG  
 # #SBATCH --time=1:00:00
 # #SBATCH --qos=debug
