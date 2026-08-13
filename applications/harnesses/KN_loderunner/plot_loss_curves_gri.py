@@ -124,6 +124,60 @@ def infer_loss_labels(loss_names, n_loss_cols):
     return loss_names
 
 
+def shade_tf_regimes(ax, ramp_start, ramp_epochs):
+    """Shade the scheduled-sampling teacher-forcing regimes on a loss axis.
+
+    The teacher-forcing ratio p anneals from 1.0 (fully teacher-forced) down to
+    0.0 (fully free-running) over training. This splits the run into three
+    regimes, defined entirely by ``ramp_start`` and ``ramp_epochs``:
+
+      - Warmup   [xmin, ramp_start]:              p = 1.0, equivalent to
+                                                  single-step training.
+      - Anneal   [ramp_start, ramp_start+epochs]: p ramps 1.0 -> 0.0.
+      - Free-run [ramp_start+epochs, xmax]:       p = 0.0, matches inference.
+
+    Only these training regimes are shaded; the validation curve is always pure
+    free-run regardless of regime, so a val bump at the anneal onset is expected.
+    """
+    xmin, xmax = ax.get_xlim()
+    anneal_end = ramp_start + ramp_epochs
+
+    # Clip regime edges to the visible epoch range so a partial run still shades
+    # sensibly (e.g. a plot that only reaches into the anneal phase).
+    warmup_lo, warmup_hi = xmin, min(ramp_start, xmax)
+    anneal_lo, anneal_hi = max(ramp_start, xmin), min(anneal_end, xmax)
+    free_lo, free_hi = max(anneal_end, xmin), xmax
+
+    regimes = [
+        (warmup_lo, warmup_hi, "tab:blue", "warmup (p=1)"),
+        (anneal_lo, anneal_hi, "tab:orange", "anneal (p:1→0)"),
+        (free_lo, free_hi, "tab:green", "free-run (p=0)"),
+    ]
+
+    for lo, hi, color, label in regimes:
+        if hi <= lo:
+            continue
+        ax.axvspan(lo, hi, color=color, alpha=0.08, zorder=0)
+        # Place the label near the top of the axis, centered in the band.
+        ax.text(
+            0.5 * (lo + hi),
+            0.97,
+            label,
+            transform=ax.get_xaxis_transform(),
+            ha="center",
+            va="top",
+            fontsize=8,
+            color=color,
+            alpha=0.9,
+        )
+
+    for boundary in (ramp_start, anneal_end):
+        if xmin < boundary < xmax:
+            ax.axvline(
+                boundary, color="gray", linewidth=1, linestyle=":", alpha=0.6
+            )
+
+
 def plot_epoch_curves(train, val, args):
     train_ep, train_mean, train_std = epoch_stats(
         train["epochs"],
@@ -193,6 +247,16 @@ def plot_epoch_curves(train, val, args):
 
     if args.logy:
         plt.yscale("log")
+
+    # Optionally shade the scheduled-sampling teacher-forcing regimes. Gated on
+    # attributes that only the 9-band wrapper sets, so g/r/i runs (and any caller
+    # that doesn't opt in) get the plain plot unchanged.
+    if getattr(args, "shade_regimes", False):
+        shade_tf_regimes(
+            plt.gca(),
+            ramp_start=getattr(args, "tf_ramp_start_epoch", 20),
+            ramp_epochs=getattr(args, "tf_ramp_epochs", 20),
+        )
 
     plt.tight_layout()
     plt.savefig(args.out, dpi=args.dpi)
