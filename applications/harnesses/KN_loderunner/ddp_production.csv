@@ -25,10 +25,12 @@ studyIDX,YOKE_TORCH_ENV,KNODES,NGPUS,EMBED_DIM,B0,B1,B2,B3,NUM_WORKERS,BATCH_SIZ
 #22,yoke311,1,1,128,1,1,9,1,2,10,1000,500,2.0e-3,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
 #23,yoke311,1,1,128,1,1,9,1,2,10,1000,500,2.0e-3,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
 24,yoke311,1,1,128,1,1,9,1,2,10,1000,500,2.0e-3,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
-# study 25: 4 GPUs for ~4x faster wall-clock. NTRN_BATCH 1000->250 and
-# NVAL_BATCH 500->125 keep total samples/epoch the same as study 24
-# (4 ranks x 250 = 1000). TERMINAL/WARMUP steps scaled 4x down (are counted
-# in per-rank batches) so the LR schedule spans the same number of epochs.
-25,yoke311,1,4,128,1,1,9,1,2,10,250,125,2.0e-3,0.5,0.5,250,125,0.0,train_LodeRunner_ddp.py
+# study 25: full 8-GPU node for ~8x faster wall-clock than 1 GPU. NTRN_BATCH
+# 1000->125 and NVAL_BATCH 500->63 keep total samples/epoch the same as study 24
+# (8 ranks x 125 = 1000). TERMINAL/WARMUP steps scaled ~8x down (counted in
+# per-rank batches) so the LR schedule spans the same number of epochs. These
+# are 8-GPU H100 nodes (se*); cpus-per-task=24 in the slurm template fits
+# 24*8=192 cores.
+25,yoke311,1,8,128,1,1,9,1,2,10,125,63,2.0e-3,0.5,0.5,125,63,0.0,train_LodeRunner_ddp.py
 
 

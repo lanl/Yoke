@@ -17,6 +17,12 @@
 #SBATCH --nodes=<KNODES>
 #SBATCH --ntasks-per-node=<NGPUS>
 #SBATCH --gpus-per-node=<NGPUS>
+# nodes have 8 H100s and 192-208 CPUs, i.e. ~24 cores/GPU. One task
+# per GPU (ntasks-per-node=NGPUS), so cpus-per-task=24 gives each rank enough
+# cores for its dataloader workers + OMP threads without over-requesting on the
+# 192-core nodes (24*NGPUS stays within budget for NGPUS up to 8). Without this
+# each task defaults to ~1 CPU and starves data loading, throttling the GPUs.
+#SBATCH --cpus-per-task=24
 #SBATCH --mem-per-gpu=50G
 #SBATCH --output=study<studyIDX>_epoch<epochIDX>.out
 #SBATCH --error=study<studyIDX>_epoch<epochIDX>.err
@@ -54,8 +60,9 @@ module load anaconda/3.12
 source activate
 conda activate <YOKE_TORCH_ENV>
 
-# Set number of threads per GPU
-export OMP_NUM_THREADS=10
+# Set number of threads per GPU. Must be <= cpus-per-task (24). Leaves cores for
+# the dataloader workers (NUM_WORKERS per rank) alongside the OMP compute threads.
+export OMP_NUM_THREADS=8
 
 # Get start time
 export date00=`date`
