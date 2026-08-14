@@ -14,10 +14,16 @@ non-detection. This script summarises the data set as histograms:
      ``--include_upper_limits`` is set.
   3. Distribution of detections-per-light-curve, per band and summed over all
      bands -- how long/rich a typical object is.
+  4. A context-length sweep: how many training samples (context windows) and how
+     many light curves survive as ``context_len`` grows. This matters because the
+     9-band model bakes ``context_len`` into its first layer, so choosing a
+     longer context means a retrain -- this panel shows the data cost before you
+     pay for it.
 
 Run directly, e.g.:
     python plot_observation_histograms.py
     python plot_observation_histograms.py --include_upper_limits
+    python plot_observation_histograms.py --sweep_max 20
     python plot_observation_histograms.py \
         --data_glob '/path/to/lc_*.npz' --out obs_hist.png
 """
@@ -194,6 +200,78 @@ def plot_per_band_hist(ax, counts):
     ax.grid(True, alpha=0.3)
 
 
+def context_len_sweep(events_per_file, sweep_max):
+    """Compute surviving samples/curves as a function of ``context_len``.
+
+    The 9-band dataset turns each light curve of ``n_events`` detections into
+    ``max(0, n_events - context_len)`` training windows (one per start index,
+    ``max_start = n_events - context_len - 1``, inclusive). A curve contributes
+    at all only when ``n_events > context_len``. This mirrors
+    ``Kilonova_lc_scalar_context_DataSet_9band`` exactly.
+
+    Args:
+        events_per_file (np.ndarray): Detections (== merged event count) per
+            light curve, one entry per file.
+        sweep_max (int): Largest context length to evaluate.
+
+    Returns:
+        context_lens (np.ndarray): Candidate context lengths, shape [sweep_max].
+        n_samples (np.ndarray): Total training windows at each context length.
+        n_curves (np.ndarray): Number of light curves that yield >=1 window.
+    """
+    context_lens = np.arange(1, sweep_max + 1)
+    ev = events_per_file.astype(np.int64)
+
+    n_samples = np.array(
+        [np.maximum(ev - c, 0).sum() for c in context_lens], dtype=np.int64
+    )
+    n_curves = np.array(
+        [int((ev > c).sum()) for c in context_lens], dtype=np.int64
+    )
+    return context_lens, n_samples, n_curves
+
+
+def plot_context_sweep(ax, events_per_file, sweep_max):
+    """Plot surviving training samples and light curves vs context length."""
+    if events_per_file.size == 0:
+        ax.set_visible(False)
+        return
+
+    context_lens, n_samples, n_curves = context_len_sweep(
+        events_per_file, sweep_max
+    )
+    n_total = events_per_file.size
+
+    # Samples on the left axis (can be large); fraction of curves kept on the
+    # right axis so both trends are readable together.
+    ax.plot(context_lens, n_samples, marker="o", color="tab:purple",
+            label="training windows")
+    ax.set_xlabel("context_len")
+    ax.set_ylabel("Total training windows", color="tab:purple")
+    ax.tick_params(axis="y", labelcolor="tab:purple")
+    ax.set_title("Data cost of context length")
+    ax.grid(True, alpha=0.3)
+
+    ax2 = ax.twinx()
+    frac_curves = n_curves / n_total
+    ax2.plot(context_lens, frac_curves, marker="s", color="tab:red",
+             linestyle="--", label="fraction of curves kept")
+    ax2.set_ylabel("Fraction of light curves kept", color="tab:red")
+    ax2.tick_params(axis="y", labelcolor="tab:red")
+    ax2.set_ylim(0, 1.02)
+
+    # Mark the current default context_len=5 for reference.
+    if context_lens[0] <= 5 <= context_lens[-1]:
+        ax.axvline(5, color="gray", linestyle=":", linewidth=1, alpha=0.7)
+        ax.text(5, ax.get_ylim()[1], " default 5", ha="left", va="top",
+                fontsize=8, color="gray")
+
+    # Combined legend from both axes.
+    lines1, labels1 = ax.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax.legend(lines1 + lines2, labels1 + labels2, fontsize=8, loc="center right")
+
+
 def print_summary(counts, include_upper_limits):
     """Print the per-band and overall counts to stdout."""
     det = counts["det_totals"]
@@ -213,6 +291,22 @@ def print_summary(counts, include_upper_limits):
             f"median {np.median(totals):.0f}, "
             f"min {int(totals.min())}, max {int(totals.max())}"
         )
+
+
+def print_sweep(events_per_file, sweep_max):
+    """Print the context-length sweep table to stdout."""
+    if events_per_file.size == 0:
+        return
+
+    context_lens, n_samples, n_curves = context_len_sweep(
+        events_per_file, sweep_max
+    )
+    n_total = events_per_file.size
+
+    print("\nContext-length sweep (samples = training windows):")
+    print(f"{'context_len':>12} {'windows':>12} {'curves_kept':>12} {'frac':>7}")
+    for c, s, k in zip(context_lens, n_samples, n_curves):
+        print(f"{int(c):>12} {int(s):>12} {int(k):>12} {k / n_total:>7.2f}")
 
 
 def main():
@@ -248,6 +342,15 @@ def main():
         ),
     )
     parser.add_argument(
+        "--sweep_max",
+        type=int,
+        default=20,
+        help=(
+            "Largest context_len to evaluate in the data-cost sweep panel. "
+            "Default 20."
+        ),
+    )
+    parser.add_argument(
         "--out",
         type=str,
         default="observation_histograms.png",
@@ -265,17 +368,19 @@ def main():
 
     counts = collect_counts(files, NINE_BAND_KEYS, args.error_col)
     print_summary(counts, args.include_upper_limits)
+    print_sweep(counts["total_det_per_curve"], args.sweep_max)
 
-    fig, axes = plt.subplots(1, 3, figsize=(18, 5.5))
-    plot_band_totals(axes[0], counts, args.include_upper_limits)
-    plot_total_hist(axes[1], counts)
-    plot_per_band_hist(axes[2], counts)
+    fig, axes = plt.subplots(2, 2, figsize=(15, 11))
+    plot_band_totals(axes[0, 0], counts, args.include_upper_limits)
+    plot_total_hist(axes[0, 1], counts)
+    plot_per_band_hist(axes[1, 0], counts)
+    plot_context_sweep(axes[1, 1], counts["total_det_per_curve"], args.sweep_max)
 
     fig.suptitle(
         f"KN light-curve observations ({counts['n_files']} light curves)",
         fontsize=13,
     )
-    fig.tight_layout(rect=(0, 0, 1, 0.96))
+    fig.tight_layout(rect=(0, 0, 1, 0.97))
     fig.savefig(args.out, dpi=args.dpi)
     print(f"Saved {os.path.abspath(args.out)}")
 
