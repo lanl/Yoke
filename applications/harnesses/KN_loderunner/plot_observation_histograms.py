@@ -69,6 +69,10 @@ def collect_counts(files, band_keys, error_col):
                 detection count in each file that contains that band.
             total_det_per_curve (np.ndarray): Total detections (all bands) per
                 file, one entry per file.
+            event_times_per_file (list[np.ndarray]): For each file, the merged,
+                time-sorted, file-relative detection times (all bands), matching
+                the event stream the 9-band dataset builds. Used by the
+                time-window sweep.
             n_files (int): Number of files successfully read.
     """
     n_bands = len(band_keys)
@@ -76,6 +80,7 @@ def collect_counts(files, band_keys, error_col):
     lim_totals = np.zeros(n_bands, dtype=np.int64)
     det_per_curve = [[] for _ in range(n_bands)]
     total_det_per_curve = []
+    event_times_per_file = []
 
     n_files = 0
     for fn in files:
@@ -86,6 +91,7 @@ def collect_counts(files, band_keys, error_col):
             continue
 
         file_total_det = 0
+        file_det_times = []
         for b, key in enumerate(band_keys):
             if key not in data.files:
                 continue
@@ -104,8 +110,21 @@ def collect_counts(files, band_keys, error_col):
             det_per_curve[b].append(n_det)
             file_total_det += n_det
 
+            # Collect detection times (col 0 = MJD) for the merged event stream.
+            if n_det:
+                file_det_times.append(arr[detected, 0].astype(np.float64))
+
         data.close()
         total_det_per_curve.append(file_total_det)
+
+        # Merge all bands' detections into one time-sorted, file-relative stream,
+        # exactly as Kilonova_lc_scalar_context_DataSet_9band does.
+        if file_det_times:
+            merged = np.concatenate(file_det_times)
+            merged.sort(kind="stable")
+            merged -= merged.min()
+            event_times_per_file.append(merged)
+
         n_files += 1
 
     return {
@@ -113,6 +132,7 @@ def collect_counts(files, band_keys, error_col):
         "lim_totals": lim_totals,
         "det_per_curve": [np.asarray(c, dtype=np.int64) for c in det_per_curve],
         "total_det_per_curve": np.asarray(total_det_per_curve, dtype=np.int64),
+        "event_times_per_file": event_times_per_file,
         "n_files": n_files,
     }
 
@@ -272,6 +292,101 @@ def plot_context_sweep(ax, events_per_file, sweep_max):
     ax.legend(lines1 + lines2, labels1 + labels2, fontsize=8, loc="center right")
 
 
+def time_window_counts(event_times_per_file, window_days):
+    """Real detections per context window for a fixed lookback in days.
+
+    Mirrors the planned window-mode selection in
+    ``Kilonova_lc_scalar_context_DataSet_9band``: for each target event (every
+    event after the first in a file's merged, time-sorted stream), the context
+    is every earlier event ``j`` with
+    ``times[target - 1] - times[j] <= window_days``. The window is anchored on
+    the event immediately preceding the target (the most recent observation),
+    so it always contains at least that one event.
+
+    Args:
+        event_times_per_file (list[np.ndarray]): Per-file merged, sorted,
+            file-relative detection times.
+        window_days (float): Trailing lookback length in days.
+
+    Returns:
+        np.ndarray: One entry per (file, target-event) sample: the number of
+            real detections that fall inside the trailing window.
+    """
+    counts = []
+    for times in event_times_per_file:
+        n = times.shape[0]
+        if n < 2:
+            continue
+        # target_idx runs over every event after the first; the window is
+        # anchored at times[target_idx - 1] and looks back window_days.
+        for target_idx in range(1, n):
+            anchor = times[target_idx - 1]
+            lo = anchor - window_days
+            # Events strictly before the target that are within the window.
+            in_window = times[:target_idx]
+            counts.append(int((in_window >= lo).sum()))
+    return np.asarray(counts, dtype=np.int64)
+
+
+def time_window_sweep(event_times_per_file, window_grid):
+    """Distribution of context size vs trailing window length.
+
+    Args:
+        event_times_per_file (list[np.ndarray]): Per-file merged detection times.
+        window_grid (np.ndarray): Candidate window lengths in days.
+
+    Returns:
+        window_grid (np.ndarray): The evaluated window lengths.
+        stats (dict): Percentile arrays keyed by label ("median", "p90", "p95",
+            "p99", "max", "mean"), each shape [len(window_grid)].
+        raw (list[np.ndarray]): Per-window arrays of per-sample context counts,
+            for histogramming.
+    """
+    pct_labels = [("median", 50), ("p90", 90), ("p95", 95), ("p99", 99)]
+    stats = {label: [] for label, _ in pct_labels}
+    stats["max"] = []
+    stats["mean"] = []
+    raw = []
+
+    for w in window_grid:
+        c = time_window_counts(event_times_per_file, float(w))
+        raw.append(c)
+        if c.size == 0:
+            for label, _ in pct_labels:
+                stats[label].append(0.0)
+            stats["max"].append(0.0)
+            stats["mean"].append(0.0)
+            continue
+        for label, q in pct_labels:
+            stats[label].append(float(np.percentile(c, q)))
+        stats["max"].append(float(c.max()))
+        stats["mean"].append(float(c.mean()))
+
+    stats = {k: np.asarray(v) for k, v in stats.items()}
+    return window_grid, stats, raw
+
+
+def plot_time_window_sweep(ax, event_times_per_file, window_grid):
+    """Plot context-size percentiles vs trailing window length."""
+    if len(event_times_per_file) == 0:
+        ax.set_visible(False)
+        return
+
+    window_grid, stats, _ = time_window_sweep(event_times_per_file, window_grid)
+
+    ax.plot(window_grid, stats["median"], marker="o", label="median")
+    ax.plot(window_grid, stats["p90"], marker="^", label="90th pct")
+    ax.plot(window_grid, stats["p95"], marker="s", label="95th pct")
+    ax.plot(window_grid, stats["p99"], marker="d", label="99th pct")
+    ax.plot(window_grid, stats["max"], linestyle=":", color="gray", label="max")
+
+    ax.set_xlabel("Context window length W (days)")
+    ax.set_ylabel("Real detections in window")
+    ax.set_title("Context size vs time window\n(pick max_context_len from a high pct)")
+    ax.legend(fontsize=8)
+    ax.grid(True, alpha=0.3)
+
+
 def print_summary(counts, include_upper_limits):
     """Print the per-band and overall counts to stdout."""
     det = counts["det_totals"]
@@ -307,6 +422,37 @@ def print_sweep(events_per_file, sweep_max):
     print(f"{'context_len':>12} {'windows':>12} {'curves_kept':>12} {'frac':>7}")
     for c, s, k in zip(context_lens, n_samples, n_curves):
         print(f"{int(c):>12} {int(s):>12} {int(k):>12} {k / n_total:>7.2f}")
+
+
+def print_time_window_sweep(event_times_per_file, window_grid):
+    """Print the time-window context-size sweep table to stdout.
+
+    This is the table to read when choosing the two window-mode hyperparameters:
+    ``context_window_days`` (a W with enough baseline for real evolution) and
+    ``max_context_len`` (a high percentile so padding rarely clips real events).
+    """
+    if len(event_times_per_file) == 0:
+        return
+
+    window_grid, stats, raw = time_window_sweep(event_times_per_file, window_grid)
+
+    print("\nTime-window context sweep (real detections inside trailing W days):")
+    print(
+        f"{'W_days':>8} {'n_samples':>10} {'median':>8} {'p90':>6} "
+        f"{'p95':>6} {'p99':>6} {'max':>6} {'mean':>7}"
+    )
+    for i, w in enumerate(window_grid):
+        n_s = raw[i].size
+        print(
+            f"{float(w):>8.2f} {int(n_s):>10} {stats['median'][i]:>8.0f} "
+            f"{stats['p90'][i]:>6.0f} {stats['p95'][i]:>6.0f} "
+            f"{stats['p99'][i]:>6.0f} {stats['max'][i]:>6.0f} "
+            f"{stats['mean'][i]:>7.1f}"
+        )
+    print(
+        "Pick context_window_days from W with enough baseline; set "
+        "max_context_len ~ the p95/p99 column at that W."
+    )
 
 
 def main():
@@ -351,6 +497,21 @@ def main():
         ),
     )
     parser.add_argument(
+        "--window_max",
+        type=float,
+        default=10.0,
+        help=(
+            "Largest trailing window length (days) in the time-window context "
+            "sweep. Default 10."
+        ),
+    )
+    parser.add_argument(
+        "--window_step",
+        type=float,
+        default=1.0,
+        help="Step (days) between evaluated window lengths. Default 1.0.",
+    )
+    parser.add_argument(
         "--out",
         type=str,
         default="observation_histograms.png",
@@ -370,11 +531,19 @@ def main():
     print_summary(counts, args.include_upper_limits)
     print_sweep(counts["total_det_per_curve"], args.sweep_max)
 
-    fig, axes = plt.subplots(2, 2, figsize=(15, 11))
+    # Time-window sweep grid: window_step .. window_max (days).
+    window_grid = np.arange(
+        args.window_step, args.window_max + 0.5 * args.window_step, args.window_step
+    )
+    print_time_window_sweep(counts["event_times_per_file"], window_grid)
+
+    fig, axes = plt.subplots(2, 3, figsize=(21, 11))
     plot_band_totals(axes[0, 0], counts, args.include_upper_limits)
     plot_total_hist(axes[0, 1], counts)
-    plot_per_band_hist(axes[1, 0], counts)
-    plot_context_sweep(axes[1, 1], counts["total_det_per_curve"], args.sweep_max)
+    plot_per_band_hist(axes[0, 2], counts)
+    plot_context_sweep(axes[1, 0], counts["total_det_per_curve"], args.sweep_max)
+    plot_time_window_sweep(axes[1, 1], counts["event_times_per_file"], window_grid)
+    axes[1, 2].set_visible(False)
 
     fig.suptitle(
         f"KN light-curve observations ({counts['n_files']} light curves)",

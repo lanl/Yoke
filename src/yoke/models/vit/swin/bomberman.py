@@ -481,8 +481,19 @@ class ScalarTemporalConditionedLodeRunner_9band(nn.Module):
         image_size: tuple[int, int] = (1120, 400),
         backbone_channels: int = 8,
         hidden: int = 64,
+        context_window_days: float = None,
     ) -> None:
-        """Initialize conditioner and output-head around the backbone."""
+        """Initialize conditioner and output-head around the backbone.
+
+        Args:
+            context_len (int): Number of context events per sample. In
+                time-window mode this is the padded width (``max_context_len``).
+            context_window_days (float): When set, the dataset selects context
+                by a trailing time window and pads it with a per-event validity
+                flag, so each event carries an extra ``valid`` feature and the
+                per-event width is ``3 + n_bands`` instead of ``2 + n_bands``.
+                When None (default), the legacy fixed-count layout is used.
+        """
         super().__init__()
 
         self.backbone = backbone
@@ -490,12 +501,14 @@ class ScalarTemporalConditionedLodeRunner_9band(nn.Module):
         self.n_bands = n_bands
         self.image_size = image_size
         self.backbone_channels = backbone_channels
+        self.context_window_days = context_window_days
 
-        # Dataset x layout, flattened per event:
-        #   [value, rel_t, one_hot_band(n_bands)] * context_len
-        #
-        # input_dim = context_len * (2 + n_bands)
-        input_dim = context_len * (2 + n_bands)
+        # Dataset x layout, flattened per event. Fixed-count mode:
+        #   [value, rel_t, one_hot_band(n_bands)] * context_len   -> 2 + n_bands
+        # Time-window mode adds a validity flag so padding is carried in x:
+        #   [value, rel_t, valid, one_hot_band(n_bands)] * context_len -> 3 + n_bands
+        per_event_width = 3 + n_bands if context_window_days is not None else 2 + n_bands
+        input_dim = context_len * per_event_width
 
         # Maps the scalar temporal event stream into the pseudo-channels
         # expected by the pretrained LodeRunner backbone.

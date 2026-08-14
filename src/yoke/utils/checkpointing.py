@@ -477,6 +477,15 @@ def load_direct_loderunner_checkpoint_9band(
     saved_model_args = checkpoint_data.get("model_args", model_args)
     context_len = checkpoint_data.get("context_len", 5)
 
+    # Time-window context mode: the model's first layer is sized by the padded
+    # width (max_context_len) and each event carries an extra validity flag.
+    # Falls through to None for legacy fixed-count checkpoints, preserving the
+    # original sizing.
+    context_window_days = checkpoint_data.get("context_window_days", None)
+    if context_window_days is not None:
+        # In window mode the padded context width drives input_dim.
+        context_len = checkpoint_data.get("max_context_len", context_len)
+
     backbone = LodeRunner(**saved_model_args).to(device)
 
     model = ScalarTemporalConditionedLodeRunner_9band(
@@ -486,6 +495,7 @@ def load_direct_loderunner_checkpoint_9band(
         image_size=saved_model_args["image_size"],
         backbone_channels=checkpoint_data.get("backbone_channels", 8),
         hidden=checkpoint_data.get("hidden", 64),
+        context_window_days=context_window_days,
     ).to(device)
 
     state_dict = checkpoint_data["model_state_dict"]

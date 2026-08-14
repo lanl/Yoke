@@ -157,10 +157,21 @@ def load_9band_model(ckpt_path, device):
     hidden = ckpt.get("hidden", 64)
     noise_scale = ckpt.get("noise_scale", 0.0)
 
+    # Time-window context mode. When set, the model's first layer is sized by the
+    # padded width (max_context_len) and each event carries an extra validity
+    # flag. Legacy fixed-count checkpoints fall through to None.
+    context_window_days = ckpt.get("context_window_days", None)
+    if context_window_days is not None:
+        max_context_len = ckpt.get("max_context_len", context_len)
+    else:
+        max_context_len = context_len
+
     print("Loaded checkpoint:", ckpt_path)
     print("model_class:", ckpt.get("model_class", "unknown"))
     print("target_type:", ckpt.get("target_type", "unknown"))
     print("context_len:", context_len)
+    print("context_window_days:", context_window_days)
+    print("max_context_len:", max_context_len)
     print("n_bands:", n_bands)
 
     backbone = LodeRunner(**model_args).to(device)
@@ -168,11 +179,12 @@ def load_9band_model(ckpt_path, device):
 
     model = ScalarTemporalConditionedLodeRunner_9band(
         backbone=backbone,
-        context_len=context_len,
+        context_len=max_context_len,
         n_bands=n_bands,
         image_size=model_args["image_size"],
         backbone_channels=backbone_channels,
         hidden=hidden,
+        context_window_days=context_window_days,
     ).to(device)
 
     state_dict = strip_ddp_prefix(ckpt["model_state_dict"])
@@ -183,7 +195,7 @@ def load_9band_model(ckpt_path, device):
 
     model.eval()
 
-    return model, context_len, n_bands
+    return model, context_len, n_bands, context_window_days, max_context_len
 
 
 def load_event_stream(fn, means, stds):
@@ -251,22 +263,43 @@ def load_event_stream(fn, means, stds):
     return times, values_norm.astype(np.float32), bands, raw, t0
 
 
-def build_context_input(ctx_t, ctx_v, ctx_b, n_bands, device):
+def build_context_input(
+    ctx_t, ctx_v, ctx_b, n_bands, device, window_mode=False, max_context_len=None
+):
     """Build the flattened per-event context input for the model.
 
-    Layout per event: [value, rel_t, one_hot_band(n_bands)].
+    Fixed-count mode (``window_mode=False``): layout per event is
+    ``[value, rel_t, one_hot_band(n_bands)]`` (width ``2 + n_bands``).
+
+    Time-window mode (``window_mode=True``): the real events are padded to
+    ``max_context_len`` rows and each event gains a validity flag, giving
+    ``[value, rel_t, valid, one_hot_band(n_bands)]`` (width ``3 + n_bands``).
+    Real events fill the leading rows in time order with ``rel_t`` relative to
+    the first real event; padded rows are all-zero with ``valid = 0``. Matches
+    ``_getitem_window`` in the dataset.
     """
-    context_len = len(ctx_t)
+    ctx_t = np.asarray(ctx_t, dtype=np.float32)
+    ctx_v = np.asarray(ctx_v, dtype=np.float32)
+    ctx_b = np.asarray(ctx_b, dtype=np.int64)
 
     rel_t = (ctx_t - ctx_t[0]).astype(np.float32)
 
-    band_onehot = np.zeros((context_len, n_bands), dtype=np.float32)
-    band_onehot[np.arange(context_len), ctx_b] = 1.0
+    if window_mode:
+        n_real = ctx_t.shape[0]
+        per_event = np.zeros((max_context_len, 3 + n_bands), dtype=np.float32)
+        per_event[:n_real, 0] = ctx_v
+        per_event[:n_real, 1] = rel_t
+        per_event[:n_real, 2] = 1.0  # validity flag for real events
+        per_event[np.arange(n_real), 3 + ctx_b] = 1.0
+    else:
+        context_len = ctx_t.shape[0]
+        band_onehot = np.zeros((context_len, n_bands), dtype=np.float32)
+        band_onehot[np.arange(context_len), ctx_b] = 1.0
 
-    per_event = np.concatenate(
-        [ctx_v[:, None], rel_t[:, None], band_onehot],
-        axis=1,
-    )
+        per_event = np.concatenate(
+            [ctx_v[:, None], rel_t[:, None], band_onehot],
+            axis=1,
+        )
 
     x = torch.tensor(
         per_event.reshape(-1),
@@ -278,7 +311,17 @@ def build_context_input(ctx_t, ctx_v, ctx_b, n_bands, device):
 
 
 def forecast_curve(
-    stream, model, device, context_len, n_bands, means, stds, lead_times
+    stream,
+    model,
+    device,
+    context_len,
+    n_bands,
+    means,
+    stds,
+    lead_times,
+    window_mode=False,
+    context_window_days=None,
+    max_context_len=None,
 ):
     """Forecast all bands at a grid of future lead times from the last context.
 
@@ -287,12 +330,32 @@ def forecast_curve(
     """
     times, values_norm, bands, _, _ = stream
 
-    # Most recent context_len events.
-    ctx_t = times[-context_len:]
-    ctx_v = values_norm[-context_len:]
-    ctx_b = bands[-context_len:]
+    if window_mode:
+        # Time-window context: all events within context_window_days of the last
+        # observation, capped at max_context_len (matches _getitem_window).
+        anchor_t = times[-1]
+        lo = anchor_t - context_window_days
+        sel_idx = np.nonzero(times >= lo)[0]
+        if sel_idx.shape[0] > max_context_len:
+            sel_idx = sel_idx[-max_context_len:]
+        ctx_t = times[sel_idx]
+        ctx_v = values_norm[sel_idx]
+        ctx_b = bands[sel_idx]
+    else:
+        # Most recent context_len events.
+        ctx_t = times[-context_len:]
+        ctx_v = values_norm[-context_len:]
+        ctx_b = bands[-context_len:]
 
-    x = build_context_input(ctx_t, ctx_v, ctx_b, n_bands, device)
+    x = build_context_input(
+        ctx_t,
+        ctx_v,
+        ctx_b,
+        n_bands,
+        device,
+        window_mode=window_mode,
+        max_context_len=max_context_len,
+    )
 
     last_t = float(times[-1])
 
@@ -382,7 +445,15 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Using device:", device)
 
-    model, context_len, n_bands = load_9band_model(args.ckpt, device)
+    (
+        model,
+        context_len,
+        n_bands,
+        context_window_days,
+        max_context_len,
+    ) = load_9band_model(args.ckpt, device)
+
+    window_mode = context_window_days is not None
 
     means, stds = load_or_compute_band_normalization(
         stats_path=args.norm_stats_path,
@@ -411,10 +482,13 @@ def main():
             continue
 
         times = stream[0]
-        if len(times) < context_len:
+        # In window mode any curve with at least one detection can be forecast
+        # (the trailing window is padded); otherwise we need a full context.
+        min_events = 1 if window_mode else context_len
+        if len(times) < min_events:
             print(
                 f"Skipping {fn}: only {len(times)} events, "
-                f"need at least context_len={context_len}."
+                f"need at least {min_events}."
             )
             continue
 
@@ -427,6 +501,9 @@ def main():
             means=means,
             stds=stds,
             lead_times=lead_times,
+            window_mode=window_mode,
+            context_window_days=context_window_days,
+            max_context_len=max_context_len,
         )
 
         base = os.path.splitext(os.path.basename(fn))[0]

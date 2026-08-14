@@ -166,11 +166,22 @@ def load_9band_model(ckpt_path, device):
     hidden = ckpt.get("hidden", 64)
     noise_scale = ckpt.get("noise_scale", 0.0)
 
+    # Time-window context mode. When set, the model's first layer is sized by the
+    # padded width (max_context_len) and each event carries an extra validity
+    # flag. Legacy fixed-count checkpoints fall through to None.
+    context_window_days = ckpt.get("context_window_days", None)
+    if context_window_days is not None:
+        max_context_len = ckpt.get("max_context_len", context_len)
+    else:
+        max_context_len = context_len
+
     print("Loaded checkpoint:", ckpt_path)
     print("model_class:", ckpt.get("model_class", "unknown"))
     print("backbone_class:", ckpt.get("backbone_class", "LodeRunner"))
     print("target_type:", ckpt.get("target_type", "unknown"))
     print("context_len:", context_len)
+    print("context_window_days:", context_window_days)
+    print("max_context_len:", max_context_len)
     print("n_bands:", n_bands)
     print("band_keys:", ckpt.get("band_keys", list(BAND_KEYS)))
     print("backbone_channels:", backbone_channels)
@@ -181,11 +192,12 @@ def load_9band_model(ckpt_path, device):
 
     model = ScalarTemporalConditionedLodeRunner_9band(
         backbone=backbone,
-        context_len=context_len,
+        context_len=max_context_len,
         n_bands=n_bands,
         image_size=model_args["image_size"],
         backbone_channels=backbone_channels,
         hidden=hidden,
+        context_window_days=context_window_days,
     ).to(device)
 
     state_dict = strip_ddp_prefix(ckpt["model_state_dict"])
@@ -198,10 +210,15 @@ def load_9band_model(ckpt_path, device):
 
     model.eval()
 
-    return model, context_len, n_bands
+    return model, context_len, n_bands, context_window_days, max_context_len
 
 
-def make_eval_dataset(args, context_len):
+def make_eval_dataset(
+    args,
+    context_len,
+    context_window_days=None,
+    max_context_len=None,
+):
     band_means, band_stds = load_or_compute_band_normalization(
         stats_path=args.norm_stats_path,
         band_keys=BAND_KEYS,
@@ -223,36 +240,90 @@ def make_eval_dataset(args, context_len):
         drop_upper_limits=DROP_UPPER_LIMITS,
         means=band_means,
         stds=band_stds,
+        context_window_days=context_window_days,
+        max_context_len=max_context_len,
     )
 
     return dataset, np.asarray(band_means), np.asarray(band_stds)
 
 
-def build_context_input(win_v, win_t, win_b, context_len, n_bands, device):
+def build_context_input(
+    win_v,
+    win_t,
+    win_b,
+    context_len,
+    n_bands,
+    device,
+    window_mode=False,
+):
     """Build the flattened per-event context input for the model.
 
-    Layout per event: [value, rel_t, one_hot_band(n_bands)], relative time
-    measured from the first event in the window, matching the dataset.
+    Fixed-count mode (``window_mode=False``): layout per event is
+    ``[value, rel_t, one_hot_band(n_bands)]`` (width ``2 + n_bands``), with
+    ``rel_t`` measured from the first event in the window and exactly
+    ``context_len`` real events, matching the fixed-count dataset path.
+
+    Time-window mode (``window_mode=True``): the (real) events are padded to
+    ``context_len`` (= ``max_context_len``) rows and each event gains a validity
+    flag, giving ``[value, rel_t, valid, one_hot_band(n_bands)]`` (width
+    ``3 + n_bands``). Real events fill the leading rows in time order with
+    ``rel_t`` relative to the first real event; padded rows are all-zero with
+    ``valid = 0``. This matches ``_getitem_window`` in the dataset.
     """
     win_v = np.asarray(win_v, dtype=np.float32)
     win_t = np.asarray(win_t, dtype=np.float32)
     win_b = np.asarray(win_b, dtype=np.int64)
 
-    rel_t = (win_t - win_t[0]).astype(np.float32)
+    if window_mode:
+        n_real = win_v.shape[0]
+        rel_t = (win_t - win_t[0]).astype(np.float32)
 
-    band_onehot = np.zeros((context_len, n_bands), dtype=np.float32)
-    band_onehot[np.arange(context_len), win_b] = 1.0
+        per_event = np.zeros((context_len, 3 + n_bands), dtype=np.float32)
+        per_event[:n_real, 0] = win_v
+        per_event[:n_real, 1] = rel_t
+        per_event[:n_real, 2] = 1.0  # validity flag for real events
+        per_event[np.arange(n_real), 3 + win_b] = 1.0
+    else:
+        rel_t = (win_t - win_t[0]).astype(np.float32)
 
-    per_event = np.concatenate(
-        [win_v[:, None], rel_t[:, None], band_onehot],
-        axis=1,
-    )
+        band_onehot = np.zeros((context_len, n_bands), dtype=np.float32)
+        band_onehot[np.arange(context_len), win_b] = 1.0
+
+        per_event = np.concatenate(
+            [win_v[:, None], rel_t[:, None], band_onehot],
+            axis=1,
+        )
 
     return torch.tensor(
         per_event.reshape(-1),
         dtype=torch.float32,
         device=device,
     ).unsqueeze(0)
+
+
+def _select_window(ctx_t, ctx_v, ctx_b, context_window_days, max_context_len):
+    """Select the trailing time-window subset of a growing context.
+
+    Mirrors ``_getitem_window`` in the dataset: keep every event within
+    ``context_window_days`` of the most recent context event, then keep the most
+    recent ``max_context_len`` if more qualify. Returns (win_v, win_t, win_b) as
+    lists in time order (oldest first).
+    """
+    ct = np.asarray(ctx_t, dtype=np.float32)
+    cv = np.asarray(ctx_v, dtype=np.float32)
+    cb = np.asarray(ctx_b, dtype=np.int64)
+
+    anchor_t = ct[-1]
+    lo = anchor_t - context_window_days
+    sel_idx = np.nonzero(ct >= lo)[0]
+    if sel_idx.shape[0] > max_context_len:
+        sel_idx = sel_idx[-max_context_len:]
+
+    return (
+        list(cv[sel_idx]),
+        list(ct[sel_idx]),
+        list(cb[sel_idx]),
+    )
 
 
 def get_rollout_from_stream(
@@ -268,6 +339,9 @@ def get_rollout_from_stream(
     means,
     stds,
     teacher_forced=False,
+    window_mode=False,
+    context_window_days=None,
+    max_context_len=None,
 ):
     """Autoregressively forecast the next events of one merged event stream.
 
@@ -291,11 +365,20 @@ def get_rollout_from_stream(
     """
     t_ref = float(times[start_idx])
 
+    # Number of true events used to warm-start the running context. In window
+    # mode we seed up to max_context_len so the trailing-W-days selection has
+    # enough events to draw from; otherwise the fixed count. Clamp so at least
+    # one true event remains past the seed for a future step (lets short curves,
+    # now trainable in window mode, still roll out).
+    requested_seed = max_context_len if window_mode else context_len
+    seed_len = min(requested_seed, len(times) - start_idx - 1)
+    seed_len = max(1, seed_len)
+
     # Running context window; values are fed back from predictions as we roll
     # out, while times and band identities follow the true observation schedule.
-    ctx_t = list(times[start_idx : start_idx + context_len].astype(np.float32))
-    ctx_v = list(values[start_idx : start_idx + context_len].astype(np.float32))
-    ctx_b = list(bands[start_idx : start_idx + context_len].astype(np.int64))
+    ctx_t = list(times[start_idx : start_idx + seed_len].astype(np.float32))
+    ctx_v = list(values[start_idx : start_idx + seed_len].astype(np.float32))
+    ctx_b = list(bands[start_idx : start_idx + seed_len].astype(np.int64))
 
     context = {
         "t_rel": np.asarray(ctx_t, dtype=np.float32) - t_ref,
@@ -308,22 +391,36 @@ def get_rollout_from_stream(
 
     with torch.no_grad():
         for step in range(n_future_steps):
-            target_idx = start_idx + context_len + step
+            target_idx = start_idx + seed_len + step
 
             if target_idx >= len(times):
                 break
 
-            win_v = ctx_v[-context_len:]
-            win_t = ctx_t[-context_len:]
-            win_b = ctx_b[-context_len:]
+            if window_mode:
+                # Time-window context: trailing W days of all events observed
+                # so far, padded to max_context_len (matches _getitem_window).
+                win_v, win_t, win_b = _select_window(
+                    ctx_t=ctx_t,
+                    ctx_v=ctx_v,
+                    ctx_b=ctx_b,
+                    context_window_days=context_window_days,
+                    max_context_len=max_context_len,
+                )
+                build_width = max_context_len
+            else:
+                win_v = ctx_v[-context_len:]
+                win_t = ctx_t[-context_len:]
+                win_b = ctx_b[-context_len:]
+                build_width = context_len
 
             x = build_context_input(
                 win_v=win_v,
                 win_t=win_t,
                 win_b=win_b,
-                context_len=context_len,
+                context_len=build_width,
                 n_bands=n_bands,
                 device=device,
+                window_mode=window_mode,
             )
 
             # Lead time from the last context event to the next true event.
@@ -396,17 +493,31 @@ def get_rollout_from_stream(
     # meaning without feedback).
     fixed_forecast = None
     if not teacher_forced and steps:
-        win_t0 = times[start_idx : start_idx + context_len].astype(np.float32)
-        win_v0 = values[start_idx : start_idx + context_len].astype(np.float32)
-        win_b0 = bands[start_idx : start_idx + context_len].astype(np.int64)
+        win_t0 = times[start_idx : start_idx + seed_len].astype(np.float32)
+        win_v0 = values[start_idx : start_idx + seed_len].astype(np.float32)
+        win_b0 = bands[start_idx : start_idx + seed_len].astype(np.int64)
+
+        if window_mode:
+            # Trailing W days of the seeded context, padded to max_context_len.
+            win_v0, win_t0, win_b0 = _select_window(
+                ctx_t=win_t0,
+                ctx_v=win_v0,
+                ctx_b=win_b0,
+                context_window_days=context_window_days,
+                max_context_len=max_context_len,
+            )
+            build_width0 = max_context_len
+        else:
+            build_width0 = context_len
 
         x0 = build_context_input(
             win_v=win_v0,
             win_t=win_t0,
             win_b=win_b0,
-            context_len=context_len,
+            context_len=build_width0,
             n_bands=n_bands,
             device=device,
+            window_mode=window_mode,
         )
 
         last_ctx_t_rel = float(win_t0[-1]) - t_ref
@@ -441,12 +552,22 @@ def get_rollout_from_stream(
     }
 
 
-def select_series(dataset, context_len, n_future_steps, n_series):
+def select_series(
+    dataset,
+    context_len,
+    n_future_steps,
+    n_series,
+    seed_len=None,
+):
     """Pick files with enough events for a rollout, longest first.
 
     Returns a list of (times, values, bands, start_idx) tuples.
     """
-    min_events = context_len + 1  # need at least one future step
+    # In window mode the context is seeded with up to max_context_len events
+    # (passed as seed_len); otherwise the fixed count. Either way we need at
+    # least one event past the seed for a future step.
+    warm = seed_len if seed_len is not None else context_len
+    min_events = warm + 1  # need at least one future step
 
     eligible = []
     for times, values, bands in dataset.events_per_file:
@@ -730,11 +851,22 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Using device:", device)
 
-    model, context_len, n_bands = load_9band_model(args.ckpt, device)
+    (
+        model,
+        context_len,
+        n_bands,
+        context_window_days,
+        max_context_len,
+    ) = load_9band_model(args.ckpt, device)
+
+    window_mode = context_window_days is not None
+    seed_len = max_context_len if window_mode else context_len
 
     eval_dataset, means, stds = make_eval_dataset(
         args=args,
         context_len=context_len,
+        context_window_days=context_window_days,
+        max_context_len=max_context_len if window_mode else None,
     )
 
     print("Dataset files with events:", len(eval_dataset.events_per_file))
@@ -744,6 +876,7 @@ def main():
         context_len=context_len,
         n_future_steps=args.n_future_steps,
         n_series=args.n_series,
+        seed_len=seed_len,
     )
 
     if not series:
@@ -773,6 +906,9 @@ def main():
             means=means,
             stds=stds,
             teacher_forced=False,
+            window_mode=window_mode,
+            context_window_days=context_window_days,
+            max_context_len=max_context_len,
         )
         rollouts.append(rollout)
 
@@ -790,6 +926,9 @@ def main():
                 means=means,
                 stds=stds,
                 teacher_forced=True,
+                window_mode=window_mode,
+                context_window_days=context_window_days,
+                max_context_len=max_context_len,
             )
             tf_rollouts.append(tf_rollout)
 

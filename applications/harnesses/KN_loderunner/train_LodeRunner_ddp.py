@@ -183,6 +183,20 @@ def main(args, rank, world_size, local_rank, device):
     CONTEXT_LEN = 5 #3
     HIDDEN_CHANNELS = 64
 
+    # Time-window context mode. When CONTEXT_WINDOW_DAYS is not None, the dataset
+    # selects context by a trailing lookback in days (all detections within the
+    # last CONTEXT_WINDOW_DAYS), padded to MAX_CONTEXT_LEN with a per-event
+    # validity flag, instead of a fixed count of CONTEXT_LEN events. This gives
+    # the model real time evolution instead of a single dense night. Set these
+    # from the plot_observation_histograms.py time-window sweep. Leave
+    # CONTEXT_WINDOW_DAYS = None to use the legacy fixed-count context.
+    CONTEXT_WINDOW_DAYS = 2.0
+    MAX_CONTEXT_LEN = 12
+    # In window mode the model's first layer is sized by the padded width.
+    WRAPPER_CONTEXT_LEN = (
+        MAX_CONTEXT_LEN if CONTEXT_WINDOW_DAYS is not None else CONTEXT_LEN
+    )
+
     # Multi-step rollout training config (scheduled sampling). n_rollout_steps=1
     # falls back to the standard single-step teacher-forced training.
     n_rollout_steps = args.n_rollout_steps
@@ -276,11 +290,12 @@ def main(args, rank, world_size, local_rank, device):
 
         model = ScalarTemporalConditionedLodeRunner_9band(
             backbone=backbone,
-            context_len=CONTEXT_LEN,
+            context_len=WRAPPER_CONTEXT_LEN,
             n_bands=N_BANDS,
             image_size=model_args["image_size"],
             backbone_channels=8,
             hidden=HIDDEN_CHANNELS,
+            context_window_days=CONTEXT_WINDOW_DAYS,
         ).to(device)
 
         # Stage 1: freeze pretrained LodeRunner, train only conditioner + output head
@@ -406,6 +421,7 @@ def main(args, rank, world_size, local_rank, device):
         print("band_stds:", band_stds)
 
     train_dataset = Kilonova_lc_scalar_context_DataSet_9band(
+        N_imgs=100,
         context_len=CONTEXT_LEN,
         band_keys=BAND_KEYS,
         value_col=VALUE_COL,
@@ -414,9 +430,12 @@ def main(args, rank, world_size, local_rank, device):
         means=band_means,
         stds=band_stds,
         n_rollout_steps=n_rollout_steps,
+        context_window_days=CONTEXT_WINDOW_DAYS,
+        max_context_len=MAX_CONTEXT_LEN,
     )
 
     val_dataset = Kilonova_lc_scalar_context_DataSet_9band(
+        N_imgs=100,
         context_len=CONTEXT_LEN,
         band_keys=BAND_KEYS,
         value_col=VALUE_COL,
@@ -425,6 +444,8 @@ def main(args, rank, world_size, local_rank, device):
         means=band_means,
         stds=band_stds,
         n_rollout_steps=n_rollout_steps,
+        context_window_days=CONTEXT_WINDOW_DAYS,
+        max_context_len=MAX_CONTEXT_LEN,
     )
 
 
@@ -575,6 +596,8 @@ def main(args, rank, world_size, local_rank, device):
                     "backbone_channels": 8,
                     "hidden": HIDDEN_CHANNELS,
                     "n_rollout_steps": n_rollout_steps,
+                    "context_window_days": CONTEXT_WINDOW_DAYS,
+                    "max_context_len": MAX_CONTEXT_LEN,
                 },
                 new_chkpt_path,
             )

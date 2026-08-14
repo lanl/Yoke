@@ -387,12 +387,17 @@ class Kilonova_lc_scalar_context_DataSet_9band(Dataset):
         means: np.ndarray = None,
         stds: np.ndarray = None,
         n_rollout_steps: int = 1,
+        context_window_days: float = None,
+        max_context_len: int = None,
     ) -> None:
         """Initialize the dataset and build the merged-event sample index.
 
         Args:
             N_imgs (int): Number of light-curve files to sample; 0 uses all.
-            context_len (int): Number of context events per sample.
+            context_len (int): Number of context events per sample. In the
+                default fixed-count mode this is the exact context length. It is
+                ignored when ``context_window_days`` is set (window mode uses
+                ``max_context_len`` for the padded width instead).
             band_keys (tuple[str, ...]): Keys of the bands to load. Their order
                 defines the band index used in the one-hot encoding and target.
             value_col (int): Column index of the value to load per band.
@@ -409,7 +414,18 @@ class Kilonova_lc_scalar_context_DataSet_9band(Dataset):
                 ``(x, target, mask, Dt)`` tuple. When >1 it returns a rollout
                 tuple carrying the initial context window plus the next
                 ``n_rollout_steps`` true events, for scheduled-sampling /
-                multi-step rollout training (see ``__getitem__``).
+                multi-step rollout training (see ``__getitem__``). Only supported
+                in fixed-count mode (``context_window_days`` is None).
+            context_window_days (float): If set, switches to **time-window
+                mode**: the context of each sample is every detection within this
+                many days before the target event, padded to ``max_context_len``
+                with a per-event validity flag (see ``_getitem_window``). If None
+                (default) the dataset uses the legacy fixed-count context of
+                exactly ``context_len`` events.
+            max_context_len (int): Padded context width used in time-window mode.
+                Windows with more real events than this keep only the most recent
+                ``max_context_len``; windows with fewer are zero-padded. Defaults
+                to ``context_len`` when not given. Unused in fixed-count mode.
         """
         # FIXME: hardcoded scratch path. Should be passed in as an argument so
         # this dataset does not depend on a user-specific filesystem location.
@@ -446,6 +462,36 @@ class Kilonova_lc_scalar_context_DataSet_9band(Dataset):
                 f"n_rollout_steps must be >= 1, got {n_rollout_steps}"
             )
         self.n_rollout_steps = n_rollout_steps
+
+        # Time-window context mode. When context_window_days is set, the context
+        # is selected by a trailing lookback in days and padded to
+        # max_context_len with a validity flag, instead of a fixed event count.
+        self.context_window_days = context_window_days
+        self.window_mode = context_window_days is not None
+
+        if self.window_mode:
+            self.max_context_len = (
+                max_context_len if max_context_len is not None else context_len
+            )
+            if self.max_context_len < 1:
+                raise ValueError(
+                    f"max_context_len must be >= 1, got {self.max_context_len}"
+                )
+            if context_window_days <= 0:
+                raise ValueError(
+                    "context_window_days must be positive, got "
+                    f"{context_window_days}"
+                )
+            if n_rollout_steps > 1:
+                # Multi-step rollout window-sliding is not yet wired for the
+                # time-window selection rule (single-step first); fail loudly
+                # rather than silently mixing the two.
+                raise NotImplementedError(
+                    "time-window context (context_window_days) is currently "
+                    "only supported with n_rollout_steps=1."
+                )
+        else:
+            self.max_context_len = context_len
 
         if means is None:
             raise ValueError(
@@ -539,9 +585,20 @@ class Kilonova_lc_scalar_context_DataSet_9band(Dataset):
             )
 
             n_events = times.shape[0]
-            max_start = n_events - context_len - 1
-            for startIDX in range(max_start + 1):
-                self.samples.append((len(self.events_per_file) - 1, startIDX))
+            file_idx = len(self.events_per_file) - 1
+
+            if self.window_mode:
+                # One sample per event after the first: the target is event
+                # target_idx and the context is the trailing window ending at
+                # target_idx - 1 (always non-empty, so short curves contribute).
+                for target_idx in range(1, n_events):
+                    self.samples.append((file_idx, target_idx))
+            else:
+                # Legacy fixed-count windows: startIDX indexes the window start,
+                # target is startIDX + context_len.
+                max_start = n_events - context_len - 1
+                for startIDX in range(max_start + 1):
+                    self.samples.append((file_idx, startIDX))
 
     def __len__(self) -> int:
         """Return the number of samples in the dataset."""
@@ -561,6 +618,9 @@ class Kilonova_lc_scalar_context_DataSet_9band(Dataset):
         Returns:
             tuple[torch.Tensor, ...]: Single-step or rollout sample.
         """
+        if self.window_mode:
+            return self._getitem_window(index)
+
         if self.n_rollout_steps > 1:
             return self._getitem_rollout(index)
 
@@ -617,6 +677,86 @@ class Kilonova_lc_scalar_context_DataSet_9band(Dataset):
 
         # Target is the next event, placed into a per-band vector with a mask
         # marking which band was actually observed.
+        target_band = int(bands[target_idx])
+        target = np.zeros(self.n_channels, dtype=np.float32)
+        mask = np.zeros(self.n_channels, dtype=np.float32)
+        target[target_band] = values[target_idx]
+        mask[target_band] = 1.0
+
+        target = torch.tensor(target, dtype=torch.float32)
+        mask = torch.tensor(mask, dtype=torch.float32)
+
+        Dt = torch.tensor(
+            times[target_idx] - times[target_idx - 1],
+            dtype=torch.float32,
+        )
+
+        return x, target, mask, Dt
+
+    def _getitem_window(
+        self, index: int
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Return the (input, target, mask, Dt) tuple in time-window mode.
+
+        The context is every detection within ``context_window_days`` before the
+        target event, padded to ``max_context_len`` with a per-event validity
+        flag. The per-event feature gains a ``valid`` channel so the flattened
+        input carries the padding mask itself (the model does no masking):
+        ``[value, rel_t, valid, one_hot_band(n_bands)]``, width ``3 + n_bands``.
+
+        Real events fill the leading rows in time order (oldest first, matching
+        the fixed-count layout), with ``rel_t`` relative to the first *real*
+        event in the window; padded rows are all-zero with ``valid = 0``.
+
+        Args:
+            index (int): Sample index (maps to a (file_idx, target_idx) pair).
+
+        Returns:
+            x (torch.Tensor): Flattened padded context, shape
+                [max_context_len * (3 + n_bands)].
+            target (torch.Tensor): Normalized value per band, shape [n_bands];
+                only the observed band is meaningful.
+            mask (torch.Tensor): Float mask, shape [n_bands]; 1.0 for the
+                observed target band, 0.0 elsewhere.
+            Dt (torch.Tensor): Lead time from the most recent context event to
+                the target event.
+        """
+        file_idx, target_idx = self.samples[index]
+        times, values, bands = self.events_per_file[file_idx]
+
+        # Anchor the trailing window on the event immediately before the target
+        # (the most recent observation). Select all earlier events within the
+        # window, then keep the most recent max_context_len if there are more.
+        anchor_t = times[target_idx - 1]
+        lo = anchor_t - self.context_window_days
+
+        prior_t = times[:target_idx]
+        in_window = prior_t >= lo
+        sel_idx = np.nonzero(in_window)[0]
+        if sel_idx.shape[0] > self.max_context_len:
+            sel_idx = sel_idx[-self.max_context_len:]
+
+        ctx_t = times[sel_idx]
+        ctx_v = values[sel_idx]
+        ctx_b = bands[sel_idx]
+        n_real = sel_idx.shape[0]
+
+        # rel_t relative to the first real event in the window (same convention
+        # as the fixed-count path, which uses the window's first event).
+        rel_t = (ctx_t - ctx_t[0]).astype(np.float32)
+
+        # Padded per-event array: [value, rel_t, valid, one_hot_band].
+        per_event = np.zeros(
+            (self.max_context_len, 3 + self.n_channels), dtype=np.float32
+        )
+        per_event[:n_real, 0] = ctx_v
+        per_event[:n_real, 1] = rel_t
+        per_event[:n_real, 2] = 1.0  # validity flag for real events
+        per_event[np.arange(n_real), 3 + ctx_b] = 1.0
+
+        x = torch.tensor(per_event.reshape(-1), dtype=torch.float32)
+
+        # Target is the event at target_idx, in a per-band vector + mask.
         target_band = int(bands[target_idx])
         target = np.zeros(self.n_channels, dtype=np.float32)
         mask = np.zeros(self.n_channels, dtype=np.float32)
