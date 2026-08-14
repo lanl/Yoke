@@ -433,7 +433,7 @@ def main(args, rank, world_size, local_rank, device):
     random.seed(DATA_SEED)
 
     train_dataset = Kilonova_lc_scalar_context_DataSet_9band(
-        N_imgs=100,
+        N_imgs=0,
         context_len=CONTEXT_LEN,
         band_keys=BAND_KEYS,
         value_col=VALUE_COL,
@@ -447,7 +447,7 @@ def main(args, rank, world_size, local_rank, device):
     )
 
     val_dataset = Kilonova_lc_scalar_context_DataSet_9band(
-        N_imgs=100,
+        N_imgs=0,
         context_len=CONTEXT_LEN,
         band_keys=BAND_KEYS,
         value_col=VALUE_COL,
