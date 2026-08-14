@@ -482,14 +482,6 @@ class Kilonova_lc_scalar_context_DataSet_9band(Dataset):
                     "context_window_days must be positive, got "
                     f"{context_window_days}"
                 )
-            if n_rollout_steps > 1:
-                # Multi-step rollout window-sliding is not yet wired for the
-                # time-window selection rule (single-step first); fail loudly
-                # rather than silently mixing the two.
-                raise NotImplementedError(
-                    "time-window context (context_window_days) is currently "
-                    "only supported with n_rollout_steps=1."
-                )
         else:
             self.max_context_len = context_len
 
@@ -619,6 +611,8 @@ class Kilonova_lc_scalar_context_DataSet_9band(Dataset):
             tuple[torch.Tensor, ...]: Single-step or rollout sample.
         """
         if self.window_mode:
+            if self.n_rollout_steps > 1:
+                return self._getitem_window_rollout(index)
             return self._getitem_window(index)
 
         if self.n_rollout_steps > 1:
@@ -845,6 +839,115 @@ class Kilonova_lc_scalar_context_DataSet_9band(Dataset):
             torch.tensor(ctx_v, dtype=torch.float32),
             torch.tensor(ctx_t, dtype=torch.float32),
             torch.tensor(ctx_b, dtype=torch.long),
+            torch.tensor(future_v, dtype=torch.float32),
+            torch.tensor(future_b, dtype=torch.long),
+            torch.tensor(future_dt, dtype=torch.float32),
+            torch.tensor(future_valid, dtype=torch.float32),
+        )
+
+    def _getitem_window_rollout(
+        self, index: int
+    ) -> tuple[
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+    ]:
+        """Return a multi-step rollout sample in time-window context mode.
+
+        Combines the time-window context selection of :meth:`_getitem_window`
+        with the multi-step future supervision of :meth:`_getitem_rollout`, so
+        scheduled-sampling rollout training uses the SAME trailing-W-day context
+        the model sees at inference (``get_rollout_from_stream`` /
+        ``_select_window`` in ``plot_pred_diagnostics_9band.py``).
+
+        The seed context is the trailing ``context_window_days`` window ending at
+        the anchor event (``target_idx - 1``), capped to the most recent
+        ``max_context_len`` events, and returned **padded** to ``max_context_len``
+        with a per-event validity flag. Unlike :meth:`_getitem_rollout`, the
+        context times are returned as **absolute stream times** (not made
+        relative here) so the training loop can append the true future event
+        times and re-select the W-day window each step, then make times relative
+        per step exactly as inference does.
+
+        Args:
+            index (int): Sample index (maps to a (file_idx, target_idx) pair).
+
+        Returns:
+            ctx_v (torch.Tensor): Padded context values, shape [max_context_len];
+                padded rows are 0.
+            ctx_t (torch.Tensor): Padded ABSOLUTE context times, shape
+                [max_context_len]; padded rows are 0.
+            ctx_b (torch.Tensor): Padded context band indices (long), shape
+                [max_context_len]; padded rows are 0.
+            ctx_valid (torch.Tensor): 1.0 for real seed events, 0.0 for padding,
+                shape [max_context_len].
+            future_v (torch.Tensor): Normalized true value of each future event,
+                shape [n_rollout_steps]; padded steps are 0.
+            future_b (torch.Tensor): Band index of each future event (long),
+                shape [n_rollout_steps]; padded steps are 0.
+            future_dt (torch.Tensor): Lead time from the previous event to each
+                future event, shape [n_rollout_steps]; padded steps are 0.
+            future_valid (torch.Tensor): 1.0 for real future events, 0.0 for
+                padded steps, shape [n_rollout_steps].
+        """
+        file_idx, target_idx = self.samples[index]
+        times, values, bands = self.events_per_file[file_idx]
+
+        # Seed context: trailing W-day window ending at the anchor event
+        # (target_idx - 1), capped to the most recent max_context_len. Identical
+        # selection to _getitem_window.
+        anchor_t = times[target_idx - 1]
+        lo = anchor_t - self.context_window_days
+
+        prior_t = times[:target_idx]
+        in_window = prior_t >= lo
+        sel_idx = np.nonzero(in_window)[0]
+        if sel_idx.shape[0] > self.max_context_len:
+            sel_idx = sel_idx[-self.max_context_len:]
+
+        n_real = sel_idx.shape[0]
+
+        # Padded seed context; times kept ABSOLUTE so the loop can append true
+        # future times and re-window (the loop makes them relative per step).
+        ctx_v = np.zeros(self.max_context_len, dtype=np.float32)
+        ctx_t = np.zeros(self.max_context_len, dtype=np.float32)
+        ctx_b = np.zeros(self.max_context_len, dtype=np.int64)
+        ctx_valid = np.zeros(self.max_context_len, dtype=np.float32)
+
+        ctx_v[:n_real] = values[sel_idx]
+        ctx_t[:n_real] = times[sel_idx]
+        ctx_b[:n_real] = bands[sel_idx]
+        ctx_valid[:n_real] = 1.0
+
+        # Future events target_idx … target_idx + n - 1, padded past the stream
+        # end and flagged invalid (same tail handling as _getitem_rollout).
+        n = self.n_rollout_steps
+        future_v = np.zeros(n, dtype=np.float32)
+        future_b = np.zeros(n, dtype=np.int64)
+        future_dt = np.zeros(n, dtype=np.float32)
+        future_valid = np.zeros(n, dtype=np.float32)
+
+        n_events = times.shape[0]
+        for step in range(n):
+            t_idx = target_idx + step
+            if t_idx >= n_events:
+                break
+
+            future_v[step] = values[t_idx]
+            future_b[step] = bands[t_idx]
+            future_dt[step] = times[t_idx] - times[t_idx - 1]
+            future_valid[step] = 1.0
+
+        return (
+            torch.tensor(ctx_v, dtype=torch.float32),
+            torch.tensor(ctx_t, dtype=torch.float32),
+            torch.tensor(ctx_b, dtype=torch.long),
+            torch.tensor(ctx_valid, dtype=torch.float32),
             torch.tensor(future_v, dtype=torch.float32),
             torch.tensor(future_b, dtype=torch.long),
             torch.tensor(future_dt, dtype=torch.float32),

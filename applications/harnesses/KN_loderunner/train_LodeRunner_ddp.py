@@ -543,6 +543,9 @@ def main(args, rank, world_size, local_rank, device):
                 world_size=world_size,
                 n_bands=N_BANDS,
                 teacher_forcing_ratio=teacher_forcing_ratio,
+                window_mode=CONTEXT_WINDOW_DAYS is not None,
+                context_window_days=CONTEXT_WINDOW_DAYS,
+                max_context_len=MAX_CONTEXT_LEN,
             )
         else:
             #train_DDP_loderunner_epoch(
