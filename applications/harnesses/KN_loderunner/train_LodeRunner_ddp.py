@@ -1,5 +1,6 @@
 import os
 import time
+import random
 import argparse
 import numpy as np
 import torch
@@ -419,6 +420,17 @@ def main(args, rank, world_size, local_rank, device):
         print("Using band normalization:")
         print("band_means:", band_means)
         print("band_stds:", band_stds)
+
+    # The 9-band dataset selects its N_imgs files with an unseeded RNG and each
+    # DDP rank builds its own dataset. With N_imgs>0 that would give every rank a
+    # DIFFERENT random file subset, hence different sample counts and different
+    # per-rank batch counts, so ranks desync and hang at gradient all-reduce
+    # (NCCL watchdog timeout). Seed both RNGs to the SAME value on every rank so
+    # all ranks pick the identical file subset. (With N_imgs=0 all files are used
+    # and this is moot, but seeding is harmless.)
+    DATA_SEED = 42
+    np.random.seed(DATA_SEED)
+    random.seed(DATA_SEED)
 
     train_dataset = Kilonova_lc_scalar_context_DataSet_9band(
         N_imgs=100,
