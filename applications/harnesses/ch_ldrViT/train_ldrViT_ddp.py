@@ -457,7 +457,7 @@ def main(args, rank, world_size, local_rank, device):
         optimizer,
         epochIDX,
         new_chkpt_path,
-        model_class=LodeRunner,
+        model_class=LodeRunnerViT,
         model_args=model_args,
     )
 
