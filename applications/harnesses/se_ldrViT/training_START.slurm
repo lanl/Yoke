@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# NOTE: Can find node configuration with `scontrol show node`
+
 #SBATCH --job-name=ldrViT_LR_s<studyIDX>_e0001
 #SBATCH --account=<allocation>
 #PRODUCTION  
@@ -13,8 +15,10 @@
 #SBATCH --nodes=<KNODES>
 #SBATCH --ntasks-per-node=<NGPUS>
 #SBATCH --gpus-per-node=<NGPUS>
-#SBATCH --cpus-per-task=8
-#SBATCH --mem-per-gpu=120G
+#SBATCH --gpus-per-task=1
+#SBATCH --cpus-per-task=12  # 96 threads / 8 GPUs
+#SBATCH --mem-per-gpu=96G  # <= RealMemory/NGPUs
+#SBATCH --hint=nomultithread
 #SBATCH --output=study<studyIDX>_epoch0001.out
 #SBATCH --error=study<studyIDX>_epoch0001.err
 #SBATCH -vvv
