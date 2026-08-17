@@ -4,14 +4,8 @@
 
 #SBATCH --job-name=ldrViT_LR_s<studyIDX>_e0001
 #SBATCH --account=<allocation>
-#PRODUCTION  
-#SBATCH --partition=gpu
 #SBATCH --time=08:00:00
-#DEBUG  
-# #SBATCH --time=1:00:00
-# #SBATCH --qos=debug
-# #SBATCH --reservation=gpu_debug
-# #SBATCH --partition=gpu_debug
+#SBATCH --qos=standard
 #SBATCH --nodes=<KNODES>
 #SBATCH --ntasks-per-node=<NGPUS>
 #SBATCH --gpus-per-node=<NGPUS>
@@ -22,6 +16,7 @@
 #SBATCH --output=study<studyIDX>_epoch0001.out
 #SBATCH --error=study<studyIDX>_epoch0001.err
 #SBATCH -vvv
+
 
 # Set the master node's address and port
 MASTER_ADDR=$(scontrol show hostnames $SLURM_JOB_NODELIST | head -n 1)
