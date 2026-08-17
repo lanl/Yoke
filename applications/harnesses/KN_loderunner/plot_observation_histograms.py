@@ -19,6 +19,14 @@ non-detection. This script summarises the data set as histograms:
      9-band model bakes ``context_len`` into its first layer, so choosing a
      longer context means a retrain -- this panel shows the data cost before you
      pay for it.
+  5. A time-window context sweep: context size (real detections) vs the trailing
+     lookback ``W`` in days, for choosing ``context_window_days`` /
+     ``max_context_len`` in window mode.
+  6. Supervised lead-time ``Delta_t`` vs forecast horizon: the CDF of the
+     gap-to-next-event (``h=1``, exactly the ``Delta_t`` training supervises)
+     against the lead times reachable at larger event offsets. Its right tail is
+     the coverage ceiling -- forecasts asked for a longer ``Delta_t`` than the
+     ``h=1`` p99/max extrapolate beyond anything the model was trained on.
 
 Run directly, e.g.:
     python plot_observation_histograms.py
@@ -387,6 +395,129 @@ def plot_time_window_sweep(ax, event_times_per_file, window_grid):
     ax.grid(True, alpha=0.3)
 
 
+def dt_horizon_stats(event_times_per_file, horizons):
+    """Distribution of lead time Delta_t as a function of event horizon.
+
+    Training supervises, for each context, the jump to the target event. When
+    the target is the *immediate next* event (``horizon=1``) the supervised
+    Delta_t is exactly the consecutive-event gap. This function collects, for
+    each horizon ``h``, every reachable lead time ``times[i + h] - times[i]``
+    across all light curves. Comparing ``h=1`` (what training actually sees)
+    against the forecast horizons used at inference reveals whether the model is
+    ever supervised at the Delta_t it is later asked to extrapolate to.
+
+    Args:
+        event_times_per_file (list[np.ndarray]): Per-file merged, sorted,
+            file-relative detection times.
+        horizons (iterable[int]): Event offsets ``h`` to evaluate. ``h=1`` is
+            the training Delta_t (gap to next event).
+
+    Returns:
+        horizons (list[int]): The evaluated horizons.
+        raw (dict[int, np.ndarray]): For each horizon, all reachable lead times
+            (days) pooled over every light curve.
+    """
+    horizons = list(horizons)
+    raw = {h: [] for h in horizons}
+    for times in event_times_per_file:
+        n = times.shape[0]
+        for h in horizons:
+            if n > h:
+                raw[h].append(times[h:] - times[:-h])
+    raw = {
+        h: (np.concatenate(v) if v else np.zeros(0, dtype=np.float64))
+        for h, v in raw.items()
+    }
+    return horizons, raw
+
+
+def plot_dt_horizon(ax, event_times_per_file, horizons):
+    """CDF of supervised lead time Delta_t vs event horizon.
+
+    The ``h=1`` curve is the distribution of training Delta_t (gap to the next
+    event); its right tail is where the model stops being supervised. Larger-``h``
+    curves show how far ahead (in events) a target must be drawn to reach a given
+    lead time -- the basis for horizon-covering target sampling. Percentile lines
+    for ``h=1`` make the coverage ceiling explicit.
+    """
+    if len(event_times_per_file) == 0:
+        ax.set_visible(False)
+        return
+
+    horizons, raw = dt_horizon_stats(event_times_per_file, horizons)
+    cmap = plt.get_cmap("viridis")
+
+    for j, h in enumerate(horizons):
+        c = raw[h]
+        if c.size == 0:
+            continue
+        xs = np.sort(c)
+        ys = np.arange(1, xs.size + 1) / xs.size
+        label = f"h={h}" + (" (train Δt)" if h == 1 else "")
+        ax.plot(
+            xs,
+            ys,
+            color=cmap(j / max(1, len(horizons) - 1)),
+            linewidth=2.0 if h == 1 else 1.3,
+            label=label,
+        )
+
+    # Percentile markers for the training Delta_t (h=1): the coverage ceiling.
+    base = raw[horizons[0]]
+    if base.size:
+        for q in (95, 99):
+            pv = float(np.percentile(base, q))
+            ax.axvline(pv, color="tab:red", linestyle=":", linewidth=1, alpha=0.7)
+            ax.text(
+                pv,
+                0.02,
+                f" p{q}={pv:.1f}d",
+                rotation=90,
+                va="bottom",
+                ha="right",
+                fontsize=7,
+                color="tab:red",
+            )
+
+    ax.set_xlabel("Lead time Δt (days)")
+    ax.set_ylabel("Cumulative fraction of samples")
+    ax.set_ylim(0, 1.02)
+    ax.set_title(
+        "Supervised Δt vs forecast horizon\n"
+        "(h=1 is training Δt; right tail = uncovered)"
+    )
+    ax.legend(fontsize=8, loc="lower right")
+    ax.grid(True, alpha=0.3)
+
+
+def print_dt_horizon(event_times_per_file, horizons):
+    """Print the lead-time-vs-horizon percentile table to stdout."""
+    if len(event_times_per_file) == 0:
+        return
+
+    horizons, raw = dt_horizon_stats(event_times_per_file, horizons)
+
+    print("\nSupervised lead time Δt by event horizon (days):")
+    print(
+        f"{'horizon':>8} {'n':>10} {'median':>8} {'p90':>7} {'p95':>7} "
+        f"{'p99':>7} {'max':>7}"
+    )
+    for h in horizons:
+        c = raw[h]
+        if c.size == 0:
+            print(f"{h:>8} {0:>10}")
+            continue
+        print(
+            f"{h:>8} {c.size:>10} {np.median(c):>8.2f} "
+            f"{np.percentile(c, 90):>7.2f} {np.percentile(c, 95):>7.2f} "
+            f"{np.percentile(c, 99):>7.2f} {c.max():>7.2f}"
+        )
+    print(
+        "h=1 is the Delta_t training actually supervises (target = next event). "
+        "Its p99/max is the coverage ceiling; forecasts beyond it extrapolate."
+    )
+
+
 def print_summary(counts, include_upper_limits):
     """Print the per-band and overall counts to stdout."""
     det = counts["det_totals"]
@@ -512,6 +643,17 @@ def main():
         help="Step (days) between evaluated window lengths. Default 1.0.",
     )
     parser.add_argument(
+        "--dt_horizons",
+        type=int,
+        nargs="+",
+        default=[1, 2, 3, 5, 8],
+        help=(
+            "Event offsets h for the supervised-Delta_t panel. h=1 is the "
+            "training Delta_t (gap to next event); larger h show how far ahead "
+            "a target must be drawn to reach a given lead time. Default 1 2 3 5 8."
+        ),
+    )
+    parser.add_argument(
         "--out",
         type=str,
         default="observation_histograms.png",
@@ -536,6 +678,7 @@ def main():
         args.window_step, args.window_max + 0.5 * args.window_step, args.window_step
     )
     print_time_window_sweep(counts["event_times_per_file"], window_grid)
+    print_dt_horizon(counts["event_times_per_file"], args.dt_horizons)
 
     fig, axes = plt.subplots(2, 3, figsize=(21, 11))
     plot_band_totals(axes[0, 0], counts, args.include_upper_limits)
@@ -543,7 +686,7 @@ def main():
     plot_per_band_hist(axes[0, 2], counts)
     plot_context_sweep(axes[1, 0], counts["total_det_per_curve"], args.sweep_max)
     plot_time_window_sweep(axes[1, 1], counts["event_times_per_file"], window_grid)
-    axes[1, 2].set_visible(False)
+    plot_dt_horizon(axes[1, 2], counts["event_times_per_file"], args.dt_horizons)
 
     fig.suptitle(
         f"KN light-curve observations ({counts['n_files']} light curves)",
