@@ -9,7 +9,6 @@
 #SBATCH --nodes=<KNODES>
 #SBATCH --ntasks-per-node=<NGPUS>
 #SBATCH --gpus-per-node=<NGPUS>
-#SBATCH --gpus-per-task=1
 #SBATCH --cpus-per-task=12  # 96 threads / 8 GPUs
 #SBATCH --mem-per-gpu=96G  # <= RealMemory/NGPUs
 #SBATCH --hint=nomultithread
@@ -32,8 +31,8 @@ nvidia-smi
 export NCCL_SOCKET_IFNAME=ib0  # Check possible interfaces with `ip link show`
 
 # for multi-node training
-export NCCL_IB_HCA=mlx5_0
-export NCCL_IB_GID_INDEX=3  # sometimes 0 or 3 depending on subnet manager config
+#export NCCL_IB_HCA=mlx5_0
+#export NCCL_IB_GID_INDEX=3  # sometimes 0 or 3 depending on subnet manager config
 
 # Debugging distributed data parallel
 # export NCCL_DEBUG=INFO
