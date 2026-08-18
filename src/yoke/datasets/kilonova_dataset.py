@@ -154,7 +154,7 @@ def load_or_compute_band_normalization(
         # on a user-specific filesystem location and does not leak val/test data.
         file_prefix_list = sorted(
             glob.glob(
-                "/Users/atoivonen/Documents/repos/fake_kilonovae/"
+                "/net/sescratch1/atoivonen/data/KN_lightcurves/"
                 "rubin_ztf_10000_dataset_same_seed/lc_*.npz"
             )
         )
@@ -482,7 +482,7 @@ class Kilonova_lc_scalar_context_DataSet_9band(Dataset):
         if data_glob is None:
             # Legacy hardcoded scratch fallback (backward compatibility).
             data_glob = (
-                "/Users/atoivonen/Documents/repos/fake_kilonovae/"
+                "/net/sescratch1/atoivonen/data/KN_lightcurves/"
                 "rubin_ztf_10000_dataset_same_seed/lc_*.npz"
             )
         file_prefix_list = sorted(glob.glob(data_glob))

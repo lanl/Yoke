@@ -115,7 +115,7 @@ def main() -> None:
         "--realistic_glob",
         type=str,
         default=(
-            "/Users/atoivonen/Documents/repos/fake_kilonovae/"
+            "/net/sescratch1/atoivonen/data/KN_lightcurves/"
             "rubin_ztf_10000_dataset_same_seed/lc_*.npz"
         ),
         help="Glob for the realistic light-curve files.",
@@ -124,7 +124,7 @@ def main() -> None:
         "--dense_glob",
         type=str,
         default=(
-            "/Users/atoivonen/Documents/repos/fake_kilonovae/"
+            "/net/sescratch1/atoivonen/data/KN_lightcurves/"
             "rubin_ztf_dense_10000_dataset_same_seed/lc_*.npz"
         ),
         help="Optional glob for the dense files (for coverage reporting only).",

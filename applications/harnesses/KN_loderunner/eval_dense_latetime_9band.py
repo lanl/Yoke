@@ -292,7 +292,7 @@ def get_args():
         "--realistic_glob",
         type=str,
         default=(
-            "/Users/atoivonen/Documents/repos/fake_kilonovae/"
+            "/net/sescratch1/atoivonen/data/KN_lightcurves/"
             "rubin_ztf_10000_dataset_same_seed/lc_*.npz"
         ),
         help="Glob for the realistic light-curve files (observing context).",

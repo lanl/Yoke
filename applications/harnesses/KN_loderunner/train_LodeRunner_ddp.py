@@ -116,7 +116,7 @@ parser.add_argument(
     "--kn_realistic_glob",
     type=str,
     default=(
-        "/Users/atoivonen/Documents/repos/fake_kilonovae/"
+        "/net/sescratch1/atoivonen/data/KN_lightcurves/"
         "rubin_ztf_10000_dataset_same_seed/lc_*.npz"
     ),
     help="Glob for the realistic light-curve files (primary training data).",
@@ -125,7 +125,7 @@ parser.add_argument(
     "--kn_dense_glob",
     type=str,
     default=(
-        "/Users/atoivonen/Documents/repos/fake_kilonovae/"
+        "/net/sescratch1/atoivonen/data/KN_lightcurves/"
         "rubin_ztf_dense_10000_dataset_same_seed/lc_*.npz"
     ),
     help="Optional glob for the dense light-curve files. When set (and it "
