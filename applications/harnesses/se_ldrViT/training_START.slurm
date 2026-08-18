@@ -4,7 +4,7 @@
 
 #SBATCH --job-name=ldrViT_LR_s<studyIDX>_e0001
 #SBATCH --account=<allocation>
-#SBATCH --time=08:00:00
+#SBATCH --time=04:00:00
 #SBATCH --qos=standard
 #SBATCH --nodes=<KNODES>
 #SBATCH --ntasks-per-node=<NGPUS>
