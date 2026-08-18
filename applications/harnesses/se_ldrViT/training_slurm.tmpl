@@ -2,7 +2,7 @@
 
 # NOTE: Can find node configuration with `scontrol show node`
 
-#SBATCH --job-name=ldrViT_LR_s<studyIDX>_e0001
+#SBATCH --job-name=ldrViT_LR_s<studyIDX>_e<epochIDX>
 #SBATCH --account=<allocation>
 #SBATCH --time=04:00:00
 #SBATCH --qos=standard
@@ -12,8 +12,8 @@
 #SBATCH --cpus-per-task=12  # 96 threads / 8 GPUs
 #SBATCH --mem-per-gpu=96G  # <= RealMemory/NGPUs
 #SBATCH --hint=nomultithread
-#SBATCH --output=study<studyIDX>_epoch0001.out
-#SBATCH --error=study<studyIDX>_epoch0001.err
+#SBATCH --output=study<studyIDX>_epoch<epochIDX>.out
+#SBATCH --error=study<studyIDX>_epoch<epochIDX>.err
 #SBATCH -vvv
 
 
