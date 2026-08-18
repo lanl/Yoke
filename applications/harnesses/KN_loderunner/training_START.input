@@ -1,7 +1,7 @@
 --studyIDX
 <studyIDX>
 --FILELIST_DIR
-/users/atoivonen/forks/Yoke/applications/filelists/
+/net/sescratch1/atoivonen/projects/filelists/
 --LSC_NPZ_DIR
 /lustre/scratch5/exempt/artimis/data/lsc240420/
 --train_filelist
