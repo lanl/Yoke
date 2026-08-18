@@ -37,6 +37,17 @@ NINE_BAND_KEYS = (
 )
 
 
+def _stem(path: str) -> str:
+    """Return the object identifier (filename without directory or extension).
+
+    Light-curve files are named ``lc_<id>.npz``; the stem ``lc_<id>`` is the
+    object identity used to pair the same object across the realistic and dense
+    directories and to build object-level train/val/test splits. ``.npz`` is a
+    single extension so ``splitext`` is exact.
+    """
+    return os.path.splitext(os.path.basename(path))[0]
+
+
 def compute_band_normalization(
     file_prefix_list: list[str],
     band_keys: tuple[str, ...] = ("arr_ztfg", "arr_ztfr", "arr_ztfi"),
@@ -117,6 +128,7 @@ def load_or_compute_band_normalization(
     value_col: int = 1,
     error_col: int = 2,
     drop_upper_limits: bool = False,
+    file_prefix_list: list[str] = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Load cached per-band normalization stats or compute them if missing.
 
@@ -128,17 +140,24 @@ def load_or_compute_band_normalization(
             used when drop_upper_limits is True.
         drop_upper_limits (bool): If True, exclude upper limits (non-finite
             uncertainty) from the statistics, matching a dataset that drops them.
+        file_prefix_list (list[str]): Files to accumulate stats over. Pass the
+            TRAIN files only to avoid val/test leakage. If None, falls back to
+            the legacy hardcoded scratch glob (kept for backward compatibility).
 
     Returns:
         means (np.ndarray): Per-band means, shape [n_bands].
         stds (np.ndarray): Per-band standard deviations, shape [n_bands].
     """
-    # FIXME: hardcoded scratch path. Should be passed in as an argument so this
-    # library function does not depend on a user-specific filesystem location.
-    file_prefix_list = sorted(
-        glob.glob(
-        "/net/sescratch1/atoivonen/data/KN_lightcurves/rubin_ztf_10000_dataset/lc_*.npz")
-    )
+    if file_prefix_list is None:
+        # FIXME: hardcoded scratch path fallback. Prefer passing an explicit
+        # (train-only) file_prefix_list so this library function does not depend
+        # on a user-specific filesystem location and does not leak val/test data.
+        file_prefix_list = sorted(
+            glob.glob(
+                "/Users/atoivonen/Documents/repos/fake_kilonovae/"
+                "rubin_ztf_10000_dataset_same_seed/lc_*.npz"
+            )
+        )
 
     if os.path.exists(stats_path):
         stats = np.load(stats_path, allow_pickle=True)
@@ -389,6 +408,9 @@ class Kilonova_lc_scalar_context_DataSet_9band(Dataset):
         n_rollout_steps: int = 1,
         context_window_days: float = None,
         max_context_len: int = None,
+        target_horizon_days: float = None,
+        data_glob: str = None,
+        object_ids: set = None,
     ) -> None:
         """Initialize the dataset and build the merged-event sample index.
 
@@ -426,20 +448,52 @@ class Kilonova_lc_scalar_context_DataSet_9band(Dataset):
                 Windows with more real events than this keep only the most recent
                 ``max_context_len``; windows with fewer are zero-padded. Defaults
                 to ``context_len`` when not given. Unused in fixed-count mode.
+            target_horizon_days (float): If set (window mode only), enables
+                **horizon-covering target sampling**: instead of always
+                supervising the immediate next event, each sample draws a target
+                lead time ~uniform in days over ``(0, target_horizon_days]`` and
+                supervises the event whose gap from the anchor is nearest that
+                lead time (clamped to the last event in the curve). This flattens
+                the supervised-``Delta_t`` distribution so the model is trained at
+                the lead times it is later asked to forecast, rather than only at
+                the short gap-to-next-event (median ~0.3d, p99 ~4d) while
+                diagnostics forecast out to ~12d. The context selection (trailing
+                ``context_window_days`` window ending at the anchor) is unchanged,
+                preserving train/inference parity; only the target moves. In
+                rollout mode each of the ``n_rollout_steps`` steps draws its own
+                farther target from its current anchor, spreading coverage across
+                the whole rollout. None (default) keeps the immediate-next-event
+                target. Ignored in fixed-count mode.
+            data_glob (str): Glob pattern selecting the light-curve files (i.e.
+                which dataset directory). If None (default) the legacy hardcoded
+                rubin_ztf_10000 scratch glob is used, preserving prior behavior.
+                Used to point at either the realistic or the dense directory.
+            object_ids (set): If given, only files whose stem (filename without
+                directory or ``.npz``) is in this set are loaded. Used to apply a
+                shared object-level train/val/test split across the realistic and
+                dense directories (the same stems appear in both). None (default)
+                loads all files matched by ``data_glob``.
         """
-        # FIXME: hardcoded scratch path. Should be passed in as an argument so
-        # this dataset does not depend on a user-specific filesystem location.
-        # NOTE: must point at the SAME dataset as
-        # load_or_compute_band_normalization (the rubin_ztf_10000 set). The old
+        # Select the dataset directory. NOTE: the chosen set must be consistent
+        # with the normalization stats (both Rubin+ZTF). The old
         # uniform_dataset_20000 set is ZTF-only, so training on it left the six
         # Rubin output heads without any targets (never trained) while the norm
         # stats were computed over Rubin+ZTF -- a silent train/stats mismatch.
-        file_prefix_list = sorted(
-            glob.glob(
-                "/net/sescratch1/atoivonen/data/KN_lightcurves/"
-                "rubin_ztf_10000_dataset/lc_*.npz"
+        if data_glob is None:
+            # Legacy hardcoded scratch fallback (backward compatibility).
+            data_glob = (
+                "/Users/atoivonen/Documents/repos/fake_kilonovae/"
+                "rubin_ztf_10000_dataset_same_seed/lc_*.npz"
             )
-        )
+        file_prefix_list = sorted(glob.glob(data_glob))
+
+        # Restrict to an object-level split (shared across the realistic and
+        # dense directories via matching filename stems) when object_ids is set.
+        if object_ids is not None:
+            object_ids = set(object_ids)
+            file_prefix_list = [
+                f for f in file_prefix_list if _stem(f) in object_ids
+            ]
 
         if N_imgs == 0:
             self.file_prefix_list = file_prefix_list
@@ -485,6 +539,22 @@ class Kilonova_lc_scalar_context_DataSet_9band(Dataset):
         else:
             self.max_context_len = context_len
 
+        # Horizon-covering target sampling (window mode only). None keeps the
+        # immediate-next-event target; a positive value draws a target lead time
+        # ~uniform in days over (0, target_horizon_days].
+        self.target_horizon_days = target_horizon_days
+        if target_horizon_days is not None:
+            if not self.window_mode:
+                raise ValueError(
+                    "target_horizon_days is only supported in time-window mode "
+                    "(set context_window_days)."
+                )
+            if target_horizon_days <= 0:
+                raise ValueError(
+                    "target_horizon_days must be positive, got "
+                    f"{target_horizon_days}"
+                )
+
         if means is None:
             raise ValueError(
                 "means must be provided for per-band normalization. "
@@ -520,6 +590,12 @@ class Kilonova_lc_scalar_context_DataSet_9band(Dataset):
         # rel_time is relative to the earliest observation across all bands in
         # the file so absolute MJD offsets do not leak into the model.
         self.events_per_file = []
+        # Object stem (identity) parallel to events_per_file. Needed because a
+        # file's index in events_per_file is NOT its index in file_prefix_list
+        # (files are shuffled above, and empty curves are skipped below), so
+        # pairing the same object across the realistic and dense datasets must go
+        # through the stem, not a positional index.
+        self.stems_per_file = []
         self.samples = []
 
         for file_idx, fn in enumerate(self.file_prefix_list):
@@ -575,6 +651,7 @@ class Kilonova_lc_scalar_context_DataSet_9band(Dataset):
             self.events_per_file.append(
                 (times, values.astype(np.float32), bands)
             )
+            self.stems_per_file.append(_stem(fn))
 
             n_events = times.shape[0]
             file_idx = len(self.events_per_file) - 1
@@ -687,6 +764,32 @@ class Kilonova_lc_scalar_context_DataSet_9band(Dataset):
 
         return x, target, mask, Dt
 
+    def _draw_target_idx(
+        self, times: np.ndarray, anchor_idx: int, n_events: int
+    ) -> int:
+        """Draw a horizon-covering target event index ahead of ``anchor_idx``.
+
+        Samples a target lead time ~uniform in days over
+        ``(0, target_horizon_days]`` and returns the future event whose gap from
+        the anchor is nearest that lead time. Because reachable lead times are
+        discrete (the actual future observation times), this approximates a
+        uniform-in-days target distribution up to data availability, and clamps
+        to the last event when the drawn lead time exceeds the curve. Assumes at
+        least one event follows the anchor (``anchor_idx + 1 < n_events``).
+
+        Args:
+            times (np.ndarray): Merged, sorted, file-relative event times.
+            anchor_idx (int): Index of the most recent context event.
+            n_events (int): Number of events in the curve.
+
+        Returns:
+            int: The drawn target event index, in ``(anchor_idx, n_events)``.
+        """
+        lead_time = np.random.uniform(0.0, self.target_horizon_days)
+        cand = np.arange(anchor_idx + 1, n_events)
+        gaps = times[cand] - times[anchor_idx]
+        return int(cand[np.argmin(np.abs(gaps - lead_time))])
+
     def _getitem_window(
         self, index: int
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -718,13 +821,23 @@ class Kilonova_lc_scalar_context_DataSet_9band(Dataset):
         file_idx, target_idx = self.samples[index]
         times, values, bands = self.events_per_file[file_idx]
 
-        # Anchor the trailing window on the event immediately before the target
-        # (the most recent observation). Select all earlier events within the
-        # window, then keep the most recent max_context_len if there are more.
-        anchor_t = times[target_idx - 1]
+        # Anchor the trailing window on the event immediately before the enumerated
+        # target (the most recent observation). With horizon-covering target
+        # sampling the supervised target is redrawn to a farther event so the
+        # lead time Dt is ~uniform in days; the anchor (hence the context) is
+        # unchanged, preserving train/inference parity.
+        anchor_idx = target_idx - 1
+        if self.target_horizon_days is not None:
+            target_idx = self._draw_target_idx(
+                times, anchor_idx, times.shape[0]
+            )
+
+        anchor_t = times[anchor_idx]
         lo = anchor_t - self.context_window_days
 
-        prior_t = times[:target_idx]
+        # Context is events up to and including the anchor (never the target,
+        # which may now be several events ahead) within the trailing window.
+        prior_t = times[: anchor_idx + 1]
         in_window = prior_t >= lo
         sel_idx = np.nonzero(in_window)[0]
         if sel_idx.shape[0] > self.max_context_len:
@@ -760,8 +873,10 @@ class Kilonova_lc_scalar_context_DataSet_9band(Dataset):
         target = torch.tensor(target, dtype=torch.float32)
         mask = torch.tensor(mask, dtype=torch.float32)
 
+        # Lead time from the anchor (most recent context event) to the target,
+        # which may be several events ahead under horizon-covering sampling.
         Dt = torch.tensor(
-            times[target_idx] - times[target_idx - 1],
+            times[target_idx] - times[anchor_idx],
             dtype=torch.float32,
         )
 
@@ -932,16 +1047,28 @@ class Kilonova_lc_scalar_context_DataSet_9band(Dataset):
         future_dt = np.zeros(n, dtype=np.float32)
         future_valid = np.zeros(n, dtype=np.float32)
 
+        # Future targets. Without horizon sampling these are the consecutive
+        # events target_idx … target_idx + n - 1 (immediate-next chain). With
+        # horizon sampling each step draws a farther target from its own anchor
+        # (the previous step's target), so the rollout is supervised at
+        # ~uniform-in-days lead times at every step; future_dt is the anchor→
+        # target gap the training loop uses to advance the growing buffer.
         n_events = times.shape[0]
+        prev_idx = target_idx - 1
         for step in range(n):
-            t_idx = target_idx + step
-            if t_idx >= n_events:
+            if prev_idx + 1 >= n_events:
                 break
+
+            if self.target_horizon_days is not None:
+                t_idx = self._draw_target_idx(times, prev_idx, n_events)
+            else:
+                t_idx = prev_idx + 1
 
             future_v[step] = values[t_idx]
             future_b[step] = bands[t_idx]
-            future_dt[step] = times[t_idx] - times[t_idx - 1]
+            future_dt[step] = times[t_idx] - times[prev_idx]
             future_valid[step] = 1.0
+            prev_idx = t_idx
 
         return (
             torch.tensor(ctx_v, dtype=torch.float32),

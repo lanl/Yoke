@@ -1,4 +1,5 @@
 import os
+import glob
 import time
 import random
 import argparse
@@ -8,6 +9,7 @@ import torch.nn as nn
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim.lr_scheduler import LambdaLR
+from torch.utils.data import ConcatDataset
 
 from yoke.models.vit.swin.bomberman import (
     LodeRunner,
@@ -30,6 +32,15 @@ from yoke.utils.checkpointing import load_direct_loderunner_checkpoint_9band
 from yoke.utils.parallel import setup_distributed, cleanup_distributed
 from yoke.lr_schedulers import CosineWithWarmupScheduler
 from yoke.helpers import cli
+
+def _read_stem_list(path: str) -> set:
+    """Read an object-stem split file (one stem per line) into a set.
+
+    Deterministic and RNG-free, so every DDP rank builds the identical set.
+    """
+    with open(path) as fh:
+        return {line.strip() for line in fh if line.strip()}
+
 
 #############################################
 # Inputs
@@ -97,11 +108,39 @@ parser.add_argument(
     "from epoch 0. Only used when --n_rollout_steps > 1.",
 )
 
-# Change some default filepaths.
+# Paired-dataset globs. The realistic set is always used; the dense set (same
+# objects, denser cadence, no limiting-mag cut) is optional and concatenated onto
+# the realistic training data when present. Both are filtered to the object-level
+# split (see --train_filelist / --validation_filelist below).
+parser.add_argument(
+    "--kn_realistic_glob",
+    type=str,
+    default=(
+        "/Users/atoivonen/Documents/repos/fake_kilonovae/"
+        "rubin_ztf_10000_dataset_same_seed/lc_*.npz"
+    ),
+    help="Glob for the realistic light-curve files (primary training data).",
+)
+parser.add_argument(
+    "--kn_dense_glob",
+    type=str,
+    default=(
+        "/Users/atoivonen/Documents/repos/fake_kilonovae/"
+        "rubin_ztf_dense_10000_dataset_same_seed/lc_*.npz"
+    ),
+    help="Optional glob for the dense light-curve files. When set (and it "
+    "matches files), the dense TRAIN objects are concatenated onto the "
+    "realistic TRAIN objects to supervise late-time behavior. Validation and "
+    "the primary metric stay realistic-only.",
+)
+
+# Change some default filepaths. The KN split lists hold object stems (one per
+# line), shared across the realistic and dense directories; see
+# make_kn_object_lists.py.
 parser.set_defaults(
-    train_filelist="lsc240420_prefixes_train_80pct.txt",
-    validation_filelist="lsc240420_prefixes_validation_10pct.txt",
-    test_filelist="lsc240420_prefixes_test_10pct.txt",
+    train_filelist="kn_rubin_ztf_train.txt",
+    validation_filelist="kn_rubin_ztf_val.txt",
+    test_filelist="kn_rubin_ztf_test.txt",
 )
 
 
@@ -116,9 +155,13 @@ def main(args, rank, world_size, local_rank, device):
     Ngpus = args.Ngpus
     Knodes = args.Knodes
 
-    # Data Paths
+    # Data Paths. The KN train/val/test lists hold object stems (one per line);
+    # the same stems select objects in both the realistic and dense directories,
+    # so an object is entirely in train or entirely in val/test in both views.
     train_filelist = args.FILELIST_DIR + args.train_filelist
     validation_filelist = args.FILELIST_DIR + args.validation_filelist
+    train_stems = _read_stem_list(train_filelist)
+    val_stems = _read_stem_list(validation_filelist)
 
     # Model Parameters
     embed_dim = args.embed_dim
@@ -193,6 +236,17 @@ def main(args, rank, world_size, local_rank, device):
     # CONTEXT_WINDOW_DAYS = None to use the legacy fixed-count context.
     CONTEXT_WINDOW_DAYS = 2.0
     MAX_CONTEXT_LEN = 12
+
+    # Horizon-covering target sampling (window mode only). When set, each sample
+    # draws its target lead time ~uniform in days over (0, TARGET_HORIZON_DAYS]
+    # and supervises the event nearest that lead time, instead of always the
+    # immediate next event. This flattens the supervised-Dt distribution so the
+    # model is trained at the multi-day lead times it is asked to forecast,
+    # rather than only at the short gap-to-next-event (p99 ~4d on this set) while
+    # rollouts forecast out to ~12d. Set from the plot_observation_histograms.py
+    # "Supervised Δt vs forecast horizon" panel (the h=1 tail is the uncovered
+    # region). Leave None to supervise the immediate next event as before.
+    TARGET_HORIZON_DAYS = 8.0
     # In window mode the model's first layer is sized by the padded width.
     WRAPPER_CONTEXT_LEN = (
         MAX_CONTEXT_LEN if CONTEXT_WINDOW_DAYS is not None else CONTEXT_LEN
@@ -397,7 +451,15 @@ def main(args, rank, world_size, local_rank, device):
     )
     '''
 
-    norm_stats_path = "kilonova_9band_norm_stats.npz"
+    # Normalization statistics are computed over the TRAIN objects only (of the
+    # realistic set) to avoid val/test leakage. The stats path is distinct from
+    # the old all-files cache so a stale/leaky cache can't be silently reused.
+    norm_stats_path = "kilonova_9band_norm_stats_trainonly.npz"
+    train_norm_files = sorted(
+        f
+        for f in glob.glob(args.kn_realistic_glob)
+        if os.path.splitext(os.path.basename(f))[0] in train_stems
+    )
 
     if rank == 0:
         band_means, band_stds = load_or_compute_band_normalization(
@@ -406,6 +468,7 @@ def main(args, rank, world_size, local_rank, device):
             value_col=VALUE_COL,
             error_col=ERROR_COL,
             drop_upper_limits=DROP_UPPER_LIMITS,
+            file_prefix_list=train_norm_files,
         )
 
     dist.barrier()
@@ -421,44 +484,74 @@ def main(args, rank, world_size, local_rank, device):
         print("band_means:", band_means)
         print("band_stds:", band_stds)
 
-    # The 9-band dataset selects its N_imgs files with an unseeded RNG and each
-    # DDP rank builds its own dataset. With N_imgs>0 that would give every rank a
-    # DIFFERENT random file subset, hence different sample counts and different
-    # per-rank batch counts, so ranks desync and hang at gradient all-reduce
-    # (NCCL watchdog timeout). Seed both RNGs to the SAME value on every rank so
-    # all ranks pick the identical file subset. (With N_imgs=0 all files are used
-    # and this is moot, but seeding is harmless.)
+    # Object-level split makes every DDP rank build an identical-length dataset:
+    # the train/val stem sets come from static files (no RNG), the file list is
+    # sorted(glob(...)) then filtered by stem, and N_imgs=0 uses all matched
+    # files (no np.random.choice). So no per-rank subset desync is possible.
+    # (The remaining random.shuffle inside the dataset only reorders files; it
+    # does not change the sample count.) Seed once for reproducibility only --
+    # this is no longer load-bearing for rank sync. Keep N_imgs=0; N_imgs>0 would
+    # reintroduce the unseeded-choice desync.
     DATA_SEED = 42
     np.random.seed(DATA_SEED)
     random.seed(DATA_SEED)
 
-    train_dataset = Kilonova_lc_scalar_context_DataSet_9band(
-        N_imgs=0,
-        context_len=CONTEXT_LEN,
-        band_keys=BAND_KEYS,
-        value_col=VALUE_COL,
-        error_col=ERROR_COL,
-        drop_upper_limits=DROP_UPPER_LIMITS,
-        means=band_means,
-        stds=band_stds,
-        n_rollout_steps=n_rollout_steps,
-        context_window_days=CONTEXT_WINDOW_DAYS,
-        max_context_len=MAX_CONTEXT_LEN,
+    def _make_9band(
+        data_glob: str, object_ids: set
+    ) -> Kilonova_lc_scalar_context_DataSet_9band:
+        """Build a 9-band dataset over one directory restricted to object_ids."""
+        return Kilonova_lc_scalar_context_DataSet_9band(
+            N_imgs=0,
+            context_len=CONTEXT_LEN,
+            band_keys=BAND_KEYS,
+            value_col=VALUE_COL,
+            error_col=ERROR_COL,
+            drop_upper_limits=DROP_UPPER_LIMITS,
+            means=band_means,
+            stds=band_stds,
+            n_rollout_steps=n_rollout_steps,
+            context_window_days=CONTEXT_WINDOW_DAYS,
+            max_context_len=MAX_CONTEXT_LEN,
+            target_horizon_days=TARGET_HORIZON_DAYS,
+            data_glob=data_glob,
+            object_ids=object_ids,
+        )
+
+    # Realistic TRAIN objects (always present) plus, if a dense set is provided
+    # and matches files, the SAME train objects viewed densely -- concatenated to
+    # supervise late-time behavior. Validation stays realistic-only (matches the
+    # deployment metric).
+    train_real = _make_9band(args.kn_realistic_glob, train_stems)
+    train_parts = [train_real]
+
+    if args.kn_dense_glob and glob.glob(args.kn_dense_glob):
+        train_dense = _make_9band(args.kn_dense_glob, train_stems)
+        if len(train_dense) > 0:
+            train_parts.append(train_dense)
+            if rank == 0:
+                print(
+                    f"Dense training set added: {len(train_dense)} samples "
+                    f"(realistic: {len(train_real)} samples).",
+                    flush=True,
+                )
+        elif rank == 0:
+            print(
+                "Dense glob matched files but yielded 0 samples for the train "
+                "split; training on realistic set only.",
+                flush=True,
+            )
+    elif rank == 0 and args.kn_dense_glob:
+        print(
+            "Dense glob set but matched no files; training on realistic set "
+            "only.",
+            flush=True,
+        )
+
+    train_dataset = (
+        ConcatDataset(train_parts) if len(train_parts) > 1 else train_parts[0]
     )
 
-    val_dataset = Kilonova_lc_scalar_context_DataSet_9band(
-        N_imgs=0,
-        context_len=CONTEXT_LEN,
-        band_keys=BAND_KEYS,
-        value_col=VALUE_COL,
-        error_col=ERROR_COL,
-        drop_upper_limits=DROP_UPPER_LIMITS,
-        means=band_means,
-        stds=band_stds,
-        n_rollout_steps=n_rollout_steps,
-        context_window_days=CONTEXT_WINDOW_DAYS,
-        max_context_len=MAX_CONTEXT_LEN,
-    )
+    val_dataset = _make_9band(args.kn_realistic_glob, val_stems)
 
 
     # NOTE: For DDP the batch_size is the per-GPU batch_size!!!
@@ -613,6 +706,12 @@ def main(args, rank, world_size, local_rank, device):
                     "n_rollout_steps": n_rollout_steps,
                     "context_window_days": CONTEXT_WINDOW_DAYS,
                     "max_context_len": MAX_CONTEXT_LEN,
+                    "target_horizon_days": TARGET_HORIZON_DAYS,
+                    "train_filelist": args.train_filelist,
+                    "validation_filelist": args.validation_filelist,
+                    "kn_realistic_glob": args.kn_realistic_glob,
+                    "kn_dense_glob": args.kn_dense_glob,
+                    "norm_stats_path": norm_stats_path,
                 },
                 new_chkpt_path,
             )
