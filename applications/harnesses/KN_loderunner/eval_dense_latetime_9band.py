@@ -140,6 +140,45 @@ def _stem_to_path(data_glob: str) -> dict:
     return {_stem(f): f for f in glob.glob(data_glob)}
 
 
+def _batched_forward(
+    model: torch.nn.Module,
+    x: torch.Tensor,
+    lead_times: np.ndarray,
+    device: torch.device,
+    max_batch: int = 256,
+) -> np.ndarray:
+    """Predict all bands for many lead times in one (chunked) forward pass.
+
+    The context ``x`` (shape [1, D]) is fixed; only the lead time varies. Tiling
+    ``x`` to the batch dimension and passing a Dt vector runs every lead time
+    together instead of one-at-a-time, which is dramatically faster on GPU and
+    numerically identical to the per-point loop. Chunked at ``max_batch`` so a
+    long lead-time sweep cannot exhaust GPU memory.
+
+    Args:
+        model: The 9-band scalar-temporal LodeRunner.
+        x (torch.Tensor): Context input of shape [1, D].
+        lead_times (np.ndarray): 1-D array of lead times (days).
+        device (torch.device): Device to run on.
+        max_batch (int): Maximum lead times evaluated per forward pass.
+
+    Returns:
+        np.ndarray: Predictions of shape [len(lead_times), N_BANDS] (normalized).
+    """
+    lead_times = np.asarray(lead_times, dtype=np.float32)
+    out = np.zeros((lead_times.shape[0], N_BANDS), dtype=np.float32)
+    with torch.no_grad():
+        for start in range(0, lead_times.shape[0], max_batch):
+            chunk = lead_times[start : start + max_batch]
+            x_batch = x.expand(chunk.shape[0], -1)
+            Dt = torch.tensor(chunk, dtype=torch.float32, device=device)
+            pred = model(x_batch, in_vars=None, out_vars=None, Dt=Dt)
+            out[start : start + chunk.shape[0]] = (
+                pred.reshape(chunk.shape[0], N_BANDS).detach().cpu().numpy()
+            )
+    return out
+
+
 def eval_object(
     real_stream,
     dense_stream,
@@ -163,23 +202,37 @@ def eval_object(
     if r_t.shape[0] < 1 or d_t.shape[0] < 1:
         return None
 
-    # Phase zero = the first realistic detection (the observed trigger). The
-    # late-time region is dense points more than the cutoff past it.
+    # Phase zero = the first realistic detection (the observed trigger).
     t0 = float(r_t[0])
-    last_real_t = float(r_t[-1])
+
+    # The cutoff splits context from forecast: the model may only see realistic
+    # detections up to the cutoff phase, and must FORECAST everything after it
+    # (scored against the dense truth). Truncating the context here -- rather
+    # than feeding the whole realistic stream and only scoring late points --
+    # makes every object forecast from the same phase boundary, instead of from
+    # wherever its realistic coverage happens to end. (Without this, a
+    # bright/well-covered object whose realistic detections run to ~14 d has an
+    # almost-zero forecast horizon and the curve collapses to a stub.)
+    ctx_mask = (r_t - t0) <= late_time_cutoff_days
+    if not np.any(ctx_mask):
+        return None
+    r_t_ctx = r_t[ctx_mask]
+    r_v_ctx = r_v[ctx_mask]
+    r_b_ctx = r_b[ctx_mask]
+    last_real_t = float(r_t_ctx[-1])
 
     late_mask = (d_t - t0) > late_time_cutoff_days
     if not np.any(late_mask):
         return None
 
-    # Seed context from the realistic stream: trailing window ending at the last
-    # realistic detection, normalized as in training. build_context_input
-    # subtracts win_t[0], so absolute times are fine here.
-    r_v_norm = (r_v - means[r_b]) / (stds[r_b] + EPS)
+    # Seed context from the truncated realistic stream: trailing window ending
+    # at the last pre-cutoff realistic detection, normalized as in training.
+    # build_context_input subtracts win_t[0], so absolute times are fine here.
+    r_v_norm = (r_v_ctx - means[r_b_ctx]) / (stds[r_b_ctx] + EPS)
     win_v, win_t, win_b = _select_window(
-        ctx_t=list(r_t.astype(np.float32)),
+        ctx_t=list(r_t_ctx.astype(np.float32)),
         ctx_v=list(r_v_norm.astype(np.float32)),
-        ctx_b=list(r_b),
+        ctx_b=list(r_b_ctx),
         context_window_days=context_window_days,
         max_context_len=max_context_len,
     )
@@ -194,46 +247,44 @@ def eval_object(
     )
 
     # Score each late-time dense point at its true lead time from the last
-    # realistic detection.
-    scored = []
-    with torch.no_grad():
-        for idx in np.nonzero(late_mask)[0]:
-            dt = float(d_t[idx]) - last_real_t
-            if dt <= 0:
-                # Dense point precedes the last realistic detection; not a
-                # forecast into the future. Skip.
-                continue
-            Dt = torch.tensor([dt], dtype=torch.float32, device=device)
-            pred_all = model(x, in_vars=None, out_vars=None, Dt=Dt)
-            pred_all = pred_all.reshape(N_BANDS).detach().cpu().numpy()
+    # realistic detection. The context ``x`` is fixed for this object, so all
+    # lead times are evaluated in a SINGLE batched forward pass (tile x to the
+    # batch dimension, pass a Dt vector) instead of one forward per point --
+    # numerically identical, but far faster on GPU.
+    late_idx = np.nonzero(late_mask)[0]
+    lead_times = (d_t[late_idx] - last_real_t).astype(np.float32)
+    # Only points strictly after the last realistic detection are forecasts.
+    keep = lead_times > 0
+    late_idx = late_idx[keep]
+    lead_times = lead_times[keep]
 
-            band = int(d_b[idx])
-            pred_mag = float(pred_all[band] * (stds[band] + EPS) + means[band])
-            true_mag = float(d_v[idx])
-            scored.append(
-                {
-                    "phase": float(d_t[idx]) - t0,
-                    "lead_time": dt,
-                    "band": band,
-                    "pred_mag": pred_mag,
-                    "true_mag": true_mag,
-                    "residual_mag": pred_mag - true_mag,
-                }
-            )
-
-    if not scored:
+    if late_idx.shape[0] == 0:
         return None
 
+    pred_scored = _batched_forward(model, x, lead_times, device)  # [P, N_BANDS]
+
+    scored = []
+    for j, idx in enumerate(late_idx):
+        band = int(d_b[idx])
+        pred_mag = float(pred_scored[j, band] * (stds[band] + EPS) + means[band])
+        true_mag = float(d_v[idx])
+        scored.append(
+            {
+                "phase": float(d_t[idx]) - t0,
+                "lead_time": float(lead_times[j]),
+                "band": band,
+                "pred_mag": pred_mag,
+                "true_mag": true_mag,
+                "residual_mag": pred_mag - true_mag,
+            }
+        )
+
     # Smooth forecast curve for plotting: sweep lead time from 0 to the farthest
-    # scored late-time point, predicting all bands at each lead time.
-    max_dt = max(s["lead_time"] for s in scored)
+    # scored late-time point, predicting all bands at each lead time -- also a
+    # single batched forward pass.
+    max_dt = float(lead_times.max())
     lead_grid = np.linspace(0.0, max_dt, 60).astype(np.float32)
-    curve = np.zeros((lead_grid.shape[0], N_BANDS), dtype=np.float32)
-    with torch.no_grad():
-        for k, dt in enumerate(lead_grid):
-            Dt = torch.tensor([dt], dtype=torch.float32, device=device)
-            pred = model(x, in_vars=None, out_vars=None, Dt=Dt)
-            curve[k] = pred.reshape(N_BANDS).detach().cpu().numpy()
+    curve = _batched_forward(model, x, lead_grid, device)  # [60, N_BANDS]
     curve_mag = curve * (stds[None, :] + EPS) + means[None, :]
 
     return {
@@ -242,7 +293,9 @@ def eval_object(
         "last_real_t": last_real_t,
         "curve_phase": (last_real_t - t0) + lead_grid,
         "curve_mag": curve_mag.astype(np.float32),
-        "real": (r_t - t0, r_v, r_b),
+        # Only the pre-cutoff realistic detections were shown to the model, so
+        # plot those as the context (not the full realistic stream).
+        "real": (r_t_ctx - t0, r_v_ctx, r_b_ctx),
         "dense": (d_t - t0, d_v, d_b),
     }
 
@@ -319,9 +372,10 @@ def get_args():
     p.add_argument(
         "--late_time_cutoff_days",
         type=float,
-        default=8.0,
-        help="Dense points with phase (from first realistic detection) greater "
-        "than this are the late-time region scored here.",
+        default=3.0,
+        help="Splits context from forecast. The model sees realistic detections "
+        "with phase (from first realistic detection) up to this value, and "
+        "forecasts all dense points after it -- the late-time region scored here.",
     )
     p.add_argument("--outdir", type=str, default=None)
     p.add_argument(
