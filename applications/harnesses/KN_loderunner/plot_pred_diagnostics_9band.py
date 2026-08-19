@@ -336,6 +336,40 @@ def build_context_input(
     ).unsqueeze(0)
 
 
+def _batched_forward(model, x, lead_times, n_bands, device, max_batch=256):
+    """Predict all bands for many lead times in one (chunked) forward pass.
+
+    The context ``x`` (shape [1, D]) is fixed; only the lead time varies. Tiling
+    ``x`` to the batch dimension and passing a Dt vector runs every lead time
+    together instead of one-at-a-time, which is dramatically faster on GPU and
+    numerically identical to the per-lead-time loop. Chunked at ``max_batch`` so
+    a long lead-time sweep cannot exhaust GPU memory.
+
+    Args:
+        model: The 9-band scalar-temporal LodeRunner.
+        x (torch.Tensor): Context input of shape [1, D].
+        lead_times (np.ndarray): 1-D array of lead times (days).
+        n_bands (int): Number of bands the model emits.
+        device (torch.device): Device to run on.
+        max_batch (int): Maximum lead times evaluated per forward pass.
+
+    Returns:
+        np.ndarray: Predictions of shape [len(lead_times), n_bands] (normalized).
+    """
+    lead_times = np.asarray(lead_times, dtype=np.float32)
+    out = np.zeros((lead_times.shape[0], n_bands), dtype=np.float32)
+    with torch.no_grad():
+        for start in range(0, lead_times.shape[0], max_batch):
+            chunk = lead_times[start : start + max_batch]
+            x_batch = x.expand(chunk.shape[0], -1)
+            Dt = torch.tensor(chunk, dtype=torch.float32, device=device)
+            pred = model(x_batch, in_vars=None, out_vars=None, Dt=Dt)
+            out[start : start + chunk.shape[0]] = (
+                pred.reshape(chunk.shape[0], n_bands).detach().cpu().numpy()
+            )
+    return out
+
+
 def _select_window(ctx_t, ctx_v, ctx_b, context_window_days, max_context_len):
     """Select the trailing time-window subset of a growing context.
 
@@ -561,13 +595,12 @@ def get_rollout_from_stream(
 
         n_lead = 60
         lead_times = np.linspace(0.0, horizon, n_lead).astype(np.float32)
-        preds_norm = np.zeros((n_lead, n_bands), dtype=np.float32)
 
-        with torch.no_grad():
-            for k, dt in enumerate(lead_times):
-                Dt = torch.tensor([dt], dtype=torch.float32, device=device)
-                pred = model(x0, in_vars=None, out_vars=None, Dt=Dt)
-                preds_norm[k] = pred.reshape(n_bands).detach().cpu().numpy()
+        # Context x0 is fixed; only the lead time varies. Evaluate the whole
+        # sweep in a single batched forward pass (tile x0 to the batch dim, pass
+        # a Dt vector) instead of one forward per lead time -- numerically
+        # identical, but far faster on GPU.
+        preds_norm = _batched_forward(model, x0, lead_times, n_bands, device)
 
         preds_mag = preds_norm * (stds[None, :] + EPS) + means[None, :]
 
