@@ -501,12 +501,16 @@ class ScalarTemporalConditionedLodeRunner_9band(nn.Module):
                 feature is DISABLED and the architecture is byte-identical to the
                 legacy model: neither MLP sees ``Dt`` directly (lead time reaches
                 the output only through the frozen backbone). When ``> 0``, a
-                ``2 * dt_fourier_bands``-wide encoding ``[sin(Dt·f), cos(Dt·f)]``
-                over a fixed log-spaced frequency bank is concatenated onto BOTH
-                MLP inputs, so the trainable path can learn a smooth, nonlinear,
-                per-band dependence on lead time (e.g. late-time decay) rather
-                than a lead-time-independent persistence value. The frequency
-                bank is a non-trainable buffer.
+                ``2 * dt_fourier_bands + 1``-wide encoding
+                ``[sin(Dt·f), cos(Dt·f), log1p(Dt)]`` -- a fixed log-spaced
+                frequency bank (periods ~0.5 -> 60 days) plus one non-periodic
+                monotone channel -- is concatenated onto BOTH MLP inputs, so the
+                trainable path can learn a smooth, nonlinear, per-band dependence
+                on lead time (e.g. late-time decay) rather than a
+                lead-time-independent persistence value. The frequency bank is a
+                non-trainable buffer. The monotone ``log1p(Dt)`` channel gives an
+                explicit long-term trend so the forecast does not curve back up
+                at long lead times (which a purely periodic basis would).
         """
         super().__init__()
 
@@ -526,16 +530,28 @@ class ScalarTemporalConditionedLodeRunner_9band(nn.Module):
         input_dim = context_len * per_event_width
 
         # Fourier lead-time encoding. When enabled, a fixed log-spaced frequency
-        # bank (periods ~0.5 -> 15 days, matching the forecast horizon) turns the
-        # scalar Dt into a 2*dt_fourier_bands feature vector that the trainable
-        # MLPs consume directly. Registered as a buffer so it saves/loads and
-        # moves with .to(device) but is excluded from the optimizer's param list.
+        # bank turns the scalar Dt into a 2*dt_fourier_bands feature vector that
+        # the trainable MLPs consume directly. Registered as a buffer so it
+        # saves/loads and moves with .to(device) but is excluded from the
+        # optimizer's param list.
+        #
+        # The longest period is 60 days, well beyond any plausible forecast
+        # horizon: a purely sinusoidal basis MUST turn around (each component
+        # bottoms at half its period), which produced an unphysical "smile" in
+        # the late-time forecast (fade, then rise) as the lowest-frequency band
+        # -- previously 15 d, ~one full cycle over the window -- swung back up.
+        # With a 60 d max period the slowest component covers only a fraction of
+        # a cycle across a <=15 d horizon, so it stays monotone. In addition, a
+        # single non-periodic log1p(Dt) channel is appended (see _encode_dt),
+        # giving the MLPs an explicit monotone ramp for the long-term trend while
+        # the Fourier bank handles short-timescale structure.
         if dt_fourier_bands > 0:
             periods = torch.logspace(
-                math.log10(0.5), math.log10(15.0), dt_fourier_bands
+                math.log10(0.5), math.log10(60.0), dt_fourier_bands
             )
             self.register_buffer("dt_freqs", 2.0 * math.pi / periods)
-            dt_extra = 2 * dt_fourier_bands
+            # 2 * bands (sin + cos) + 1 monotone log1p(Dt) channel.
+            dt_extra = 2 * dt_fourier_bands + 1
         else:
             dt_extra = 0
 
@@ -565,16 +581,22 @@ class ScalarTemporalConditionedLodeRunner_9band(nn.Module):
             batch_size (int): Batch size B, used to size the disabled-path output.
 
         Returns:
-            torch.Tensor: [B, 2 * dt_fourier_bands] of ``[sin(Dt·f), cos(Dt·f)]``
-            when enabled, else an empty [B, 0] tensor (so the concat is a no-op
-            and the disabled path is identical to the legacy model).
+            torch.Tensor: [B, 2 * dt_fourier_bands + 1] of
+            ``[sin(Dt·f), cos(Dt·f), log1p(Dt)]`` when enabled, else an empty
+            [B, 0] tensor (so the concat is a no-op and the disabled path is
+            identical to the legacy model). The trailing ``log1p(Dt)`` is a
+            non-periodic, monotone channel so the trainable path always has an
+            explicit "further ahead -> keep fading" ramp, independent of the
+            periodic bands (which alone would eventually curve back up).
         """
         if self.dt_fourier_bands == 0:
             return Dt.new_zeros((batch_size, 0))
 
+        Dt = Dt.reshape(batch_size, 1)
         # [B, 1] * [1, bands] -> [B, bands]
-        angles = Dt.reshape(batch_size, 1) * self.dt_freqs.reshape(1, -1)
-        return torch.cat([torch.sin(angles), torch.cos(angles)], dim=1)
+        angles = Dt * self.dt_freqs.reshape(1, -1)
+        mono = torch.log1p(Dt.clamp_min(0.0))  # [B, 1], monotone in lead time
+        return torch.cat([torch.sin(angles), torch.cos(angles), mono], dim=1)
 
     def forward(
         self,

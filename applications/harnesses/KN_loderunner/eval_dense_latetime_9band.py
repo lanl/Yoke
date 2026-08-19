@@ -189,12 +189,18 @@ def eval_object(
     context_window_days,
     max_context_len,
     late_time_cutoff_days,
+    late_time_max_days,
 ):
     """Score one object's late-time dense truth against a realistic-context forecast.
 
     Returns a dict with the scored late-time points and a smooth forecast curve,
     or None if the object cannot be evaluated (no realistic context, or no dense
     points in the late-time region).
+
+    The scored/forecast region is the phase band
+    ``late_time_cutoff_days < phase <= late_time_max_days`` (phase measured from
+    the first realistic detection). Points beyond ``late_time_max_days`` are
+    ignored so the forecast is only judged over a horizon we care about.
     """
     r_t, r_v, r_b = real_stream
     d_t, d_v, d_b = dense_stream
@@ -221,7 +227,9 @@ def eval_object(
     r_b_ctx = r_b[ctx_mask]
     last_real_t = float(r_t_ctx[-1])
 
-    late_mask = (d_t - t0) > late_time_cutoff_days
+    # Score the forecast only within the phase band cutoff < phase <= max_days.
+    d_phase = d_t - t0
+    late_mask = (d_phase > late_time_cutoff_days) & (d_phase <= late_time_max_days)
     if not np.any(late_mask):
         return None
 
@@ -377,6 +385,14 @@ def get_args():
         "with phase (from first realistic detection) up to this value, and "
         "forecasts all dense points after it -- the late-time region scored here.",
     )
+    p.add_argument(
+        "--late_time_max_days",
+        type=float,
+        default=10.0,
+        help="Upper bound (phase from first realistic detection) on the scored "
+        "forecast region. Dense points beyond this are ignored, so the forecast "
+        "is judged only over cutoff < phase <= this horizon.",
+    )
     p.add_argument("--outdir", type=str, default=None)
     p.add_argument(
         "--max_objects",
@@ -467,6 +483,7 @@ def main():
             context_window_days,
             max_context_len,
             args.late_time_cutoff_days,
+            args.late_time_max_days,
         )
         if result is None:
             continue
