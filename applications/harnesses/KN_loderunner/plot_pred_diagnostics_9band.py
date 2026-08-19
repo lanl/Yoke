@@ -122,7 +122,26 @@ def get_args():
     parser.add_argument(
         "--norm_stats_path",
         type=str,
-        default="kilonova_9band_norm_stats.npz",
+        default="kilonova_9band_norm_stats_trainonly.npz",
+        help="Train-only normalization stats the model was trained with. Must "
+        "match training so plots use the exact encoding the model saw.",
+    )
+    parser.add_argument(
+        "--data_glob",
+        type=str,
+        default=(
+            "/net/sescratch1/atoivonen/data/KN_lightcurves/"
+            "rubin_ztf_10000_dataset_same_seed/lc_*.npz"
+        ),
+        help="Glob for the realistic light-curve files to diagnose.",
+    )
+    parser.add_argument(
+        "--test_filelist",
+        type=str,
+        default=None,
+        help="Path to the test-split stem list (one object stem per line). When "
+        "set, diagnostics run ONLY on held-out test objects, so plots are not "
+        "leaked by training data. Omit to run over every object in --data_glob.",
     )
 
     return parser.parse_args()
@@ -231,6 +250,14 @@ def make_eval_dataset(
     print("band_means:", band_means)
     print("band_stds:", band_stds)
 
+    # Restrict to held-out test objects when a split list is given, so the
+    # diagnostics are not leaked by training data.
+    object_ids = None
+    if getattr(args, "test_filelist", None):
+        with open(args.test_filelist) as fh:
+            object_ids = {line.strip() for line in fh if line.strip()}
+        print(f"Restricting diagnostics to {len(object_ids)} test-split objects.")
+
     dataset = Kilonova_lc_scalar_context_DataSet_9band(
         N_imgs=args.N_imgs,
         context_len=context_len,
@@ -242,6 +269,8 @@ def make_eval_dataset(
         stds=band_stds,
         context_window_days=context_window_days,
         max_context_len=max_context_len,
+        data_glob=getattr(args, "data_glob", None),
+        object_ids=object_ids,
     )
 
     return dataset, np.asarray(band_means), np.asarray(band_stds)

@@ -112,7 +112,17 @@ def get_args():
     parser.add_argument(
         "--norm_stats_path",
         type=str,
-        default="kilonova_9band_norm_stats.npz",
+        default="kilonova_9band_norm_stats_trainonly.npz",
+        help="Train-only normalization stats the model was trained with. Must "
+        "match training so forecasts use the exact encoding the model saw.",
+    )
+    parser.add_argument(
+        "--test_filelist",
+        type=str,
+        default=None,
+        help="Path to the test-split stem list (one object stem per line). When "
+        "set, only held-out test objects are forecast. Omit to use every object "
+        "in --data_glob.",
     )
 
     return parser.parse_args()
@@ -132,7 +142,7 @@ def resolve_paths(args):
     if args.data_glob is None:
         args.data_glob = (
             "/net/sescratch1/atoivonen/data/KN_lightcurves/"
-            "uniform_dataset_20000/lc_*.npz"
+            "rubin_ztf_10000_dataset_same_seed/lc_*.npz"
         )
 
     return tag
@@ -468,6 +478,23 @@ def main():
     files = sorted(glob.glob(args.data_glob))
     if not files:
         raise RuntimeError(f"No files matched data_glob: {args.data_glob}")
+
+    # Restrict to held-out test objects when a split list is given, so forecasts
+    # are not shown on training data.
+    if args.test_filelist:
+        with open(args.test_filelist) as fh:
+            test_stems = {line.strip() for line in fh if line.strip()}
+        files = [
+            f
+            for f in files
+            if os.path.splitext(os.path.basename(f))[0] in test_stems
+        ]
+        if not files:
+            raise RuntimeError(
+                "No files in --data_glob matched the test split "
+                f"({args.test_filelist})."
+            )
+        print(f"Restricting forecasts to {len(files)} test-split objects.")
 
     files = files[: args.n_curves]
     print(f"Forecasting {len(files)} light curves.")
