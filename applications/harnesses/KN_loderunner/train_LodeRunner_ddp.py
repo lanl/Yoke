@@ -227,6 +227,14 @@ def main(args, rank, world_size, local_rank, device):
     CONTEXT_LEN = 5 #3
     HIDDEN_CHANNELS = 64
 
+    # Fourier lead-time conditioning. When > 0, the trainable conditioner and
+    # output head receive a 2*DT_FOURIER_BANDS sinusoidal encoding of the lead
+    # time Dt, so they can learn a real per-band decay curve instead of a flat
+    # persistence value. (Without this, Dt reaches the output only through the
+    # frozen backbone, which cannot adapt, so late-time forecasts plateau.) Set
+    # to 0 for the legacy architecture (byte-identical; old checkpoints load).
+    DT_FOURIER_BANDS = 8
+
     # Time-window context mode. When CONTEXT_WINDOW_DAYS is not None, the dataset
     # selects context by a trailing lookback in days (all detections within the
     # last CONTEXT_WINDOW_DAYS), padded to MAX_CONTEXT_LEN with a per-event
@@ -351,6 +359,7 @@ def main(args, rank, world_size, local_rank, device):
             backbone_channels=8,
             hidden=HIDDEN_CHANNELS,
             context_window_days=CONTEXT_WINDOW_DAYS,
+            dt_fourier_bands=DT_FOURIER_BANDS,
         ).to(device)
 
         # Stage 1: freeze pretrained LodeRunner, train only conditioner + output head
@@ -703,6 +712,7 @@ def main(args, rank, world_size, local_rank, device):
                     "band_keys": list(BAND_KEYS),
                     "backbone_channels": 8,
                     "hidden": HIDDEN_CHANNELS,
+                    "dt_fourier_bands": DT_FOURIER_BANDS,
                     "n_rollout_steps": n_rollout_steps,
                     "context_window_days": CONTEXT_WINDOW_DAYS,
                     "max_context_len": MAX_CONTEXT_LEN,

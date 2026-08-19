@@ -9,6 +9,7 @@ emulator.
 """
 
 from collections.abc import Callable, Iterable
+import math
 import random
 
 import numpy as np
@@ -482,6 +483,7 @@ class ScalarTemporalConditionedLodeRunner_9band(nn.Module):
         backbone_channels: int = 8,
         hidden: int = 64,
         context_window_days: float = None,
+        dt_fourier_bands: int = 0,
     ) -> None:
         """Initialize conditioner and output-head around the backbone.
 
@@ -493,6 +495,18 @@ class ScalarTemporalConditionedLodeRunner_9band(nn.Module):
                 flag, so each event carries an extra ``valid`` feature and the
                 per-event width is ``3 + n_bands`` instead of ``2 + n_bands``.
                 When None (default), the legacy fixed-count layout is used.
+            dt_fourier_bands (int): Number of Fourier (sinusoidal) frequency
+                bands used to encode the lead time ``Dt`` and inject it into the
+                trainable conditioner and output head. When ``0`` (default) the
+                feature is DISABLED and the architecture is byte-identical to the
+                legacy model: neither MLP sees ``Dt`` directly (lead time reaches
+                the output only through the frozen backbone). When ``> 0``, a
+                ``2 * dt_fourier_bands``-wide encoding ``[sin(Dt·f), cos(Dt·f)]``
+                over a fixed log-spaced frequency bank is concatenated onto BOTH
+                MLP inputs, so the trainable path can learn a smooth, nonlinear,
+                per-band dependence on lead time (e.g. late-time decay) rather
+                than a lead-time-independent persistence value. The frequency
+                bank is a non-trainable buffer.
         """
         super().__init__()
 
@@ -502,6 +516,7 @@ class ScalarTemporalConditionedLodeRunner_9band(nn.Module):
         self.image_size = image_size
         self.backbone_channels = backbone_channels
         self.context_window_days = context_window_days
+        self.dt_fourier_bands = dt_fourier_bands
 
         # Dataset x layout, flattened per event. Fixed-count mode:
         #   [value, rel_t, one_hot_band(n_bands)] * context_len   -> 2 + n_bands
@@ -510,22 +525,56 @@ class ScalarTemporalConditionedLodeRunner_9band(nn.Module):
         per_event_width = 3 + n_bands if context_window_days is not None else 2 + n_bands
         input_dim = context_len * per_event_width
 
-        # Maps the scalar temporal event stream into the pseudo-channels
-        # expected by the pretrained LodeRunner backbone.
+        # Fourier lead-time encoding. When enabled, a fixed log-spaced frequency
+        # bank (periods ~0.5 -> 15 days, matching the forecast horizon) turns the
+        # scalar Dt into a 2*dt_fourier_bands feature vector that the trainable
+        # MLPs consume directly. Registered as a buffer so it saves/loads and
+        # moves with .to(device) but is excluded from the optimizer's param list.
+        if dt_fourier_bands > 0:
+            periods = torch.logspace(
+                math.log10(0.5), math.log10(15.0), dt_fourier_bands
+            )
+            self.register_buffer("dt_freqs", 2.0 * math.pi / periods)
+            dt_extra = 2 * dt_fourier_bands
+        else:
+            dt_extra = 0
+
+        # Maps the scalar temporal event stream (plus the Fourier Dt encoding,
+        # when enabled) into the pseudo-channels expected by the backbone.
         self.conditioner = nn.Sequential(
-            nn.Linear(input_dim, hidden),
+            nn.Linear(input_dim + dt_extra, hidden),
             nn.GELU(),
             nn.Linear(hidden, hidden),
             nn.GELU(),
             nn.Linear(hidden, backbone_channels),
         )
 
-        # Maps the backbone-channel summary back to one prediction per band.
+        # Maps the backbone-channel summary (plus the Fourier Dt encoding, when
+        # enabled) back to one prediction per band.
         self.output_head = nn.Sequential(
-            nn.Linear(backbone_channels, hidden),
+            nn.Linear(backbone_channels + dt_extra, hidden),
             nn.GELU(),
             nn.Linear(hidden, n_bands),
         )
+
+    def _encode_dt(self, Dt: torch.Tensor, batch_size: int) -> torch.Tensor:
+        """Fourier-encode the lead time for the trainable path.
+
+        Args:
+            Dt (torch.Tensor): Lead-time tensor of shape [B] (or broadcastable).
+            batch_size (int): Batch size B, used to size the disabled-path output.
+
+        Returns:
+            torch.Tensor: [B, 2 * dt_fourier_bands] of ``[sin(Dt·f), cos(Dt·f)]``
+            when enabled, else an empty [B, 0] tensor (so the concat is a no-op
+            and the disabled path is identical to the legacy model).
+        """
+        if self.dt_fourier_bands == 0:
+            return Dt.new_zeros((batch_size, 0))
+
+        # [B, 1] * [1, bands] -> [B, bands]
+        angles = Dt.reshape(batch_size, 1) * self.dt_freqs.reshape(1, -1)
+        return torch.cat([torch.sin(angles), torch.cos(angles)], dim=1)
 
     def forward(
         self,
@@ -541,7 +590,10 @@ class ScalarTemporalConditionedLodeRunner_9band(nn.Module):
                 [B, context_len * (2 + n_bands)].
             in_vars (torch.Tensor): Kept for LodeRunner API compatibility.
             out_vars (torch.Tensor): Kept for LodeRunner API compatibility.
-            Dt (torch.Tensor): Lead-time tensor passed to the backbone.
+            Dt (torch.Tensor): Lead-time tensor. Passed to the backbone and, when
+                ``dt_fourier_bands > 0``, Fourier-encoded and concatenated onto
+                both the conditioner and output-head inputs so the trainable path
+                can condition directly on lead time.
 
         Returns:
             pred (torch.Tensor): Predictions of shape [B, n_bands].
@@ -549,7 +601,13 @@ class ScalarTemporalConditionedLodeRunner_9band(nn.Module):
         B = x.shape[0]
         H, W = self.image_size
 
-        channel_vals = self.conditioner(x)  # [B, backbone_channels]
+        # Fourier Dt encoding for the trainable path ([B, 0] when disabled, so
+        # both concats below are no-ops and match the legacy architecture).
+        dt_feat = self._encode_dt(Dt, B)
+
+        channel_vals = self.conditioner(
+            torch.cat([x, dt_feat], dim=1)
+        )  # [B, backbone_channels]
 
         pseudo_img = channel_vals.view(
             B,
@@ -576,8 +634,11 @@ class ScalarTemporalConditionedLodeRunner_9band(nn.Module):
         # Collapse spatial dimensions to backbone-channel summaries.
         pred_channel_vals = pred_img.mean(dim=(2, 3))  # [B, backbone_channels]
 
-        # Convert backbone channels to per-band predictions.
-        pred = self.output_head(pred_channel_vals)  # [B, n_bands]
+        # Convert backbone channels to per-band predictions, conditioning the
+        # head on lead time via the same Fourier encoding ([B, 0] when disabled).
+        pred = self.output_head(
+            torch.cat([pred_channel_vals, dt_feat], dim=1)
+        )  # [B, n_bands]
 
         return pred
 

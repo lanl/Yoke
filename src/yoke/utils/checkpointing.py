@@ -496,6 +496,9 @@ def load_direct_loderunner_checkpoint_9band(
         backbone_channels=checkpoint_data.get("backbone_channels", 8),
         hidden=checkpoint_data.get("hidden", 64),
         context_window_days=context_window_days,
+        # 0 for legacy checkpoints (no key) -> Fourier Dt disabled -> the
+        # architecture matches the saved weights and strict load succeeds.
+        dt_fourier_bands=checkpoint_data.get("dt_fourier_bands", 0),
     ).to(device)
 
     state_dict = checkpoint_data["model_state_dict"]

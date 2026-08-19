@@ -176,6 +176,10 @@ def load_9band_model(ckpt_path, device):
     else:
         max_context_len = context_len
 
+    # 0 for legacy checkpoints (no key) -> Fourier Dt disabled -> matches saved
+    # weights so strict load succeeds.
+    dt_fourier_bands = ckpt.get("dt_fourier_bands", 0)
+
     print("Loaded checkpoint:", ckpt_path)
     print("model_class:", ckpt.get("model_class", "unknown"))
     print("target_type:", ckpt.get("target_type", "unknown"))
@@ -183,6 +187,7 @@ def load_9band_model(ckpt_path, device):
     print("context_window_days:", context_window_days)
     print("max_context_len:", max_context_len)
     print("n_bands:", n_bands)
+    print("dt_fourier_bands:", dt_fourier_bands)
 
     backbone = LodeRunner(**model_args).to(device)
     backbone.noise_scale = noise_scale
@@ -195,6 +200,7 @@ def load_9band_model(ckpt_path, device):
         backbone_channels=backbone_channels,
         hidden=hidden,
         context_window_days=context_window_days,
+        dt_fourier_bands=dt_fourier_bands,
     ).to(device)
 
     state_dict = strip_ddp_prefix(ckpt["model_state_dict"])
