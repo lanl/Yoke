@@ -279,6 +279,30 @@ def main(args, rank, world_size, local_rank, device):
     # detections; normalization statistics are computed the same way.
     DROP_UPPER_LIMITS = True
 
+    # Per-band loss weighting. Targets are per-band z-scored, so an equal-weight
+    # loss lets the large-dynamic-range blue bands (u, g fade to mag ~28-30) be
+    # under-fit -- the dense-eval showed a strong under-fade bias there (u
+    # ~ -5 mag, g ~ -2 mag) while ZTF/red bands fit well. Up-weighting u and g
+    # in the TRAINING backward (the recorded per-sample loss stays unweighted so
+    # the val CSV remains a comparable yardstick) pushes gradient toward the
+    # blue fade the model currently ignores. Order matches BAND_KEYS =
+    # (ztfg, ztfr, ztfi, sdssu, ps1_g, ps1_r, ps1_i, ps1_z, ps1_y). Set to None
+    # to recover the exact equal-weight objective.
+    BAND_WEIGHTS = torch.tensor(
+        [
+            1.0,  # ztfg
+            1.0,  # ztfr
+            1.0,  # ztfi
+            3.0,  # sdssu (u) -- worst under-fade, largest up-weight
+            2.0,  # ps1__g (g)
+            1.0,  # ps1__r (r)
+            1.0,  # ps1__i (i)
+            1.0,  # ps1__z (z)
+            1.0,  # ps1__y (y)
+        ],
+        dtype=torch.float32,
+    )
+
     optimizer_kwargs = {
         "lr": 1e-4,# 1e-4, #1e-5
         "betas": (0.9, 0.999),
@@ -648,6 +672,7 @@ def main(args, rank, world_size, local_rank, device):
                 window_mode=CONTEXT_WINDOW_DAYS is not None,
                 context_window_days=CONTEXT_WINDOW_DAYS,
                 max_context_len=MAX_CONTEXT_LEN,
+                band_weights=BAND_WEIGHTS,
             )
         else:
             #train_DDP_loderunner_epoch(
@@ -667,6 +692,7 @@ def main(args, rank, world_size, local_rank, device):
                 device=device,
                 rank=rank,
                 world_size=world_size,
+                band_weights=BAND_WEIGHTS,
             )
 
         print(f"[rank {rank}] finished epoch", flush=True)
@@ -713,6 +739,11 @@ def main(args, rank, world_size, local_rank, device):
                     "backbone_channels": 8,
                     "hidden": HIDDEN_CHANNELS,
                     "dt_fourier_bands": DT_FOURIER_BANDS,
+                    "band_weights": (
+                        BAND_WEIGHTS.tolist()
+                        if BAND_WEIGHTS is not None
+                        else None
+                    ),
                     "n_rollout_steps": n_rollout_steps,
                     "context_window_days": CONTEXT_WINDOW_DAYS,
                     "max_context_len": MAX_CONTEXT_LEN,

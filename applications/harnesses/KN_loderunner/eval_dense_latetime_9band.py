@@ -305,6 +305,9 @@ def eval_object(
         # plot those as the context (not the full realistic stream).
         "real": (r_t_ctx - t0, r_v_ctx, r_b_ctx),
         "dense": (d_t - t0, d_v, d_b),
+        # Right edge for plotting: the scored horizon. Beyond this the forecast
+        # is unsupervised extrapolation, so it is not shown.
+        "plot_max_phase": late_time_max_days,
     }
 
 
@@ -314,11 +317,17 @@ def plot_object(result, stem, outpath):
     axes = axes.ravel()
     r_ph, r_v, r_b = result["real"]
     d_ph, d_v, d_b = result["dense"]
+    # Show only the scored horizon; the forecast beyond it is unsupervised
+    # extrapolation (where the late-time upturn artifact lives).
+    plot_max = result.get("plot_max_phase")
 
     for b in range(N_BANDS):
         ax = axes[b]
         rm = r_b == b
         dm = d_b == b
+        # Clip the dense-truth scatter to the plotted horizon as well.
+        if plot_max is not None:
+            dm = dm & (d_ph <= plot_max)
         if np.any(dm):
             ax.scatter(d_ph[dm], d_v[dm], s=14, c="0.6", label="dense truth")
         if np.any(rm):
@@ -331,6 +340,8 @@ def plot_object(result, stem, outpath):
             c=BAND_COLORS[b], lw=1.6, label="forecast",
         )
         ax.invert_yaxis()  # magnitudes: brighter is smaller
+        if plot_max is not None:
+            ax.set_xlim(right=plot_max)
         ax.set_title(BAND_NAMES[b], fontsize=9)
         if b == 0:
             ax.legend(fontsize=7, loc="best")

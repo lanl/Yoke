@@ -497,6 +497,7 @@ def train_DDP_scalar_temporal_loderunner_epoch_9band(
     device: torch.device,
     rank: int,
     world_size: int,
+    band_weights: torch.Tensor = None,
 ) -> None:
     """DDP epoch function for the masked 9-band scalar temporal LodeRunner.
 
@@ -512,6 +513,13 @@ def train_DDP_scalar_temporal_loderunner_epoch_9band(
 
     Expected model output:
         pred:   [B, n_bands]
+
+    ``band_weights`` (optional [n_bands] tensor) up-weights the backward pass
+    per observed band. Because targets are per-band z-scored, equal weighting
+    lets large-dynamic-range bands (u, g) contribute little to the loss and be
+    under-fit; weighting scales each sample by its observed band's weight. The
+    RECORDED per-sample loss stays unweighted so the CSV metric is comparable
+    across runs. ``None`` (default) reproduces the plain equal-weight behavior.
     """
     train_rcrd_filename = train_rcrd_filename.replace(
         "<epochIDX>",
@@ -519,6 +527,9 @@ def train_DDP_scalar_temporal_loderunner_epoch_9band(
     )
 
     model.train()
+
+    if band_weights is not None:
+        band_weights = band_weights.to(device)
 
     with (
         open(train_rcrd_filename, "a") if rank == 0 else nullcontext()
@@ -554,7 +565,18 @@ def train_DDP_scalar_temporal_loderunner_epoch_9band(
             loss = loss_fn(pred, target) * mask
             per_sample_loss = loss.sum(dim=1) / (mask.sum(dim=1) + 1e-8)
 
-            batch_loss = per_sample_loss.mean()
+            if band_weights is None:
+                # Recorded metric == training objective: plain equal weight.
+                batch_loss = per_sample_loss.mean()
+            else:
+                # Weight the backward by the observed band's weight (mask is
+                # one-hot, so this picks each sample's band weight). The
+                # recorded per_sample_loss above stays unweighted so the CSV
+                # metric is comparable across runs and weightings.
+                sample_w = (mask * band_weights.reshape(1, -1)).sum(dim=1)
+                batch_loss = (per_sample_loss * sample_w).sum() / (
+                    sample_w.sum() + 1e-8
+                )
 
             batch_loss.backward()
             optimizer.step()
@@ -636,6 +658,7 @@ def _rollout_pass_9band(
     n_bands: int,
     teacher_forcing_ratio: float,
     device: torch.device,
+    band_weights: torch.Tensor = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Unroll the 9-band model over a batch of rollouts with scheduled sampling.
 
@@ -660,10 +683,16 @@ def _rollout_pass_9band(
         teacher_forcing_ratio (float): Probability of feeding the true value back
             at each step (1.0 = fully teacher-forced, 0.0 = fully free-running).
         device (torch.device): Compute device.
+        band_weights (torch.Tensor): Optional per-band gradient weights
+            [n_bands]. When given, ``total_loss`` (the backward objective) is a
+            per-band weighted mean over valid steps; ``per_sample_loss`` (the
+            recorded metric) stays unweighted. ``None`` reproduces the plain
+            equal-weight behavior exactly.
 
     Returns:
         per_sample_loss (torch.Tensor): Mean rollout loss per sample [B].
-        total_loss (torch.Tensor): Scalar mean loss over all valid steps.
+        total_loss (torch.Tensor): Scalar mean loss over all valid steps
+            (per-band weighted when ``band_weights`` is given).
     """
     B, context_len = ctx_v.shape
     n_steps = future_v.shape[1]
@@ -681,6 +710,7 @@ def _rollout_pass_9band(
 
     step_losses = []  # [B] per valid step
     step_valid = []  # [B] per step
+    step_bands = []  # [B] observed band index per step (for band weighting)
 
     for step in range(n_steps):
         # Build the flattened per-event input from the current window, with
@@ -709,6 +739,7 @@ def _rollout_pass_9band(
         step_loss = loss_fn(pred_obs, true_obs) * valid
         step_losses.append(step_loss)
         step_valid.append(valid)
+        step_bands.append(tgt_band)
 
         # Scheduled sampling: choose true vs own (detached) prediction per sample.
         use_true = (
@@ -730,7 +761,18 @@ def _rollout_pass_9band(
     step_valid = torch.stack(step_valid, dim=1)  # [B, n_steps]
 
     per_sample_loss = step_losses.sum(dim=1) / (step_valid.sum(dim=1) + 1e-8)
-    total_loss = step_losses.sum() / (step_valid.sum() + 1e-8)
+
+    if band_weights is None:
+        total_loss = step_losses.sum() / (step_valid.sum() + 1e-8)
+    else:
+        # Per-band-weighted objective: scale each valid step by its observed
+        # band's weight. per_sample_loss (recorded) stays unweighted above.
+        step_bands = torch.stack(step_bands, dim=1)  # [B, n_steps]
+        bw = band_weights.to(device)
+        step_w = bw[step_bands] * step_valid  # [B, n_steps]
+        total_loss = (step_losses * bw[step_bands]).sum() / (
+            step_w.sum() + 1e-8
+        )
 
     return per_sample_loss, total_loss
 
@@ -751,6 +793,7 @@ def _rollout_pass_9band_window(
     max_context_len: int,
     teacher_forcing_ratio: float,
     device: torch.device,
+    band_weights: torch.Tensor = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Unroll the 9-band model over a batch of rollouts in time-window mode.
 
@@ -787,10 +830,16 @@ def _rollout_pass_9band_window(
         teacher_forcing_ratio (float): Probability of feeding the true value back
             at each step (1.0 = fully teacher-forced, 0.0 = fully free-running).
         device (torch.device): Compute device.
+        band_weights (torch.Tensor): Optional per-band gradient weights
+            [n_bands]. When given, ``total_loss`` (the backward objective) is a
+            per-band weighted mean over valid steps; ``per_sample_loss`` (the
+            recorded metric) stays unweighted. ``None`` reproduces the plain
+            equal-weight behavior exactly.
 
     Returns:
         per_sample_loss (torch.Tensor): Mean rollout loss per sample [B].
-        total_loss (torch.Tensor): Scalar mean loss over all valid steps.
+        total_loss (torch.Tensor): Scalar mean loss over all valid steps
+            (per-band weighted when ``band_weights`` is given).
     """
     B = ctx_v.shape[0]
     seed_width = ctx_v.shape[1]
@@ -824,6 +873,7 @@ def _rollout_pass_9band_window(
 
     step_losses = []  # [B] per step
     step_valid = []  # [B] per step
+    step_bands = []  # [B] observed band index per step (for band weighting)
 
     for step in range(n_steps):
         # Most recent real event time per row (left-packed => index count - 1).
@@ -883,6 +933,7 @@ def _rollout_pass_9band_window(
         step_loss = loss_fn(pred_obs, true_obs) * valid
         step_losses.append(step_loss)
         step_valid.append(valid)
+        step_bands.append(tgt_band)
 
         # Scheduled sampling: choose true vs own (detached) prediction per sample.
         use_true = torch.rand(B, device=device) < teacher_forcing_ratio
@@ -906,7 +957,18 @@ def _rollout_pass_9band_window(
     step_valid = torch.stack(step_valid, dim=1)  # [B, n_steps]
 
     per_sample_loss = step_losses.sum(dim=1) / (step_valid.sum(dim=1) + 1e-8)
-    total_loss = step_losses.sum() / (step_valid.sum() + 1e-8)
+
+    if band_weights is None:
+        total_loss = step_losses.sum() / (step_valid.sum() + 1e-8)
+    else:
+        # Per-band-weighted objective: scale each valid step by its observed
+        # band's weight. per_sample_loss (recorded) stays unweighted above.
+        step_bands = torch.stack(step_bands, dim=1)  # [B, n_steps]
+        bw = band_weights.to(device)
+        step_w = bw[step_bands] * step_valid  # [B, n_steps]
+        total_loss = (step_losses * bw[step_bands]).sum() / (
+            step_w.sum() + 1e-8
+        )
 
     return per_sample_loss, total_loss
 
@@ -932,6 +994,7 @@ def train_DDP_scalar_temporal_loderunner_epoch_9band_rollout(
     window_mode: bool = False,
     context_window_days: float = None,
     max_context_len: int = None,
+    band_weights: torch.Tensor = None,
 ) -> None:
     """Multi-step rollout DDP epoch for the masked 9-band scalar temporal model.
 
@@ -964,9 +1027,15 @@ def train_DDP_scalar_temporal_loderunner_epoch_9band_rollout(
             ``window_mode`` is True.
         max_context_len (int): Padded context width M. Required when
             ``window_mode`` is True.
+        band_weights (torch.Tensor): Optional per-band gradient weights
+            [n_bands], forwarded to the rollout pass to up-weight
+            large-dynamic-range bands (u, g) in the backward objective. The
+            recorded per-sample loss stays unweighted. ``None`` (default)
+            reproduces the plain equal-weight behavior. Validation always runs
+            unweighted so the recorded metric is comparable.
     """
     def _run_pass(
-        data: tuple[torch.Tensor, ...], ratio: float
+        data: tuple[torch.Tensor, ...], ratio: float, weights: torch.Tensor = None
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Unpack a batch (7- or 8-tuple), move to device, run the rollout."""
         if window_mode:
@@ -1017,6 +1086,7 @@ def train_DDP_scalar_temporal_loderunner_epoch_9band_rollout(
                 max_context_len=max_context_len,
                 teacher_forcing_ratio=ratio,
                 device=device,
+                band_weights=weights,
             )
 
         return _rollout_pass_9band(
@@ -1032,6 +1102,7 @@ def train_DDP_scalar_temporal_loderunner_epoch_9band_rollout(
             n_bands=n_bands,
             teacher_forcing_ratio=ratio,
             device=device,
+            band_weights=weights,
         )
 
     train_rcrd_filename = train_rcrd_filename.replace(
@@ -1052,7 +1123,7 @@ def train_DDP_scalar_temporal_loderunner_epoch_9band_rollout(
             optimizer.zero_grad(set_to_none=True)
 
             per_sample_loss, batch_loss = _run_pass(
-                data, teacher_forcing_ratio
+                data, teacher_forcing_ratio, weights=band_weights
             )
 
             batch_loss.backward()
