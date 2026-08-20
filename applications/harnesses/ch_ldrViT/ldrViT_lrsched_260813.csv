@@ -35,10 +35,10 @@ studyIDX,KNODES,NGPUS,VIT_EMBED_DIM,VIT_NUM_LAYERS,VIT_NUM_HEADS,MAX_TIME_OFFSET
 # Here we study the effect of an LR schedule on the baseline model architecture
 #
 # Baseline
-1,1,4,512,12,8,1,2,4,1000,500,1.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,t26_hrznshld_g
-2,1,4,512,12,8,1,2,4,1000,500,2.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,t26_hrznshld_g
-3,1,4,512,12,8,1,2,4,1000,500,5.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,t26_hrznshld_g
-4,1,4,512,12,8,1,2,4,1000,500,1.0e-3,0.5,0.5,1000,500,train_ldrViT_ddp.py,t26_hrznshld_g
+#1,1,4,512,12,8,1,2,4,1000,500,1.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,t26_hrznshld_g
+#2,1,4,512,12,8,1,2,4,1000,500,2.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,t26_hrznshld_g
+#3,1,4,512,12,8,1,2,4,1000,500,5.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,t26_hrznshld_g
+#4,1,4,512,12,8,1,2,4,1000,500,1.0e-3,0.5,0.5,1000,500,train_ldrViT_ddp.py,t26_hrznshld_g
 5,1,4,512,12,8,1,2,4,1000,500,2.0e-3,0.5,0.5,1000,500,train_ldrViT_ddp.py,t26_hrznshld_g
 # Narrower
 6,1,4,384,12,6,1,2,4,1000,500,1.0e-4,0.5,0.5,1000,500,train_ldrViT_ddp.py,t26_hrznshld_g
