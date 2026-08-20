@@ -372,8 +372,14 @@ def get_args():
     p.add_argument(
         "--dense_glob",
         type=str,
-        required=True,
-        help="Glob for the dense light-curve files (late-time truth).",
+        default=(
+            "/net/sescratch1/atoivonen/data/KN_lightcurves/"
+            "rubin_ztf_dense_10000_dataset_same_seed/lc_*.npz"
+        ),
+        help="Glob for the dense light-curve files (late-time truth). Defaults to "
+        "the same dense set the model was trained on "
+        "(rubin_ztf_dense_10000_dataset_same_seed), whose Rubin bands reach "
+        "~11-12 d median so the 2->10 d scored region is well covered.",
     )
     p.add_argument(
         "--test_filelist",
@@ -391,10 +397,13 @@ def get_args():
     p.add_argument(
         "--late_time_cutoff_days",
         type=float,
-        default=3.0,
+        default=2.0,
         help="Splits context from forecast. The model sees realistic detections "
         "with phase (from first realistic detection) up to this value, and "
-        "forecasts all dense points after it -- the late-time region scored here.",
+        "forecasts all dense points after it -- the late-time region scored here. "
+        "Defaults to 2.0 to match the model's trained context_window_days (a "
+        "2-day trailing lookback), so the eval feeds the model the same context "
+        "span it saw in training rather than a wider ->3-day slice.",
     )
     p.add_argument(
         "--late_time_max_days",

@@ -120,6 +120,16 @@ def get_args():
 
     parser.add_argument("--outdir", type=str, default=None)
     parser.add_argument(
+        "--fixed_forecast_max_days",
+        type=float,
+        default=10.0,
+        help="Cap (days past the last context event) on the smooth fixed-context "
+        "forecast sweep. The sweep would otherwise extend to the last true event "
+        "of each curve, which can run well past the region we care about and into "
+        "the unsupervised tail. Set to match the eval's --late_time_max_days so "
+        "both scripts show the same forecast horizon.",
+    )
+    parser.add_argument(
         "--norm_stats_path",
         type=str,
         default="kilonova_9band_norm_stats_trainonly.npz",
@@ -411,6 +421,7 @@ def get_rollout_from_stream(
     window_mode=False,
     context_window_days=None,
     max_context_len=None,
+    fixed_forecast_max_days=None,
 ):
     """Autoregressively forecast the next events of one merged event stream.
 
@@ -592,6 +603,12 @@ def get_rollout_from_stream(
         last_ctx_t_rel = float(win_t0[-1]) - t_ref
         max_step_t_rel = max(s["t_rel"] for s in steps)
         horizon = max(1e-3, max_step_t_rel - last_ctx_t_rel)
+
+        # Cap the smooth sweep at the horizon we care about (measured as lead
+        # time past the last context event), so it doesn't run into the
+        # unsupervised late tail. Matches the eval's --late_time_max_days.
+        if fixed_forecast_max_days is not None:
+            horizon = min(horizon, float(fixed_forecast_max_days))
 
         n_lead = 60
         lead_times = np.linspace(0.0, horizon, n_lead).astype(np.float32)
@@ -977,6 +994,7 @@ def main():
             window_mode=window_mode,
             context_window_days=context_window_days,
             max_context_len=max_context_len,
+            fixed_forecast_max_days=args.fixed_forecast_max_days,
         )
         rollouts.append(rollout)
 
