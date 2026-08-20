@@ -125,7 +125,7 @@ def main() -> None:
         type=str,
         default=(
             "/net/sescratch1/atoivonen/data/KN_lightcurves/"
-            "rubin_ztf_dense_10000_dataset_same_seed/lc_*.npz"
+            "rubin_ztf_moredense_10000_dataset_same_seed/lc_*.npz"
         ),
         help="Optional glob for the dense files (for coverage reporting only).",
     )

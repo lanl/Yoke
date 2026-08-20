@@ -126,7 +126,7 @@ parser.add_argument(
     type=str,
     default=(
         "/net/sescratch1/atoivonen/data/KN_lightcurves/"
-        "rubin_ztf_dense_10000_dataset_same_seed/lc_*.npz"
+        "rubin_ztf_moredense_10000_dataset_same_seed/lc_*.npz"
     ),
     help="Optional glob for the dense light-curve files. When set (and it "
     "matches files), the dense TRAIN objects are concatenated onto the "

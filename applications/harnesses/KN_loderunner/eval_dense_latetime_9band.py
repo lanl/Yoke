@@ -190,6 +190,7 @@ def eval_object(
     max_context_len,
     late_time_cutoff_days,
     late_time_max_days,
+    uniform_stream: tuple | None = None,
 ):
     """Score one object's late-time dense truth against a realistic-context forecast.
 
@@ -295,6 +296,17 @@ def eval_object(
     curve = _batched_forward(model, x, lead_grid, device)  # [60, N_BANDS]
     curve_mag = curve * (stds[None, :] + EPS) + means[None, :]
 
+    # Optional uniform-grid "true curve" for plotting, phase-aligned to the same
+    # t0 (first realistic detection) so it overlays in the same frame. Never
+    # scored or fed to the model -- it is the noise-free, no-limiting-mag target
+    # curve, shown so the forecast is readable even where the survey-limited
+    # dense truth goes dark.
+    uniform = None
+    if uniform_stream is not None:
+        u_t, u_v, u_b = uniform_stream
+        if u_t.shape[0] > 0:
+            uniform = (u_t - t0, u_v, u_b)
+
     return {
         "scored": scored,
         "t0": t0,
@@ -305,6 +317,7 @@ def eval_object(
         # plot those as the context (not the full realistic stream).
         "real": (r_t_ctx - t0, r_v_ctx, r_b_ctx),
         "dense": (d_t - t0, d_v, d_b),
+        "uniform": uniform,
         # Right edge for plotting: the scored horizon. Beyond this the forecast
         # is unsupervised extrapolation, so it is not shown.
         "plot_max_phase": late_time_max_days,
@@ -317,6 +330,7 @@ def plot_object(result, stem, outpath):
     axes = axes.ravel()
     r_ph, r_v, r_b = result["real"]
     d_ph, d_v, d_b = result["dense"]
+    uniform = result.get("uniform")
     # Show only the scored horizon; the forecast beyond it is unsupervised
     # extrapolation (where the late-time upturn artifact lives).
     plot_max = result.get("plot_max_phase")
@@ -330,6 +344,20 @@ def plot_object(result, stem, outpath):
             dm = dm & (d_ph <= plot_max)
         if np.any(dm):
             ax.scatter(d_ph[dm], d_v[dm], s=14, c="0.6", label="dense truth")
+        # Uniform-grid true curve: continuous line so forecast-vs-truth reads as
+        # curve-vs-curve, including where the survey-limited dense truth has no
+        # points. Clip to the plotted horizon and sort by phase for a clean line.
+        if uniform is not None:
+            u_ph, u_v, u_b = uniform
+            um = u_b == b
+            if plot_max is not None:
+                um = um & (u_ph <= plot_max)
+            if np.any(um):
+                order = np.argsort(u_ph[um])
+                ax.plot(
+                    u_ph[um][order], u_v[um][order],
+                    c="0.4", lw=1.0, ls="--", alpha=0.9, label="uniform truth",
+                )
         if np.any(rm):
             ax.scatter(
                 r_ph[rm], r_v[rm], s=26, c=BAND_COLORS[b],
@@ -374,12 +402,28 @@ def get_args():
         type=str,
         default=(
             "/net/sescratch1/atoivonen/data/KN_lightcurves/"
-            "rubin_ztf_dense_10000_dataset_same_seed/lc_*.npz"
+            "rubin_ztf_moredense_10000_dataset_same_seed/lc_*.npz"
         ),
         help="Glob for the dense light-curve files (late-time truth). Defaults to "
         "the same dense set the model was trained on "
-        "(rubin_ztf_dense_10000_dataset_same_seed), whose Rubin bands reach "
+        "(rubin_ztf_moredense_10000_dataset_same_seed), whose Rubin bands reach "
         "~11-12 d median so the 2->10 d scored region is well covered.",
+    )
+    p.add_argument(
+        "--uniform_glob",
+        type=str,
+        default=(
+            "/net/sescratch1/atoivonen/data/KN_lightcurves/"
+            "rubin_ztf_uniform_10000_dataset_same_seed/lc_*.npz"
+        ),
+        help="Optional glob for a UNIFORM-grid, noise-free, no-limiting-mag "
+        "companion set (same objects/seed, sampled on a dense regular phase "
+        "grid). When it matches files, each per-object plot overlays this as a "
+        "continuous 'true curve' line so the forecast can be read curve-vs-curve "
+        "even where the survey-limited dense truth has no detections (e.g. deep "
+        "late-time u/g). Plotting only -- never scored, never fed to the model. "
+        "Silently skipped if no files match, so it auto-activates once the set "
+        "is generated.",
     )
     p.add_argument(
         "--test_filelist",
@@ -474,6 +518,12 @@ def main():
     dense_map = _stem_to_path(args.dense_glob)
     stems = sorted(set(real_map) & set(dense_map))
 
+    # Optional uniform-grid plotting companion (same stems). Absent files are
+    # fine: the overlay just doesn't appear.
+    uniform_map = _stem_to_path(args.uniform_glob) if args.uniform_glob else {}
+    if uniform_map:
+        print(f"Uniform-grid overlay files: {len(uniform_map)}")
+
     if args.test_filelist is not None:
         with open(args.test_filelist) as fh:
             test_stems = {line.strip() for line in fh if line.strip()}
@@ -493,6 +543,11 @@ def main():
     for stem in stems:
         real_stream = read_merged_stream(real_map[stem], DROP_UPPER_LIMITS)
         dense_stream = read_merged_stream(dense_map[stem], drop_upper_limits=False)
+        uniform_stream = None
+        if stem in uniform_map:
+            uniform_stream = read_merged_stream(
+                uniform_map[stem], drop_upper_limits=False
+            )
         result = eval_object(
             real_stream,
             dense_stream,
@@ -504,6 +559,7 @@ def main():
             max_context_len,
             args.late_time_cutoff_days,
             args.late_time_max_days,
+            uniform_stream=uniform_stream,
         )
         if result is None:
             continue
