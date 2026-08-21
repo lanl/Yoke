@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --job-name=ldrViT_LR_s<studyIDX>_e0001
+#SBATCH --job-name=ldrViT_LR_s<studyIDX>_e<epochIDX>
 #SBATCH --account=<allocation>
 #PRODUCTION  
 #SBATCH --partition=gpu
@@ -14,8 +14,8 @@
 #SBATCH --ntasks-per-node=<NGPUS>
 #SBATCH --gpus-per-node=<NGPUS>
 #SBATCH --cpus-per-task=16
-#SBATCH --output=study<studyIDX>_epoch0001.out
-#SBATCH --error=study<studyIDX>_epoch0001.err
+#SBATCH --output=study<studyIDX>_epoch<epochIDX>.out
+#SBATCH --error=study<studyIDX>_epoch<epochIDX>.err
 #SBATCH -vvv
 
 # Set the master node's address and port
