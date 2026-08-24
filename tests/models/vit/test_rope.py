@@ -509,3 +509,52 @@ def test_make_regular_centers_default_device() -> None:
     centers = make_regular_centers((32, 32), (8, 8))
 
     assert centers.device.type == "cpu"
+
+
+# ============================================================================
+# RoPE scale axis-order confirmation (plan Section 1.5)
+# ============================================================================
+
+
+def test_rope_scale_axis_order(device: str) -> None:
+    """Confirm scale[0] scales the width (x) axis and scale[1] the height (y).
+
+    ``RotaryPositionalEmbeddingFromCenters`` applies ``centers[:, i] * scale[i]``
+    index-aligned, and ``make_regular_centers`` emits columns ``[x, y]`` with
+    ``x`` = width and ``y`` = height. Therefore for the ArtIMich ViT (finest)
+    value ``rope_scale=(80, 224)``, ``80`` scales width and ``224`` scales
+    height. This test verifies that scaling axis ``i`` produces exactly the same
+    cos/sin as feeding pre-scaled coordinates on that axis alone.
+    """
+    head_dim = 32
+    rope_dims = [head_dim // 2, head_dim // 2]
+    scale = (80.0, 224.0)
+
+    centers = make_regular_centers((1120, 400), (10, 5), device=device)
+
+    scaled = RotaryPositionalEmbeddingFromCenters(
+        rope_dim_list=rope_dims, theta=10000.0, scale=scale
+    ).to(device)
+    unit = RotaryPositionalEmbeddingFromCenters(
+        rope_dim_list=rope_dims, theta=10000.0, scale=(1.0, 1.0)
+    ).to(device)
+
+    cos_scaled, sin_scaled = scaled(centers)
+
+    # Pre-scale the centers manually and feed through the unit-scale module.
+    manual = centers.clone()
+    manual[:, 0] = manual[:, 0] * scale[0]  # width axis
+    manual[:, 1] = manual[:, 1] * scale[1]  # height axis
+    cos_manual, sin_manual = unit(manual)
+
+    assert torch.allclose(cos_scaled, cos_manual, atol=1e-6)
+    assert torch.allclose(sin_scaled, sin_manual, atol=1e-6)
+
+    # And the per-axis segments are independent: swapping the scale order does
+    # NOT give the same embedding (unless the token grid is square).
+    swapped = RotaryPositionalEmbeddingFromCenters(
+        rope_dim_list=rope_dims, theta=10000.0, scale=(scale[1], scale[0])
+    ).to(device)
+    cos_swapped, _ = swapped(centers)
+    assert not torch.allclose(cos_scaled, cos_swapped, atol=1e-6)
+

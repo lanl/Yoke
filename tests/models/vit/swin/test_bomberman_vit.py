@@ -299,3 +299,212 @@ def test_loderunner_vit_gradient_flow(
         if "parallel_embed" in name:
             continue
         assert param.grad is not None, f"No gradient for {name}"
+
+
+# ============================================================================
+# eps / bias forwarding (plan Section 1.4)
+# ============================================================================
+
+
+def test_loderunner_vit_eps_forwarded(default_vars: list[str], device: str) -> None:
+    """Test the eps argument is threaded into the backbone LayerNorm/RMSNorm."""
+    model = LodeRunnerViT(
+        default_vars=default_vars,
+        image_size=(1120, 800),
+        patch_size=(10, 10),
+        embed_dim=128,
+        num_attention_heads=8,
+        attention_head_dim=16,
+        num_layers=2,
+        eps=1e-7,
+    ).to(device)
+
+    assert model.eps == 1e-7
+    assert model.backbone.norm_out.eps == 1e-7
+    assert model.backbone.transformer_blocks[0].norm.eps == 1e-7
+    assert model.backbone.transformer_blocks[0].attn.norm_q.eps == 1e-7
+
+
+def test_loderunner_vit_bias_default_off(default_vars: list[str], device: str) -> None:
+    """Test bias defaults to False (bias-free) for backward compatibility."""
+    model = LodeRunnerViT(
+        default_vars=default_vars,
+        image_size=(1120, 800),
+        patch_size=(10, 10),
+        embed_dim=128,
+        num_attention_heads=8,
+        attention_head_dim=16,
+        num_layers=1,
+    ).to(device)
+
+    attn = model.backbone.transformer_blocks[0].attn
+    assert attn.to_q.bias is None
+    assert attn.to_out[0].bias is None
+
+
+def test_loderunner_vit_bias_on(default_vars: list[str], device: str) -> None:
+    """Test bias=True enables Q/K/V and output-projection biases."""
+    model = LodeRunnerViT(
+        default_vars=default_vars,
+        image_size=(1120, 800),
+        patch_size=(10, 10),
+        embed_dim=128,
+        num_attention_heads=8,
+        attention_head_dim=16,
+        num_layers=1,
+        bias=True,
+    ).to(device)
+
+    attn = model.backbone.transformer_blocks[0].attn
+    assert attn.to_q.bias is not None
+    assert attn.to_k.bias is not None
+    assert attn.to_v.bias is not None
+    assert attn.to_out[0].bias is not None
+
+
+# ============================================================================
+# 2-in / 1-out extension (plan Section 3)
+# ============================================================================
+
+
+def test_loderunner_vit_rejects_bad_num_input_frames(
+    default_vars: list[str], device: str
+) -> None:
+    """Test num_input_frames must be 1 or 2."""
+    with pytest.raises(AssertionError, match="num_input_frames"):
+        LodeRunnerViT(
+            default_vars=default_vars,
+            image_size=(1120, 800),
+            patch_size=(10, 10),
+            embed_dim=128,
+            num_attention_heads=8,
+            attention_head_dim=16,
+            num_layers=1,
+            num_input_frames=3,
+        ).to(device)
+
+
+def test_loderunner_vit_single_frame_has_no_fusion(
+    loderunner_vit: LodeRunnerViT,
+) -> None:
+    """Test the single-frame model does not build the temporal fusion layer."""
+    assert loderunner_vit.num_input_frames == 1
+    assert loderunner_vit.temporal_fusion is None
+
+
+@pytest.fixture
+def loderunner_vit_2frame(default_vars: list[str], device: str) -> LodeRunnerViT:
+    """Fixture for a small 2-in/1-out LodeRunnerViT model."""
+    return LodeRunnerViT(
+        default_vars=default_vars,
+        image_size=(1120, 800),
+        patch_size=(10, 10),
+        embed_dim=128,
+        num_heads=8,
+        num_attention_heads=8,
+        attention_head_dim=16,
+        num_layers=2,
+        num_input_frames=2,
+    ).to(device)
+
+
+def test_loderunner_vit_2frame_builds_fusion(
+    loderunner_vit_2frame: LodeRunnerViT,
+) -> None:
+    """Test the 2-frame model builds a 2D->D temporal fusion linear."""
+    assert loderunner_vit_2frame.num_input_frames == 2
+    fusion = loderunner_vit_2frame.temporal_fusion
+    assert isinstance(fusion, torch.nn.Linear)
+    assert fusion.in_features == 2 * loderunner_vit_2frame.embed_dim
+    assert fusion.out_features == loderunner_vit_2frame.embed_dim
+
+
+def test_loderunner_vit_2frame_forward_shape(
+    loderunner_vit_2frame: LodeRunnerViT, device: str
+) -> None:
+    """Test the 2-frame forward produces a single-frame prediction."""
+    x = torch.randn(2, 2, 3, 1120, 800).to(device)  # (B, T=2, C, H, W)
+    in_vars = torch.tensor([0, 1, 2]).to(device)
+    out_vars = torch.tensor([0, 1, 2]).to(device)
+    lead_times = torch.rand(2, 2).to(device)  # (dt_in, dt_out)
+
+    output = loderunner_vit_2frame(x, in_vars, out_vars, lead_times)
+
+    assert output.shape == (2, 3, 1120, 800)
+    assert not torch.isnan(output).any()
+
+
+def test_loderunner_vit_2frame_bad_input_shape_raises(
+    loderunner_vit_2frame: LodeRunnerViT, device: str
+) -> None:
+    """Test the 2-frame path rejects a single-frame input tensor."""
+    x = torch.randn(2, 3, 1120, 800).to(device)  # missing time axis
+    in_vars = torch.tensor([0, 1, 2]).to(device)
+    out_vars = torch.tensor([0, 1, 2]).to(device)
+    lead_times = torch.rand(2, 2).to(device)
+
+    with pytest.raises(AssertionError, match="B, 2, C, H, W"):
+        loderunner_vit_2frame(x, in_vars, out_vars, lead_times)
+
+
+def test_loderunner_vit_2frame_bad_leadtime_shape_raises(
+    loderunner_vit_2frame: LodeRunnerViT, device: str
+) -> None:
+    """Test the 2-frame path rejects scalar lead-times."""
+    x = torch.randn(2, 2, 3, 1120, 800).to(device)
+    in_vars = torch.tensor([0, 1, 2]).to(device)
+    out_vars = torch.tensor([0, 1, 2]).to(device)
+    lead_times = torch.rand(2).to(device)  # should be (B, 2)
+
+    with pytest.raises(AssertionError, match="dt_in, dt_out"):
+        loderunner_vit_2frame(x, in_vars, out_vars, lead_times)
+
+
+def test_loderunner_vit_2frame_gradient_flow(
+    loderunner_vit_2frame: LodeRunnerViT, device: str
+) -> None:
+    """Test gradients flow through the 2-frame model, incl. temporal fusion."""
+    x = torch.randn(2, 2, 3, 1120, 800).to(device)
+    in_vars = torch.tensor([0, 1, 2]).to(device)
+    out_vars = torch.tensor([0, 1, 2]).to(device)
+    lead_times = torch.rand(2, 2).to(device)
+
+    loss = loderunner_vit_2frame(x, in_vars, out_vars, lead_times).pow(2).mean()
+    loss.backward()
+
+    assert loderunner_vit_2frame.temporal_fusion.weight.grad is not None
+
+
+def test_loderunner_vit_single_frame_regression(
+    default_vars: list[str], device: str
+) -> None:
+    """Test that num_input_frames=1 (default) reproduces the prior forward path.
+
+    With noise disabled and a fixed seed, the single-frame path must be
+    deterministic and unchanged in interface: (B, C, H, W) input, (B,)
+    lead-times.
+    """
+    model = LodeRunnerViT(
+        default_vars=default_vars,
+        image_size=(1120, 800),
+        patch_size=(10, 10),
+        embed_dim=128,
+        num_attention_heads=8,
+        attention_head_dim=16,
+        num_layers=2,
+        noise_scale=0.0,
+    ).to(device)
+    model.eval()
+
+    x = torch.randn(2, 3, 1120, 800).to(device)
+    in_vars = torch.tensor([0, 1, 2]).to(device)
+    out_vars = torch.tensor([0, 1, 2]).to(device)
+    lead_times = torch.rand(2).to(device)
+
+    out1 = model(x, in_vars, out_vars, lead_times)
+    out2 = model(x, in_vars, out_vars, lead_times)
+
+    # Deterministic with noise off.
+    assert torch.allclose(out1, out2)
+    assert out1.shape == (2, 3, 1120, 800)
+

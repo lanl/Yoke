@@ -19,6 +19,8 @@ from yoke.utils.training.datastep.loderunner import (
     eval_loderunner_datastep_cylex,
     train_DDP_loderunner_datastep_cylex,
     eval_DDP_loderunner_datastep_cylex,
+    train_DDP_loderunner_2frame_datastep,
+    eval_DDP_loderunner_2frame_datastep,
 )
 
 
@@ -49,6 +51,35 @@ class DummyModel(nn.Module):
             torch.Tensor: The input tensor x incremented by 1.0.
         """
         return x + self.param
+
+
+class DummyTwoFrameModel(nn.Module):
+    """Dummy 2-in/1-out model: averages the two input frames then adds 1.0."""
+
+    def __init__(self) -> None:
+        """Initialize with a single parameter."""
+        super().__init__()
+        self.param = nn.Parameter(torch.tensor(1.0))
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        in_vars: torch.Tensor,
+        out_vars: torch.Tensor,
+        lead_times: torch.Tensor,
+    ) -> torch.Tensor:
+        """Reduce the (B, 2, C, H, W) input over the time axis and add 1.0.
+
+        Args:
+            x (torch.Tensor): Input of shape (B, 2, C, H, W).
+            in_vars (torch.Tensor): Input variables (unused).
+            out_vars (torch.Tensor): Output variables (unused).
+            lead_times (torch.Tensor): (B, 2) lead-times (unused).
+
+        Returns:
+            torch.Tensor: Prediction of shape (B, C, H, W).
+        """
+        return x.mean(dim=1) + self.param
 
 
 @pytest.fixture(autouse=True)
@@ -150,10 +181,109 @@ def test_train_DDP_loderunner_datastep(
     assert torch.equal(end_img, end)
     assert torch.equal(pred_img, start + 1.0)
     if rank == 0:
-        # all_losses is concatenation of three per-sample vectors of ones
+        assert all_losses is not None
         assert all_losses.shape == (world_size * B,)
     else:
         assert all_losses is None
+
+
+@pytest.mark.parametrize("rank", [0, 1])
+def test_train_DDP_loderunner_2frame_datastep(
+    rank: int, device: torch.device, loss_fn: nn.Module
+) -> None:
+    """Test the 2-frame DDP training step shapes and rank-0 loss gathering."""
+    model = DummyTwoFrameModel()
+    optimizer = optim.SGD(model.parameters(), lr=0.1)
+    B, T, C, H, W = 2, 2, 1, 2, 2
+    input_frames = torch.zeros((B, T, C, H, W))
+    target = torch.zeros((B, C, H, W))
+    lead_times = torch.ones((B, 2))
+    world_size = 3
+
+    end_img, pred_img, all_losses = train_DDP_loderunner_2frame_datastep(
+        (input_frames, target, lead_times),
+        model,
+        optimizer,
+        loss_fn,
+        device,
+        rank,
+        world_size,
+        channel_map=[0],
+    )
+
+    assert torch.equal(end_img, target)
+    # mean over frames (all zeros) + 1.0
+    assert torch.equal(pred_img, target + 1.0)
+    if rank == 0:
+        assert all_losses.shape == (world_size * B,)
+    else:
+        assert all_losses is None
+
+
+def test_train_DDP_loderunner_2frame_datastep_grad_clip(
+    device: torch.device, loss_fn: nn.Module, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test grad_clip invokes clip_grad_norm_ before the optimizer step."""
+    model = DummyTwoFrameModel()
+    optimizer = optim.SGD(model.parameters(), lr=0.1)
+    B, T, C, H, W = 2, 2, 1, 2, 2
+    input_frames = torch.ones((B, T, C, H, W))
+    target = torch.zeros((B, C, H, W))
+    lead_times = torch.ones((B, 2))
+
+    called = {"n": 0}
+    orig = torch.nn.utils.clip_grad_norm_
+
+    def spy(*args: object, **kwargs: object) -> torch.Tensor:
+        called["n"] += 1
+        return orig(*args, **kwargs)
+
+    monkeypatch.setattr(torch.nn.utils, "clip_grad_norm_", spy)
+
+    train_DDP_loderunner_2frame_datastep(
+        (input_frames, target, lead_times),
+        model,
+        optimizer,
+        loss_fn,
+        device,
+        rank=0,
+        world_size=1,
+        channel_map=[0],
+        grad_clip=1.0,
+    )
+
+    assert called["n"] == 1
+
+
+@pytest.mark.parametrize("rank", [0, 1])
+def test_eval_DDP_loderunner_2frame_datastep(
+    rank: int, device: torch.device, loss_fn: nn.Module
+) -> None:
+    """Test the 2-frame DDP eval step shapes and rank-0 loss gathering."""
+    model = DummyTwoFrameModel()
+    B, T, C, H, W = 2, 2, 1, 2, 2
+    input_frames = torch.zeros((B, T, C, H, W))
+    target = torch.zeros((B, C, H, W))
+    lead_times = torch.ones((B, 2))
+    world_size = 4
+
+    end_img, pred_img, all_losses = eval_DDP_loderunner_2frame_datastep(
+        (input_frames, target, lead_times),
+        model,
+        loss_fn,
+        device,
+        rank,
+        world_size,
+        channel_map=[0],
+    )
+
+    assert torch.equal(end_img, target)
+    assert torch.equal(pred_img, target + 1.0)
+    if rank == 0:
+        assert all_losses.shape == (world_size * B,)
+    else:
+        assert all_losses is None
+
 
 
 def test_eval_loderunner_datastep(device: torch.device, loss_fn: nn.Module) -> None:

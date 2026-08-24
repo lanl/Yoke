@@ -12,6 +12,7 @@ import numpy as np
 import torch
 from unittest.mock import patch, mock_open, MagicMock
 from yoke.datasets.lsc_dataset import LSC_rho2rho_temporal_DataSet
+from yoke.datasets.lsc_dataset import LSC_rho2rho_temporal_2frame_DataSet
 from yoke.datasets.lsc_dataset import LSC_cntr2hfield_DataSet
 from yoke.datasets.lsc_dataset import LSC_hfield_reward_DataSet
 from yoke.datasets.lsc_dataset import LSC_hfield_policy_DataSet
@@ -129,6 +130,71 @@ def test_r2r_temporal_getitem(
 
     assert start_img.shape == (8, 10, 10)
     assert end_img.shape == (8, 10, 10)
+
+
+# For LSC_rho2rho_temporal_2frame_DataSet
+@pytest.fixture
+def r2r_temporal_2frame_dataset() -> LSC_rho2rho_temporal_2frame_DataSet:
+    """Setup an instance of the 2-in/1-out temporal dataset (mock args)."""
+    LSC_NPZ_DIR = "/mock/path/"
+    file_prefix_list = "mock_file_prefix_list.txt"
+    max_timeIDX_offset = 3
+    max_file_checks = 5
+
+    mock_file_list = "mock_prefix_1\nmock_prefix_2\nmock_prefix_3\n"
+    with patch("builtins.open", mock_open(read_data=mock_file_list)):
+        with patch("random.shuffle") as mock_shuffle:
+            ds = LSC_rho2rho_temporal_2frame_DataSet(
+                LSC_NPZ_DIR, file_prefix_list, max_timeIDX_offset, max_file_checks
+            )
+            mock_shuffle.assert_called_once()
+
+    return ds
+
+
+def test_r2r_temporal_2frame_init(
+    r2r_temporal_2frame_dataset: LSC_rho2rho_temporal_2frame_DataSet,
+) -> None:
+    """Test the 2-frame dataset initializes correctly."""
+    assert r2r_temporal_2frame_dataset.LSC_NPZ_DIR == "/mock/path/"
+    assert r2r_temporal_2frame_dataset.max_timeIDX_offset == 3
+    assert r2r_temporal_2frame_dataset.max_file_checks == 5
+    assert r2r_temporal_2frame_dataset.Nsamples == 3
+
+
+def test_r2r_temporal_2frame_len(
+    r2r_temporal_2frame_dataset: LSC_rho2rho_temporal_2frame_DataSet,
+) -> None:
+    """Test the 2-frame dataset length."""
+    assert len(r2r_temporal_2frame_dataset) == int(1e6)
+
+
+@patch("yoke.datasets.lsc_dataset.LSCread_npz_NaN", side_effect=mock_LSCread_npz_NaN)
+@patch(
+    "numpy.load", side_effect=lambda _: MockNpzFile({"dummy_field": np.ones((10, 10))})
+)
+@patch("pathlib.Path.is_file", return_value=True)
+def test_r2r_temporal_2frame_getitem(
+    mock_is_file: MagicMock,
+    mock_npz_load: MagicMock,
+    mock_LSCread_npz_NaN: MagicMock,
+    r2r_temporal_2frame_dataset: LSC_rho2rho_temporal_2frame_DataSet,
+) -> None:
+    """Test that the 2-frame dataset yields (input_frames, target, lead_times)."""
+    input_frames, target, lead_times = r2r_temporal_2frame_dataset[0]
+
+    assert isinstance(input_frames, torch.Tensor)
+    assert isinstance(target, torch.Tensor)
+    assert isinstance(lead_times, torch.Tensor)
+
+    # Two input frames stacked along a leading time axis: (2, C, H, W).
+    assert input_frames.shape == (2, 8, 10, 10)
+    # Single target frame: (C, H, W).
+    assert target.shape == (8, 10, 10)
+    # Lead-times are (dt_in, dt_out).
+    assert lead_times.shape == (2,)
+    # Both gaps are sampled in [1, max_timeIDX_offset] -> positive dt values.
+    assert torch.all(lead_times > 0)
 
 
 def test_r2r_temporal_file_prefix_list_loading(

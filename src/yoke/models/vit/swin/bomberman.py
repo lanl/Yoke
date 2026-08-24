@@ -271,6 +271,19 @@ class LodeRunnerViT(nn.Module):
                                           ``(x, y)`` patch centers.
         concat_mlp (bool): Concatenate-then-project (True) or sum (False) fusion
                            of the attention and MLP branches.
+        eps (float): Epsilon for the backbone LayerNorm and QK RMSNorm layers.
+                     The ArtIMich ViT (finest) reference uses ``1e-7``; the Yoke
+                     default of ``1e-6`` is preserved for backward compatibility.
+        bias (bool): Whether the backbone attention Q/K/V and output projections
+                     use a bias. The reference uses ``True``; the Yoke default of
+                     ``False`` (bias-free) is preserved for backward
+                     compatibility.
+        num_input_frames (int): Number of consecutive input frames consumed per
+                     sample. ``1`` (default) reproduces the original single-frame
+                     behavior exactly. ``2`` enables the 2-timestep-in /
+                     1-timestep-out path (Strategy A: per-frame embed +
+                     per-frame temporal tag, concat-along-D then linear
+                     ``2D -> D`` fusion).
         noise_scale (float): Relative magnitude of input noise injection.
         verbose (bool): When TRUE, backbone dimensions are printed during
                         initialization.
@@ -291,11 +304,19 @@ class LodeRunnerViT(nn.Module):
         rope_theta: float = 10000.0,
         rope_scale: Iterable[float, float] = (1.0, 1.0),
         concat_mlp: bool = True,
+        eps: float = 1e-6,
+        bias: bool = False,
+        num_input_frames: int = 1,
         noise_scale: float = 0.0,
         verbose: bool = False,
     ) -> None:
         """Initialization for class."""
         super().__init__()
+
+        assert num_input_frames in (1, 2), (
+            "num_input_frames must be 1 (single-frame) or 2 (2-in/1-out); "
+            f"got {num_input_frames}."
+        )
 
         self.default_vars = default_vars
         self.max_vars = len(self.default_vars)
@@ -307,6 +328,9 @@ class LodeRunnerViT(nn.Module):
         self.attention_head_dim = attention_head_dim
         self.num_layers = num_layers
         self.mlp_ratio = mlp_ratio
+        self.eps = eps
+        self.bias = bias
+        self.num_input_frames = num_input_frames
         self.noise_scale = noise_scale
 
         # The isotropic backbone fixes the embedding dimension.
@@ -349,8 +373,19 @@ class LodeRunnerViT(nn.Module):
             rope_theta=rope_theta,
             rope_scale=rope_scale,
             concat_mlp=concat_mlp,
+            eps=self.eps,
+            bias=self.bias,
             verbose=verbose,
         )
+
+        # Temporal fusion for the 2-in/1-out path (Strategy A). When
+        # `num_input_frames == 2`, the two per-frame token grids are
+        # concatenated along the embedding axis -> (B, N, 2D) and projected
+        # back to (B, N, D). Guarded so the single-frame path is untouched.
+        if self.num_input_frames == 2:
+            self.temporal_fusion = nn.Linear(2 * self.embed_dim, self.embed_dim)
+        else:
+            self.temporal_fusion = None
 
         # Linear embed the last dimension into V*p_h*p_w.
         self.linear4unpatch = nn.Linear(
@@ -364,15 +399,30 @@ class LodeRunnerViT(nn.Module):
             patch_size=self.patch_size,
         )
 
-    def forward(
+    def _embed_frame(
         self,
         x: torch.Tensor,
         in_vars: torch.Tensor,
-        out_vars: torch.Tensor,
         lead_times: torch.Tensor,
     ) -> torch.Tensor:
-        """Forward method for LodeRunnerViT."""
-        # Noise injection:
+        """Embed a single frame into post-temporal tokens ``(B, N, D)``.
+
+        Runs one frame through the LodeRunner front-end
+        (``parallel_embed -> var_embed_layer -> agg_vars -> temporal_encoding``)
+        including per-frame noise injection. Shared by the single-frame and
+        2-in/1-out forward paths.
+
+        Args:
+            x (torch.Tensor): Single frame of shape ``(B, C, H, W)``.
+            in_vars (torch.Tensor): Integer indices of the input variables.
+            lead_times (torch.Tensor): Per-sample lead-time-to-output for this
+                frame, shape ``(B,)``.
+
+        Returns:
+            torch.Tensor: Post-temporal tokens of shape ``(B, N, D)``.
+
+        """
+        # Noise injection (applied per frame, matching single-frame behavior).
         l2_norm = torch.sqrt((x * x).sum(dim=(1, 2, 3), keepdim=True))
         noise = torch.randn_like(x)
         x = x + self.noise_scale * l2_norm * noise
@@ -389,8 +439,74 @@ class LodeRunnerViT(nn.Module):
         # Encode temporal information.
         x = self.temporal_encoding(x, lead_times)
 
+        return x
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        in_vars: torch.Tensor,
+        out_vars: torch.Tensor,
+        lead_times: torch.Tensor,
+    ) -> torch.Tensor:
+        """Forward method for LodeRunnerViT.
+
+        Supports two input modes selected by ``num_input_frames``:
+
+        - **Single-frame (default, ``num_input_frames == 1``).** ``x`` has shape
+          ``(B, C, H, W)`` and ``lead_times`` is ``(B,)`` (steps from the input
+          frame to the output frame). Reproduces the original behavior exactly.
+        - **2-in/1-out (``num_input_frames == 2``).** ``x`` has shape
+          ``(B, 2, C, H, W)`` with frame order ``[x_{t-1}, x_t]`` and
+          ``lead_times`` is ``(B, 2) = (dt_in, dt_out)`` where ``dt_in`` is the
+          ``x_{t-1} -> x_t`` timestep and ``dt_out`` is the ``x_t -> x_{t+1}``
+          timestep. Each frame is embedded independently and tagged with its own
+          timestep-to-output (frame ``t`` -> ``dt_out``, frame ``t-1`` ->
+          ``dt_in + dt_out``), then the two token grids are fused by
+          concat-along-``D`` + linear ``2D -> D``.
+
+        Args:
+            x (torch.Tensor): Input frame(s); ``(B, C, H, W)`` for single-frame
+                or ``(B, 2, C, H, W)`` for the 2-in/1-out path.
+            in_vars (torch.Tensor): Integer indices of the input variables.
+            out_vars (torch.Tensor): Integer indices of the output variables.
+            lead_times (torch.Tensor): ``(B,)`` for single-frame or
+                ``(B, 2) = (dt_in, dt_out)`` for the 2-in/1-out path.
+
+        Returns:
+            torch.Tensor: Predicted frame of shape ``(B, len(out_vars), H, W)``.
+
+        """
+        if self.num_input_frames == 1:
+            # Single-frame path (original behavior).
+            tokens = self._embed_frame(x, in_vars, lead_times)
+        else:
+            # 2-in/1-out path (Strategy A). Frame order is [x_{t-1}, x_t].
+            assert x.dim() == 5 and x.shape[1] == 2, (
+                "num_input_frames == 2 expects x of shape (B, 2, C, H, W); "
+                f"got {tuple(x.shape)}."
+            )
+            assert lead_times.dim() == 2 and lead_times.shape[1] == 2, (
+                "num_input_frames == 2 expects lead_times of shape "
+                f"(B, 2) = (dt_in, dt_out); got {tuple(lead_times.shape)}."
+            )
+
+            dt_in = lead_times[:, 0]
+            dt_out = lead_times[:, 1]
+
+            # Per-frame timestep-to-output:
+            #   frame t-1 -> dt_in + dt_out, frame t -> dt_out.
+            lt_prev = dt_in + dt_out
+            lt_curr = dt_out
+
+            tok_prev = self._embed_frame(x[:, 0], in_vars, lt_prev)  # (B, N, D)
+            tok_curr = self._embed_frame(x[:, 1], in_vars, lt_curr)  # (B, N, D)
+
+            # Concat-along-D then linear 2D -> D.
+            fused = torch.cat([tok_prev, tok_curr], dim=-1)  # (B, N, 2D)
+            tokens = self.temporal_fusion(fused)  # (B, N, D)
+
         # Pass through the plain-ViT backbone (position via RoPE inside attn).
-        x = self.backbone(x)
+        x = self.backbone(tokens)
 
         # Use linear map to remap to correct variable and patchsize dimension.
         x = self.linear4unpatch(x)
@@ -673,6 +789,88 @@ if __name__ == "__main__":
             f"\nLodeRunnerViT-{size_name} parameters: "
             f"{count_torch_params(lode_runner_vit, trainable=True):,}"
         )
+
+    # Test LodeRunnerViT backbone matched to ArtIMich ViT (finest).
+    #
+    # The finest backbone operates on the half-image (1120, 400) with patch
+    # (10, 5) -> 112 x 80 tokens. rope_scale=(80, 224) is passed verbatim
+    # (axis order RESOLVED: scale[0]=width, scale[1]=height). The "finest"
+    # entry (embed_dim=2304) is very large and will typically OOM on a single
+    # GPU / CPU dev box; the "finest-lite" entry (embed_dim=768) is a dev-sized
+    # companion with the same structural knobs.
+    print("\n" + "=" * 60)
+    print("Testing LodeRunnerViT ArtIMich-finest matched backbone")
+    print("=" * 60)
+
+    # (name, image_size, patch_size, embed_dim, num_heads(AggVars),
+    #  num_attention_heads, attention_head_dim, num_layers, mlp_ratio,
+    #  rope_theta, rope_scale, eps, bias)
+    finest_sizes = [
+        (
+            "artimis-finest",
+            (1120, 400), (10, 5), 2304, 12, 12, 192, 6, 1.0,
+            10000.0, (80.0, 224.0), 1e-7, True,
+        ),
+        (
+            "artimis-finest-lite",
+            (1120, 400), (10, 5), 768, 12, 12, 64, 6, 1.0,
+            10000.0, (80.0, 224.0), 1e-7, True,
+        ),
+    ]
+
+    # Half-image input for the finest backbone.
+    x_finest = torch.rand(2, 4, 1120, 400).type(torch.FloatTensor).to(device)
+    lead_times_finest = torch.rand(2).to(device)
+
+    for (
+        size_name,
+        finest_image_size,
+        finest_patch_size,
+        finest_embed_dim,
+        finest_agg_heads,
+        finest_attn_heads,
+        finest_head_dim,
+        finest_num_layers,
+        finest_mlp_ratio,
+        finest_rope_theta,
+        finest_rope_scale,
+        finest_eps,
+        finest_bias,
+    ) in finest_sizes:
+        try:
+            lode_runner_vit = LodeRunnerViT(
+                default_vars=default_vars,
+                image_size=finest_image_size,
+                patch_size=finest_patch_size,
+                embed_dim=finest_embed_dim,
+                num_heads=finest_agg_heads,
+                num_attention_heads=finest_attn_heads,
+                attention_head_dim=finest_head_dim,
+                num_layers=finest_num_layers,
+                mlp_ratio=finest_mlp_ratio,
+                rope_theta=finest_rope_theta,
+                rope_scale=finest_rope_scale,
+                concat_mlp=True,
+                eps=finest_eps,
+                bias=finest_bias,
+                verbose=False,
+            ).to(device)
+
+            print(
+                f"\nLodeRunnerViT-{size_name} parameters: "
+                f"{count_torch_params(lode_runner_vit, trainable=True):,}"
+            )
+
+            vit_out = lode_runner_vit(
+                x_finest, x_vars, out_vars, lead_times_finest
+            )
+            print(f"LodeRunnerViT-{size_name} output shape: {vit_out.shape}")
+            print(
+                f"LodeRunnerViT-{size_name} output has NaNs: "
+                f"{torch.isnan(vit_out).any()}"
+            )
+        except RuntimeError as err:  # e.g. CUDA OOM on the full finest model
+            print(f"LodeRunnerViT-{size_name} skipped: {err}")
 
     print("\n" + "=" * 60)
     print("All tests completed successfully!")

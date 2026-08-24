@@ -15,12 +15,19 @@ from yoke.utils.training.datastep.loderunner import (
     eval_DDP_loderunner_datastep,
     train_DDP_loderunner_datastep_cylex,
     eval_DDP_loderunner_datastep_cylex,
+    train_DDP_loderunner_2frame_datastep,
+    eval_DDP_loderunner_2frame_datastep,
 )
 
 DATASTEP_FN = {
     "pli": {
         "train_ddp": "train_DDP_loderunner_datastep",
         "eval_ddp": "eval_DDP_loderunner_datastep",
+        "eval": "eval_loderunner_datastep"
+    },
+    "pli_2frame": {
+        "train_ddp": "train_DDP_loderunner_2frame_datastep",
+        "eval_ddp": "eval_DDP_loderunner_2frame_datastep",
         "eval": "eval_loderunner_datastep"
     },
     "cylex": {
@@ -363,7 +370,11 @@ def train_DDP_loderunner_epoch(
     rank: int,
     world_size: int,
     dataset: str = "pli",
-) -> None:
+    ema_model: torch.nn.Module = None,
+    global_step: int = 0,
+    ema_update_after_step: int = 1000,
+    grad_clip: float = None,
+) -> int:
     """Distributed data-parallel LodeRunner Epoch.
 
     Function to complete a training epoch on the LodeRunner architecture with
@@ -389,6 +400,20 @@ def train_DDP_loderunner_epoch(
         rank (int): rank of process
         world_size (int): number of total processes
         dataset (string): name of dataset being analyzed. Options are "pli" and "cylex".
+        ema_model (torch.nn.Module): Optional EMA (``AveragedModel``) shadow of
+            the underlying model, updated after each optimizer/scheduler step
+            once ``global_step`` exceeds ``ema_update_after_step``. When ``None``
+            no EMA update is performed.
+        global_step (int): Global optimizer-step counter at the start of this
+            epoch, persisted across continuation restarts so the EMA warmup
+            schedule is continuous.
+        ema_update_after_step (int): Only update the EMA once the global step
+            exceeds this value (Diffusers warmup start).
+        grad_clip (float | None): If not ``None``, clip the global gradient norm
+            to this value before each optimizer step.
+
+    Returns:
+        int: The updated global optimizer-step counter after this epoch.
 
     """
     # Initialize things to save
@@ -416,11 +441,22 @@ def train_DDP_loderunner_epoch(
 
             # Training
             truth, pred, train_losses = train_fn(
-                traindata, model, optimizer, loss_fn, device, rank, world_size, channel_map,
+                traindata, model, optimizer, loss_fn, device, rank, world_size,
+                channel_map, grad_clip=grad_clip,
             )
 
             # Increment the learning-rate scheduler
             LRsched.step()
+
+            # Advance the global optimizer-step counter and, once past the
+            # warmup start, update the EMA shadow model. Ordering matches the
+            # ArtIMich recipe:
+            #   backward -> clip -> optimizer.step -> LRsched.step -> ema.update
+            global_step += 1
+            if ema_model is not None and global_step > ema_update_after_step:
+                # Update EMA from the underlying (unwrapped) model when DDP.
+                source = model.module if hasattr(model, "module") else model
+                ema_model.update_parameters(source)
 
             # Save training record (rank 0 only)
             if rank == 0:
@@ -467,6 +503,8 @@ def train_DDP_loderunner_epoch(
                             ]
                         )
                         np.savetxt(val_rcrd_file, batch_records, fmt="%d, %d, %.8f")
+
+    return global_step
 
 
 def eval_loderunner_epoch(

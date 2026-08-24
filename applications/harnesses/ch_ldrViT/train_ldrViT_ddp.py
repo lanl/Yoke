@@ -14,6 +14,7 @@ from yoke.utils.restart import continuation_setup
 from yoke.utils.dataload import make_distributed_dataloader
 from yoke.utils.checkpointing import load_model_and_optimizer
 from yoke.utils.checkpointing import save_model_and_optimizer
+from yoke.utils.ema import build_ema_model, save_ema_checkpoint
 from yoke.lr_schedulers import CosineWithWarmupScheduler
 from yoke.helpers import cli
 
@@ -62,7 +63,51 @@ parser.add_argument(
     default=8,
     help="Number of ViT attention heads in backbone.",
 )
-        
+
+# EMA + gradient-clipping parameters (ArtIMich recipe).
+parser.add_argument(
+    "--use_ema",
+    action="store_true",
+    help="Maintain a Diffusers-style warmup EMA shadow of the model and save "
+    "the EMA weights as a companion production checkpoint.",
+)
+
+parser.add_argument(
+    "--ema_update_after_step",
+    type=int,
+    default=1000,
+    help="Global optimizer-step after which the EMA begins updating.",
+)
+
+parser.add_argument(
+    "--ema_max_decay",
+    type=float,
+    default=0.9999,
+    help="Maximum (asymptotic) EMA decay.",
+)
+
+parser.add_argument(
+    "--ema_inv_gamma",
+    type=float,
+    default=1.0,
+    help="Inverse-gamma factor controlling the EMA warmup rate.",
+)
+
+parser.add_argument(
+    "--ema_power",
+    type=float,
+    default=2.0 / 3.0,
+    help="Warmup power for the EMA decay schedule.",
+)
+
+parser.add_argument(
+    "--grad_clip",
+    type=float,
+    default=1.0,
+    help="Global gradient-norm clip value applied before each optimizer step. "
+    "Set <= 0 to disable clipping.",
+)
+
 # Change some default filepaths.
 parser.set_defaults(
     train_filelist="lsc240420_prefixes_train_80pct.txt",
@@ -138,6 +183,14 @@ def main(args, rank, world_size, local_rank, device):
 
     # Training parameters
     max_timeIDX_offset = args.max_timeIDX_offset
+
+    # EMA + gradient-clip parameters.
+    use_ema = args.use_ema
+    ema_update_after_step = args.ema_update_after_step
+    ema_max_decay = args.ema_max_decay
+    ema_inv_gamma = args.ema_inv_gamma
+    ema_power = args.ema_power
+    grad_clip = args.grad_clip if args.grad_clip and args.grad_clip > 0 else None
 
     # Number of workers controls how batches of data are prefetched and,
     # possibly, pre-loaded onto GPUs. If the number of workers is large they
@@ -327,6 +380,43 @@ def main(args, rank, world_size, local_rank, device):
     model = DDP(model, device_ids=[local_rank], output_device=local_rank)
 
     #############################################
+    # EMA Setup (optional; Diffusers-style warmup EMA)
+    #############################################
+    # A companion checkpoint file (alongside the main .pth) persists the EMA
+    # shadow weights and the global optimizer-step counter across continuation
+    # restarts so the warmup schedule remains continuous.
+    ema_model = None
+    global_step = 0
+    if use_ema:
+        # Build EMA from the underlying (unwrapped) module.
+        ema_model = build_ema_model(
+            model.module,
+            max_decay=ema_max_decay,
+            inv_gamma=ema_inv_gamma,
+            power=ema_power,
+            device=device,
+        )
+
+        # Restore EMA state + global step on continuation, if present.
+        if CONTINUATION and checkpoint:
+            ema_state_path = checkpoint.replace(".pth", "_ema.pth")
+            if os.path.exists(ema_state_path):
+                ema_ckpt = torch.load(
+                    ema_state_path, map_location=device, weights_only=False
+                )
+                ema_model.load_state_dict(ema_ckpt["ema_state_dict"])
+                global_step = int(ema_ckpt.get("global_step", 0))
+                print(
+                    f"EMA state restored from {ema_state_path} "
+                    f"(global_step={global_step})."
+                )
+            else:
+                print(
+                    f"No EMA companion checkpoint at {ema_state_path}; "
+                    "starting EMA fresh."
+                )
+
+    #############################################
     # Learning Rate Scheduler
     #############################################
     print("Starting epoch: ", starting_epoch)
@@ -415,7 +505,7 @@ def main(args, rank, world_size, local_rank, device):
             startTime = time.time()
 
         # Train and Validate
-        train_DDP_loderunner_epoch(
+        global_step = train_DDP_loderunner_epoch(
             training_data=train_dataloader,
             validation_data=val_dataloader,
             num_train_batches=train_batches,
@@ -432,6 +522,10 @@ def main(args, rank, world_size, local_rank, device):
             device=device,
             rank=rank,
             world_size=world_size,
+            ema_model=ema_model,
+            global_step=global_step,
+            ema_update_after_step=ema_update_after_step,
+            grad_clip=grad_clip,
         )
 
         if TIME_EPOCH:
@@ -460,6 +554,30 @@ def main(args, rank, world_size, local_rank, device):
         model_class=LodeRunnerViT,
         model_args=model_args,
     )
+
+    #############################################
+    # Save EMA companion checkpoint (rank 0)
+    #############################################
+    # Persists both the EMA shadow state (for continuation) and the EMA weights
+    # as a plain LodeRunnerViT state_dict (the production checkpoint). The
+    # global optimizer-step counter is stored so the warmup schedule continues.
+    if ema_model is not None and rank == 0:
+        ema_state_path = new_chkpt_path.replace(".pth", "_ema.pth")
+        torch.save(
+            {
+                "ema_state_dict": ema_model.state_dict(),
+                "global_step": global_step,
+                "epoch": epochIDX,
+            },
+            ema_state_path,
+        )
+        # Production EMA weights (loads cleanly into a fresh LodeRunnerViT).
+        ema_prod_path = new_chkpt_path.replace(".pth", "_ema_weights.pth")
+        save_ema_checkpoint(ema_model, ema_prod_path)
+        print(f"[Rank {rank}] Saved EMA checkpoints -> {ema_state_path}")
+
+    if dist.is_initialized():
+        dist.barrier()
 
     if rank == 0:
         #############################################

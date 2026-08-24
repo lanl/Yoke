@@ -170,6 +170,7 @@ def train_DDP_loderunner_datastep(
     rank: int,
     world_size: int,
     channel_map: list[int] = [0, 1, 2, 3, 4, 5, 6, 7],
+    grad_clip: float | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """A DDP-compatible training step for multi-input, multi-output data.
 
@@ -182,6 +183,9 @@ def train_DDP_loderunner_datastep(
         device (torch.device): device index to select
         rank (int): Rank of device
         world_size (int): Number of total DDP processes
+        grad_clip (float | None): If not ``None``, clip the global gradient norm
+            to this value (via :func:`torch.nn.utils.clip_grad_norm_`) before the
+            optimizer step.
 
     Returns:
         end_img (torch.Tensor): Ground truth end image
@@ -211,6 +215,11 @@ def train_DDP_loderunner_datastep(
     # Backward pass and optimization
     optimizer.zero_grad(set_to_none=True)
     loss.mean().backward()
+
+    # Optional gradient-norm clipping (matches the ArtIMich recipe at 1.0).
+    if grad_clip is not None:
+        torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+
     optimizer.step()
 
     # Gather per-sample losses from all processes
@@ -234,6 +243,8 @@ def train_DDP_loderunner_datastep_cylex(
     device: torch.device,
     rank: int,
     world_size: int,
+    channel_map: list[int] = None,
+    grad_clip: float | None = None,
 ):
 
     """A DDP-compatible training step for multi-input, multi-output data.
@@ -246,6 +257,9 @@ def train_DDP_loderunner_datastep_cylex(
         device (torch.device): device index to select
         rank (int): Rank of device
         world_size (int): Number of total DDP processes
+        channel_map (list): unused; channel map is unpacked from ``data``.
+        grad_clip (float | None): If not ``None``, clip the global gradient norm
+            to this value before the optimizer step.
     """
     # Extract data
     start_img, channel_map, end_img, channel_map, Dt = data
@@ -272,6 +286,11 @@ def train_DDP_loderunner_datastep_cylex(
     # Backward pass and optimization
     optimizer.zero_grad(set_to_none=True)
     loss.mean().backward()
+
+    # Optional gradient-norm clipping.
+    if grad_clip is not None:
+        torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+
     optimizer.step()
 
     # Gather per-sample losses from all processes
@@ -288,6 +307,130 @@ def train_DDP_loderunner_datastep_cylex(
     # Free memory
     del in_vars, out_vars
     torch.cuda.empty_cache()
+
+    return end_img, pred_img, all_losses
+
+
+def train_DDP_loderunner_2frame_datastep(
+    data: tuple,
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    loss_fn: torch.nn.Module,
+    device: torch.device,
+    rank: int,
+    world_size: int,
+    channel_map: list[int] = [0, 1, 2, 3, 4, 5, 6, 7],
+    grad_clip: float | None = None,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """A DDP training step for the 2-input-frame / 1-output-frame path.
+
+    Consumes a batch from :class:`LSC_rho2rho_temporal_2frame_DataSet` and
+    trains a :class:`LodeRunnerViT` built with ``num_input_frames == 2``.
+
+    Args:
+        data (tuple): ``(input_frames, target_frame, lead_times)`` where
+            ``input_frames`` is ``(B, 2, C, H, W)`` ordered ``[x_{t-1}, x_t]``,
+            ``target_frame`` is ``(B, C, H, W)``, and ``lead_times`` is
+            ``(B, 2) = (dt_in, dt_out)``.
+        model (torch.nn.Module): model to train (``num_input_frames == 2``).
+        optimizer (torch.optim.Optimizer): optimizer for training set.
+        loss_fn (torch.nn.Module): loss function for training set.
+        device (torch.device): device index to select.
+        rank (int): Rank of device.
+        world_size (int): Number of total DDP processes.
+        channel_map (list[int]): list of channel indices to use.
+        grad_clip (float | None): If not ``None``, clip the global gradient norm
+            to this value before the optimizer step.
+
+    Returns:
+        end_img (torch.Tensor): Ground truth target image.
+        pred_img (torch.Tensor): Predicted target image.
+        all_losses (torch.Tensor): Concatenated per-sample losses from all ranks.
+    """
+    model.train()
+
+    input_frames, end_img, lead_times = data
+    input_frames = input_frames.to(device, non_blocking=True)
+    lead_times = lead_times.to(torch.float32).to(device, non_blocking=True)
+    end_img = end_img.to(device, non_blocking=True)
+
+    in_vars = torch.tensor(channel_map).to(device, non_blocking=True)
+    out_vars = torch.tensor(channel_map).to(device, non_blocking=True)
+
+    # Forward pass through the 2-in/1-out model.
+    pred_img = model(input_frames, in_vars, out_vars, lead_times)
+
+    loss = loss_fn(pred_img, end_img)
+    per_sample_loss = loss.mean(dim=[1, 2, 3])
+
+    optimizer.zero_grad(set_to_none=True)
+    loss.mean().backward()
+
+    if grad_clip is not None:
+        torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+
+    optimizer.step()
+
+    gathered_losses = [torch.zeros_like(per_sample_loss) for _ in range(world_size)]
+    dist.all_gather(gathered_losses, per_sample_loss)
+
+    if rank == 0:
+        all_losses = torch.cat(gathered_losses, dim=0)
+    else:
+        all_losses = None
+
+    return end_img, pred_img, all_losses
+
+
+def eval_DDP_loderunner_2frame_datastep(
+    data: tuple,
+    model: torch.nn.Module,
+    loss_fn: torch.nn.Module,
+    device: torch.device,
+    rank: int,
+    world_size: int,
+    channel_map: list[int] = [0, 1, 2, 3, 4, 5, 6, 7],
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """A DDP evaluation step for the 2-input-frame / 1-output-frame path.
+
+    Args:
+        data (tuple): ``(input_frames, target_frame, lead_times)`` as produced
+            by :class:`LSC_rho2rho_temporal_2frame_DataSet`.
+        model (torch.nn.Module): model to evaluate (``num_input_frames == 2``).
+        loss_fn (torch.nn.Module): loss function for evaluation.
+        device (torch.device): device index to select.
+        rank (int): Rank of device.
+        world_size (int): Total number of DDP processes.
+        channel_map (list[int]): list of channel indices to use.
+
+    Returns:
+        end_img (torch.Tensor): Ground truth target image.
+        pred_img (torch.Tensor): Predicted target image.
+        all_losses (torch.Tensor): Concatenated per-sample losses from all ranks.
+    """
+    model.eval()
+
+    input_frames, end_img, lead_times = data
+    input_frames = input_frames.to(device, non_blocking=True)
+    lead_times = lead_times.to(torch.float32).to(device, non_blocking=True)
+    end_img = end_img.to(device, non_blocking=True)
+
+    in_vars = torch.tensor(channel_map).to(device, non_blocking=True)
+    out_vars = torch.tensor(channel_map).to(device, non_blocking=True)
+
+    with torch.no_grad():
+        pred_img = model(input_frames, in_vars, out_vars, lead_times)
+
+    loss = loss_fn(pred_img, end_img)
+    per_sample_loss = loss.mean(dim=[1, 2, 3])
+
+    gathered_losses = [torch.zeros_like(per_sample_loss) for _ in range(world_size)]
+    dist.all_gather(gathered_losses, per_sample_loss)
+
+    if rank == 0:
+        all_losses = torch.cat(gathered_losses, dim=0)
+    else:
+        all_losses = None
 
     return end_img, pred_img, all_losses
 
