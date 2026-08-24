@@ -68,8 +68,11 @@ export OMP_NUM_THREADS=8
 export date00=`date`
 
 # Start the Code
-# Explicitly set TCP environment for the following...
-srun -vv --cpu-bind=verbose python -u <train_script> @<INPUTFILE>
+# --gpu-bind=none exposes ALL node GPUs to every task so setup_distributed()'s
+# local_rank (0..NGPUS-1) maps 1:1 onto distinct devices. Without it Slurm's
+# default binding hands each task only a subset, so ranks collide on the same
+# CUDA device ("Duplicate GPU detected" in NCCL).
+srun -vv --cpu-bind=verbose --gpu-bind=none python -u <train_script> @<INPUTFILE>
 
 # Get end time and print to stdout
 export date01=`date`
