@@ -5,6 +5,8 @@ to the Yoke framework. They are designed to work seamlessly with the Yoke traini
 evaluation processes, ensuring that model states can be saved and restored effectively.
 """
 
+import copy
+
 import torch
 import torch.nn as nn
 import torch.distributed as dist
@@ -164,6 +166,7 @@ def save_model_and_optimizer(
     filepath: str,
     model_class: type,
     model_args: dict,
+    extra_state: dict = None,
 ) -> None:
     """Class-aware torch checkpointing.
 
@@ -176,7 +179,8 @@ def save_model_and_optimizer(
     - If model is wrapped in DDP (`model.module` exists), saves
       `model.module.state_dict()`.
     - If model is NOT using DDP, saves `model.state_dict()`.
-    - Moves model and optimizer to CPU to avoid CUDA-specific issues.
+    - Copies model and optimizer state to CPU (without mutating the live,
+      in-training model/optimizer) to avoid CUDA-specific issues.
     - Saves only on rank 0 when using DDP to prevent redundant writes.
     - If using DDP, synchronizes all processes after saving to ensure consistency.
 
@@ -187,6 +191,11 @@ def save_model_and_optimizer(
         filepath (str): Checkpoint filename.
         model_class (torch.nn.Module class): Class of model being checkpointed.
         model_args (dict): Dictionary of model parameters.
+        extra_state (dict): Optional dictionary of additional metadata to store
+            in the checkpoint (e.g. ``{"global_step": ...}``). Keys must not
+            collide with the reserved checkpoint keys (``epoch``,
+            ``model_class``, ``model_args``, ``model_state_dict``,
+            ``optimizer_state_dict``). Defaults to ``None``.
     """
     is_ddp = isinstance(model, nn.parallel.DistributedDataParallel)
 
@@ -198,12 +207,16 @@ def save_model_and_optimizer(
 
     # Save only on rank 0 in DDP or always in single-GPU mode
     if save_rank == 0:
-        if is_ddp:
-            model_cpu = model.module.to("cpu")
-        else:
-            model_cpu = model.to("cpu")
+        # Unwrap DDP if necessary, then deep-copy to CPU. Deep-copying avoids
+        # the destructive side effect of moving the *live* training model to
+        # CPU (an in-place `.to("cpu")` would strand the model, its optimizer,
+        # and any EMA shadow built from it on the wrong device mid-training).
+        source_model = model.module if is_ddp else model
+        model_cpu = copy.deepcopy(source_model).to("cpu")
 
-        optimizer_cpu = optimizer.state_dict()
+        # Deep-copy optimizer state so the live optimizer is not mutated, then
+        # move any tensors to CPU.
+        optimizer_cpu = copy.deepcopy(optimizer.state_dict())
         for state in optimizer_cpu["state"].values():
             for key, value in state.items():
                 if isinstance(value, torch.Tensor):
@@ -216,6 +229,17 @@ def save_model_and_optimizer(
             "model_state_dict": model_cpu.state_dict(),
             "optimizer_state_dict": optimizer_cpu,
         }
+
+        # Merge in any caller-supplied metadata (e.g. global_step for EMA).
+        if extra_state is not None:
+            reserved = set(checkpoint.keys())
+            overlap = reserved.intersection(extra_state.keys())
+            if overlap:
+                raise ValueError(
+                    f"extra_state keys collide with reserved checkpoint keys: "
+                    f"{sorted(overlap)}"
+                )
+            checkpoint.update(extra_state)
 
         torch.save(checkpoint, filepath)
         print(f"[Rank {save_rank}] Saved checkpoint at epoch {epoch} -> {filepath}")
@@ -231,6 +255,7 @@ def load_model_and_optimizer(
     optimizer_kwargs: dict,
     available_models: dict,
     device: str = "cuda",
+    return_checkpoint: bool = False,
 ) -> tuple[torch.nn.Module, torch.optim.Optimizer, int]:
     """Dynamically load model & optimizer state from checkpoint.
 
@@ -248,6 +273,16 @@ def load_model_and_optimizer(
         optimizer_kwargs (dict): Dictionary of optimizer parameters.
         available_models (dict): Dictionary mapping class names to class references.
         device (torch.device): String or device specifier.
+        return_checkpoint (bool): If ``True``, additionally return the full
+            checkpoint dictionary as a fourth element so callers can read any
+            extra metadata stored via ``save_model_and_optimizer``'s
+            ``extra_state`` (e.g. ``global_step``). Defaults to ``False`` to
+            preserve the original 3-tuple return signature.
+
+    Returns:
+        tuple: ``(model, optimizer, epoch)`` by default, or
+        ``(model, optimizer, epoch, checkpoint)`` when
+        ``return_checkpoint=True``.
 
     """
     # Get rank if in DDP, else assume single process
@@ -301,5 +336,8 @@ def load_model_and_optimizer(
     # Synchronize all processes in DDP
     if dist.is_initialized():
         dist.barrier()
+
+    if return_checkpoint:
+        return model, optimizer, checkpoint["epoch"], checkpoint
 
     return model, optimizer, checkpoint["epoch"]

@@ -397,18 +397,57 @@ def main(args, rank, world_size, local_rank, device):
             device=device,
         )
 
-        # Restore EMA state + global step on continuation, if present.
+        # Restore EMA weights + global step on continuation, if present.
+        #
+        # The EMA companion checkpoint is written with the same class-aware
+        # `save_model_and_optimizer` used for the main model. We reconstruct a
+        # LodeRunnerViT from it, copy those weights into the EMA shadow's inner
+        # module, and read the persisted `global_step` so the warmup schedule
+        # stays continuous. A dummy optimizer is created by the loader and
+        # discarded (the EMA shadow has no optimizer of its own).
         if CONTINUATION and checkpoint:
             ema_state_path = checkpoint.replace(".pth", "_ema.pth")
             if os.path.exists(ema_state_path):
-                ema_ckpt = torch.load(
-                    ema_state_path, map_location=device, weights_only=False
+                ema_loaded_model, _, ema_epoch, ema_ckpt = load_model_and_optimizer(
+                    ema_state_path,
+                    optimizer_class=torch.optim.AdamW,
+                    optimizer_kwargs={
+                        "lr": anchor_lr,
+                        "betas": (0.9, 0.999),
+                        "eps": 1e-08,
+                        "weight_decay": 0.01,
+                    },
+                    available_models=available_models,
+                    device=device,
+                    return_checkpoint=True,
                 )
-                ema_model.load_state_dict(ema_ckpt["ema_state_dict"])
+                # Copy reconstructed EMA weights into the shadow's inner module.
+                ema_model.module.load_state_dict(ema_loaded_model.state_dict())
                 global_step = int(ema_ckpt.get("global_step", 0))
+
+                # Consistency check: the EMA companion must come from the same
+                # restart point as the main checkpoint. `starting_epoch` was set
+                # from the main checkpoint above.
+                if ema_epoch != starting_epoch:
+                    raise ValueError(
+                        f"EMA checkpoint epoch ({ema_epoch}) does not match the "
+                        f"main checkpoint epoch ({starting_epoch}). The main and "
+                        f"EMA checkpoints appear to be out of sync; refusing to "
+                        f"continue with a corrupt EMA warmup schedule."
+                    )
+
+                # A warmed-up EMA should have advanced past the warmup delay by
+                # the recorded epoch. Warn (do not fail) on an implausible pair.
+                if global_step == 0 and starting_epoch > 0:
+                    print(
+                        "WARNING: EMA global_step is 0 while resuming at epoch "
+                        f"{starting_epoch}; the EMA warmup schedule will restart "
+                        "from scratch."
+                    )
+
                 print(
                     f"EMA state restored from {ema_state_path} "
-                    f"(global_step={global_step})."
+                    f"(epoch={ema_epoch}, global_step={global_step})."
                 )
             else:
                 print(
@@ -556,25 +595,35 @@ def main(args, rank, world_size, local_rank, device):
     )
 
     #############################################
-    # Save EMA companion checkpoint (rank 0)
+    # Save EMA companion checkpoint
     #############################################
-    # Persists both the EMA shadow state (for continuation) and the EMA weights
-    # as a plain LodeRunnerViT state_dict (the production checkpoint). The
-    # global optimizer-step counter is stored so the warmup schedule continues.
-    if ema_model is not None and rank == 0:
+    # Persist the EMA shadow using the same class-aware checkpoint format as the
+    # main model. This stores the model class + init args (so it reconstructs
+    # robustly) and the `global_step` (so the warmup schedule stays continuous
+    # across restarts). We save the EMA shadow's inner LodeRunnerViT
+    # (`ema_model.module`); its state_dict keys match a fresh LodeRunnerViT.
+    #
+    # `save_model_and_optimizer` is model+optimizer coupled, so we reuse the
+    # main optimizer purely to satisfy the signature -- it is ignored when the
+    # EMA is restored. Rank-0-only writing and DDP synchronization are handled
+    # inside the function.
+    if ema_model is not None:
         ema_state_path = new_chkpt_path.replace(".pth", "_ema.pth")
-        torch.save(
-            {
-                "ema_state_dict": ema_model.state_dict(),
-                "global_step": global_step,
-                "epoch": epochIDX,
-            },
+        save_model_and_optimizer(
+            ema_model.module,
+            optimizer,
+            epochIDX,
             ema_state_path,
+            model_class=LodeRunnerViT,
+            model_args=model_args,
+            extra_state={"global_step": global_step},
         )
+
         # Production EMA weights (loads cleanly into a fresh LodeRunnerViT).
-        ema_prod_path = new_chkpt_path.replace(".pth", "_ema_weights.pth")
-        save_ema_checkpoint(ema_model, ema_prod_path)
-        print(f"[Rank {rank}] Saved EMA checkpoints -> {ema_state_path}")
+        if rank == 0:
+            ema_prod_path = new_chkpt_path.replace(".pth", "_ema_weights.pth")
+            save_ema_checkpoint(ema_model, ema_prod_path)
+            print(f"[Rank {rank}] Saved EMA checkpoints -> {ema_state_path}")
 
     if dist.is_initialized():
         dist.barrier()
