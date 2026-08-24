@@ -402,11 +402,11 @@ def get_args():
         type=str,
         default=(
             "/net/sescratch1/atoivonen/data/KN_lightcurves/"
-            "rubin_ztf_moredense_10000_dataset_same_seed/lc_*.npz"
+            "rubin_ztf_dense_10000_dataset_same_seed/lc_*.npz"
         ),
         help="Glob for the dense light-curve files (late-time truth). Defaults to "
         "the same dense set the model was trained on "
-        "(rubin_ztf_moredense_10000_dataset_same_seed), whose Rubin bands reach "
+        "(rubin_ztf_dense_10000_dataset_same_seed), whose Rubin bands reach "
         "~11-12 d median so the 2->10 d scored region is well covered.",
     )
     p.add_argument(
