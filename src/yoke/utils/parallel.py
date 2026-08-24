@@ -35,6 +35,14 @@ def setup_distributed() -> tuple[int, int, int, torch.device]:
     master_port = os.environ["MASTER_PORT"]
 
     # ----- 2) Set the current GPU device for this process -----
+    # Map local rank onto the GPUs this process can actually see. When Slurm
+    # binds one GPU per task (cgroup isolation), each rank sees a single device
+    # renumbered to 0, so device_count() == 1 and local_rank must fold to 0.
+    # When every rank sees all node GPUs, device_count() == NGPUS and the modulo
+    # is a no-op. Guards against "invalid device ordinal" under per-task binding.
+    n_visible = torch.cuda.device_count()
+    if n_visible > 0:
+        local_rank = local_rank % n_visible
     torch.cuda.set_device(local_rank)
     device = torch.device(f"cuda:{local_rank}")
 
