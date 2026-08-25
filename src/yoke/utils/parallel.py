@@ -22,7 +22,11 @@ def setup_distributed() -> tuple[int, int, int, torch.device]:
     Returns:
         rank (int): Global rank of this process.
         world_size (int): Total number of processes.
-        local_rank (int): Local rank (GPU index) on this node.
+        gpu_index (int): The CUDA device index this process was assigned. This is
+            the actual device ordinal to use for DDP ``device_ids``/
+            ``output_device`` -- 0 under per-task GPU binding (one visible GPU),
+            or the local rank when all node GPUs are visible. NOT necessarily
+            equal to SLURM_LOCALID.
         device (torch.device): CUDA device for this process.
     """
     # ----- 1) Basic setup & environment variables -----
@@ -35,27 +39,33 @@ def setup_distributed() -> tuple[int, int, int, torch.device]:
     master_port = os.environ["MASTER_PORT"]
 
     # ----- 2) Set the current GPU device for this process -----
-    # DDP requires each rank to own a DISTINCT physical GPU. That must be
-    # arranged by the launcher's GPU visibility, not by index arithmetic here:
-    # folding local_rank onto a partial visible set (e.g. local_rank % count)
-    # silently maps two ranks to the same device ("Duplicate GPU detected").
-    # Log what this rank actually sees so a bad Slurm binding is obvious.
+    # Two Slurm GPU-visibility models must both work, so pick the device index
+    # from what THIS task actually sees rather than assuming local_rank is it:
+    #   * Per-task binding (default cgroup isolation): each task sees exactly one
+    #     GPU, renumbered to cuda:0. device_count() == 1, so the device index is
+    #     0 for every rank (local_rank 1,2,3 would be invalid ordinals here).
+    #   * All-visible (e.g. srun --gpu-bind=none): each task sees all node GPUs,
+    #     device_count() == NGPUS, and local_rank is the correct distinct index.
+    # Choosing 0 when only one GPU is visible, else local_rank, gives each rank a
+    # DISTINCT physical GPU under both models and avoids "invalid device ordinal"
+    # and "Duplicate GPU detected".
     n_visible = torch.cuda.device_count()
+    gpu_index = 0 if n_visible <= 1 else local_rank
     print(
         f"[setup_distributed] rank={rank} local_rank={local_rank} "
-        f"world_size={world_size} visible_gpus={n_visible} "
+        f"world_size={world_size} visible_gpus={n_visible} gpu_index={gpu_index} "
         f"CUDA_VISIBLE_DEVICES={os.environ.get('CUDA_VISIBLE_DEVICES', '<unset>')}",
         flush=True,
     )
-    if local_rank >= n_visible:
+    if gpu_index >= n_visible:
         raise RuntimeError(
-            f"local_rank {local_rank} >= visible GPUs {n_visible}. Each task sees "
-            "only a subset of the node's GPUs -- the Slurm launcher is binding "
-            "GPUs per task. Launch with `srun --gpu-bind=none` so every rank sees "
-            "all node GPUs and local_rank maps 1:1 to a distinct device."
+            f"Chosen GPU index {gpu_index} >= visible GPUs {n_visible} for "
+            f"local_rank {local_rank}. Each task sees only a partial subset of the "
+            "node's GPUs (neither clean per-task binding nor full visibility). "
+            "Check the Slurm GPU request/binding for this job."
         )
-    torch.cuda.set_device(local_rank)
-    device = torch.device(f"cuda:{local_rank}")
+    torch.cuda.set_device(gpu_index)
+    device = torch.device(f"cuda:{gpu_index}")
 
     # ----- 3) Initialize the process group -----
     dist.init_process_group(
@@ -65,7 +75,9 @@ def setup_distributed() -> tuple[int, int, int, torch.device]:
         rank=rank,
     )
 
-    return rank, world_size, local_rank, device
+    # Return the ACTUAL device index (gpu_index), not SLURM_LOCALID, so callers
+    # place DDP on the device this process really owns under both binding models.
+    return rank, world_size, gpu_index, device
 
 
 def cleanup_distributed() -> None:

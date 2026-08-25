@@ -62,7 +62,7 @@ export date00=`date`
 
 # Start the Code
 # Explicitly set TCP environment for the following...
-srun -vv --cpu-bind=verbose --gpu-bind=none python -u <train_script> @study<studyIDX>_START.input
+srun -vv --cpu-bind=verbose python -u <train_script> @study<studyIDX>_START.input
 
 # Get end time and print to stdout
 export date01=`date`
