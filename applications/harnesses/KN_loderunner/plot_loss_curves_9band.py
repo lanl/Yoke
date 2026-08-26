@@ -114,16 +114,18 @@ def main():
     parser.add_argument(
         "--tf_ramp_start_epoch",
         type=int,
-        default=20,
+        default=8,
         help="Absolute epoch at which the teacher-forcing anneal begins. Must "
-        "match the training schedule. Default 20.",
+        "match --tf_ramp_start_epoch in training_START.input / "
+        "training_input.tmpl. Default 8.",
     )
     parser.add_argument(
         "--tf_ramp_epochs",
         type=int,
-        default=20,
+        default=12,
         help="Number of epochs the teacher-forcing ratio anneals over. Must "
-        "match the training schedule. Default 20.",
+        "match --tf_ramp_epochs in training_START.input / training_input.tmpl. "
+        "Default 12.",
     )
 
     args = parser.parse_args()
