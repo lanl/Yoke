@@ -794,6 +794,7 @@ def _rollout_pass_9band_window(
     teacher_forcing_ratio: float,
     device: torch.device,
     band_weights: torch.Tensor = None,
+    dt_weight_tau: float = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Unroll the 9-band model over a batch of rollouts in time-window mode.
 
@@ -835,6 +836,14 @@ def _rollout_pass_9band_window(
             per-band weighted mean over valid steps; ``per_sample_loss`` (the
             recorded metric) stays unweighted. ``None`` reproduces the plain
             equal-weight behavior exactly.
+        dt_weight_tau (float): Optional lead-time weighting time-constant in days.
+            When set, each rollout step is weighted by ``1 / (1 + Dt / tau)`` in the
+            backward objective, so short-lead steps (the early rise, where the model
+            fails) get relatively more gradient than the many slowly-fading
+            late-tail steps (which otherwise dominate a per-point mean and pull the
+            forecast toward a flat plateau). Composes multiplicatively with
+            ``band_weights``. ``per_sample_loss`` (the recorded metric) stays
+            unweighted. ``None`` (default) disables it, reproducing prior behavior.
 
     Returns:
         per_sample_loss (torch.Tensor): Mean rollout loss per sample [B].
@@ -958,17 +967,23 @@ def _rollout_pass_9band_window(
 
     per_sample_loss = step_losses.sum(dim=1) / (step_valid.sum(dim=1) + 1e-8)
 
-    if band_weights is None:
+    if band_weights is None and dt_weight_tau is None:
         total_loss = step_losses.sum() / (step_valid.sum() + 1e-8)
     else:
-        # Per-band-weighted objective: scale each valid step by its observed
-        # band's weight. per_sample_loss (recorded) stays unweighted above.
-        step_bands = torch.stack(step_bands, dim=1)  # [B, n_steps]
-        bw = band_weights.to(device)
-        step_w = bw[step_bands] * step_valid  # [B, n_steps]
-        total_loss = (step_losses * bw[step_bands]).sum() / (
-            step_w.sum() + 1e-8
-        )
+        # Weighted objective: scale each valid step by its observed band's weight
+        # (band_weights) and/or a lead-time weight that down-weights long horizons
+        # (dt_weight_tau). Both compose multiplicatively; per_sample_loss
+        # (recorded) stays unweighted above.
+        step_w = step_valid.clone()  # [B, n_steps]
+        if band_weights is not None:
+            step_bands = torch.stack(step_bands, dim=1)  # [B, n_steps]
+            step_w = step_w * band_weights.to(device)[step_bands]
+        if dt_weight_tau is not None:
+            # 1 / (1 + Dt / tau): 1.0 at Dt=0, decaying with lead time. future_dt
+            # is [B, n_steps]; clamp Dt>=0 so padded/degenerate steps stay sane.
+            dt_w = 1.0 / (1.0 + future_dt.clamp_min(0.0) / float(dt_weight_tau))
+            step_w = step_w * dt_w
+        total_loss = (step_losses * step_w).sum() / (step_w.sum() + 1e-8)
 
     return per_sample_loss, total_loss
 
@@ -995,6 +1010,7 @@ def train_DDP_scalar_temporal_loderunner_epoch_9band_rollout(
     context_window_days: float = None,
     max_context_len: int = None,
     band_weights: torch.Tensor = None,
+    dt_weight_tau: float = None,
 ) -> None:
     """Multi-step rollout DDP epoch for the masked 9-band scalar temporal model.
 
@@ -1033,9 +1049,17 @@ def train_DDP_scalar_temporal_loderunner_epoch_9band_rollout(
             recorded per-sample loss stays unweighted. ``None`` (default)
             reproduces the plain equal-weight behavior. Validation always runs
             unweighted so the recorded metric is comparable.
+        dt_weight_tau (float): Optional lead-time weighting time-constant in days
+            (window mode only), forwarded to the rollout pass to down-weight
+            long-horizon steps so the early rise is not swamped by the many
+            late-tail points. The recorded per-sample loss stays unweighted, and
+            validation always runs unweighted. ``None`` (default) disables it.
     """
     def _run_pass(
-        data: tuple[torch.Tensor, ...], ratio: float, weights: torch.Tensor = None
+        data: tuple[torch.Tensor, ...],
+        ratio: float,
+        weights: torch.Tensor = None,
+        dt_tau: float = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Unpack a batch (7- or 8-tuple), move to device, run the rollout."""
         if window_mode:
@@ -1087,6 +1111,7 @@ def train_DDP_scalar_temporal_loderunner_epoch_9band_rollout(
                 teacher_forcing_ratio=ratio,
                 device=device,
                 band_weights=weights,
+                dt_weight_tau=dt_tau,
             )
 
         return _rollout_pass_9band(
@@ -1123,7 +1148,7 @@ def train_DDP_scalar_temporal_loderunner_epoch_9band_rollout(
             optimizer.zero_grad(set_to_none=True)
 
             per_sample_loss, batch_loss = _run_pass(
-                data, teacher_forcing_ratio, weights=band_weights
+                data, teacher_forcing_ratio, weights=band_weights, dt_tau=dt_weight_tau
             )
 
             batch_loss.backward()

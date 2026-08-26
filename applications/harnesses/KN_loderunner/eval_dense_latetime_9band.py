@@ -179,6 +179,109 @@ def _batched_forward(
     return out
 
 
+def _rollout_scored(
+    model: torch.nn.Module,
+    device: torch.device,
+    means: np.ndarray,
+    stds: np.ndarray,
+    ctx_t0: list,
+    ctx_v0: list,
+    ctx_b0: list,
+    target_t: np.ndarray,
+    target_v: np.ndarray,
+    target_b: np.ndarray,
+    t0: float,
+    context_window_days: float,
+    max_context_len: int,
+) -> list:
+    """Autoregressive late-time forecast: feed each prediction back as context.
+
+    Steps through the chronologically-ordered late-time dense targets. At each
+    step the trailing-window context is rebuilt from the growing lists, the model
+    predicts all bands at the lead time ``target_t[k] - ctx_t[-1]`` (from the last
+    FED event, not the fixed last realistic detection), the target band's residual
+    is recorded, then the model's own NORMALIZED prediction for that band is
+    appended to the context -- matching the training rollout (``pred_obs.detach()``)
+    and ``get_rollout_from_stream`` (``pred_norm``). Produces the same per-point
+    ``scored`` dicts as the direct path, so plotting/CSV/aggregation are unchanged.
+
+    Args:
+        model: The 9-band scalar-temporal LodeRunner.
+        device (torch.device): Device to run on.
+        means (np.ndarray): Per-band normalization means.
+        stds (np.ndarray): Per-band normalization standard deviations.
+        ctx_t0 (list): Seed context absolute times (pre-cutoff realistic).
+        ctx_v0 (list): Seed context NORMALIZED values (pre-cutoff realistic).
+        ctx_b0 (list): Seed context band indices (pre-cutoff realistic).
+        target_t (np.ndarray): Late-time dense target absolute times, chronological.
+        target_v (np.ndarray): Late-time dense target magnitudes.
+        target_b (np.ndarray): Late-time dense target band indices.
+        t0 (float): Phase-zero time (first realistic detection).
+        context_window_days (float): Trailing lookback W.
+        max_context_len (int): Padded context width M.
+
+    Returns:
+        list: One scored dict per target (phase/lead_time/band/pred_mag/true_mag/
+        residual_mag).
+    """
+    ctx_t = list(ctx_t0)
+    ctx_v = list(ctx_v0)
+    ctx_b = list(ctx_b0)
+
+    scored = []
+    with torch.no_grad():
+        for k in range(target_t.shape[0]):
+            win_v, win_t, win_b = _select_window(
+                ctx_t=ctx_t,
+                ctx_v=ctx_v,
+                ctx_b=ctx_b,
+                context_window_days=context_window_days,
+                max_context_len=max_context_len,
+            )
+            x = build_context_input(
+                win_v=win_v,
+                win_t=win_t,
+                win_b=win_b,
+                context_len=max_context_len,
+                n_bands=N_BANDS,
+                device=device,
+                window_mode=True,
+            )
+            # Lead time from the last FED event (the running context tip).
+            dt = float(target_t[k]) - float(ctx_t[-1])
+            if dt <= 0:
+                # Non-increasing time; skip feeding but still score at a tiny dt.
+                dt = max(dt, 1e-3)
+            Dt = torch.tensor([dt], dtype=torch.float32, device=device)
+            pred_all = (
+                model(x, in_vars=None, out_vars=None, Dt=Dt)
+                .reshape(N_BANDS)
+                .detach()
+                .cpu()
+                .numpy()
+            )
+            band = int(target_b[k])
+            pred_norm = float(pred_all[band])
+            pred_mag = pred_norm * (stds[band] + EPS) + means[band]
+            true_mag = float(target_v[k])
+            scored.append(
+                {
+                    "phase": float(target_t[k]) - t0,
+                    "lead_time": dt,
+                    "band": band,
+                    "pred_mag": float(pred_mag),
+                    "true_mag": true_mag,
+                    "residual_mag": float(pred_mag) - true_mag,
+                }
+            )
+            # Feed the NORMALIZED prediction back as the next context event.
+            ctx_t.append(float(target_t[k]))
+            ctx_v.append(pred_norm)
+            ctx_b.append(band)
+
+    return scored
+
+
 def eval_object(
     real_stream,
     dense_stream,
@@ -191,6 +294,7 @@ def eval_object(
     late_time_cutoff_days,
     late_time_max_days,
     uniform_stream: tuple | None = None,
+    rollout: bool = False,
 ):
     """Score one object's late-time dense truth against a realistic-context forecast.
 
@@ -202,6 +306,19 @@ def eval_object(
     ``late_time_cutoff_days < phase <= late_time_max_days`` (phase measured from
     the first realistic detection). Points beyond ``late_time_max_days`` are
     ignored so the forecast is only judged over a horizon we care about.
+
+    Two forecast modes:
+
+    * DIRECT (``rollout=False``, default): the pre-cutoff realistic context is
+      fixed, and every late-time point is predicted in one batched pass at its
+      true lead time from the last realistic detection. No feedback -- this
+      measures the model's raw Dt-conditioned response.
+    * AUTOREGRESSIVE (``rollout=True``): the context grows -- at each late-time
+      point (chronological order) the model predicts, and its own (normalized)
+      prediction is appended to the context before the next step, exactly as the
+      training rollout and ``get_rollout_from_stream`` do. Each step's ``Dt`` is
+      measured from the last FED event, not the fixed last realistic detection.
+      This measures the true inference path (and exposes drift).
     """
     r_t, r_v, r_b = real_stream
     d_t, d_v, d_b = dense_stream
@@ -270,23 +387,42 @@ def eval_object(
     if late_idx.shape[0] == 0:
         return None
 
-    pred_scored = _batched_forward(model, x, lead_times, device)  # [P, N_BANDS]
-
-    scored = []
-    for j, idx in enumerate(late_idx):
-        band = int(d_b[idx])
-        pred_mag = float(pred_scored[j, band] * (stds[band] + EPS) + means[band])
-        true_mag = float(d_v[idx])
-        scored.append(
-            {
-                "phase": float(d_t[idx]) - t0,
-                "lead_time": float(lead_times[j]),
-                "band": band,
-                "pred_mag": pred_mag,
-                "true_mag": true_mag,
-                "residual_mag": pred_mag - true_mag,
-            }
+    if rollout:
+        # AUTOREGRESSIVE: grow the context, feeding each (normalized) prediction
+        # back before the next step. Mirrors get_rollout_from_stream and the
+        # training rollout. Each step's Dt is from the last FED event's time.
+        scored = _rollout_scored(
+            model=model,
+            device=device,
+            means=means,
+            stds=stds,
+            ctx_t0=list(r_t_ctx.astype(np.float32)),
+            ctx_v0=list(r_v_norm.astype(np.float32)),
+            ctx_b0=list(r_b_ctx),
+            target_t=d_t[late_idx].astype(np.float32),
+            target_v=d_v[late_idx].astype(np.float32),
+            target_b=d_b[late_idx].astype(np.int64),
+            t0=t0,
+            context_window_days=context_window_days,
+            max_context_len=max_context_len,
         )
+    else:
+        pred_scored = _batched_forward(model, x, lead_times, device)  # [P, N_BANDS]
+        scored = []
+        for j, idx in enumerate(late_idx):
+            band = int(d_b[idx])
+            pred_mag = float(pred_scored[j, band] * (stds[band] + EPS) + means[band])
+            true_mag = float(d_v[idx])
+            scored.append(
+                {
+                    "phase": float(d_t[idx]) - t0,
+                    "lead_time": float(lead_times[j]),
+                    "band": band,
+                    "pred_mag": pred_mag,
+                    "true_mag": true_mag,
+                    "residual_mag": pred_mag - true_mag,
+                }
+            )
 
     # Smooth forecast curve for plotting: sweep lead time from 0 to the farthest
     # scored late-time point, predicting all bands at each lead time -- also a
@@ -470,6 +606,14 @@ def get_args():
         default=12,
         help="Number of per-object forecast plots to write.",
     )
+    p.add_argument(
+        "--rollout",
+        action="store_true",
+        help="Score the AUTOREGRESSIVE forecast: feed each prediction back as "
+        "context before the next late-time point (the true inference path), "
+        "instead of the default DIRECT single-pass forecast from a fixed "
+        "pre-cutoff context. Comparing the two isolates rollout drift.",
+    )
     return p.parse_args()
 
 
@@ -560,6 +704,7 @@ def main():
             args.late_time_cutoff_days,
             args.late_time_max_days,
             uniform_stream=uniform_stream,
+            rollout=args.rollout,
         )
         if result is None:
             continue
@@ -581,7 +726,9 @@ def main():
     # Per-band late-time error summary.
     resid = np.asarray([s["residual_mag"] for s in all_scored])
     bands = np.asarray([s["band"] for s in all_scored])
-    print(f"\nEvaluated {n_eval} objects; {len(all_scored)} late-time points "
+    mode = "AUTOREGRESSIVE rollout" if args.rollout else "DIRECT single-pass"
+    print(f"\nForecast mode: {mode}")
+    print(f"Evaluated {n_eval} objects; {len(all_scored)} late-time points "
           f"(cutoff {args.late_time_cutoff_days} d).")
     print(f"Overall late-time RMSE (mag): {np.sqrt(np.mean(resid**2)):.4f}  "
           f"MAE: {np.mean(np.abs(resid)):.4f}")

@@ -235,6 +235,17 @@ def main(args, rank, world_size, local_rank, device):
     # to 0 for the legacy architecture (byte-identical; old checkpoints load).
     DT_FOURIER_BANDS = 8
 
+    # Delta-anchored head. When True, the output head predicts a CHANGE relative
+    # to the per-band last observed magnitude (fallback: most-recent observation
+    # in any band) instead of an absolute magnitude, so the forecast starts AT the
+    # last observation at Dt=0 rather than reconstructing the zero-point from
+    # scratch. This kills the ~0.5-0.8 mag lead-0 offset seen in the dense eval.
+    # Adds NO parameters (the anchor is derived from x), so old checkpoints still
+    # load strict=True; the flag is saved and restored by the loaders. Requires
+    # window mode (needs the per-event validity flag). Set False for the absolute
+    # head (byte-identical numerics to the pre-delta model).
+    PREDICT_DELTA = True
+
     # Time-window context mode. When CONTEXT_WINDOW_DAYS is not None, the dataset
     # selects context by a trailing lookback in days (all detections within the
     # last CONTEXT_WINDOW_DAYS), padded to MAX_CONTEXT_LEN with a per-event
@@ -282,17 +293,20 @@ def main(args, rank, world_size, local_rank, device):
     # Per-band loss weighting. Targets are per-band z-scored, so an equal-weight
     # loss lets the large-dynamic-range blue bands (u, g fade to mag ~28-30) be
     # under-fit -- the dense-eval showed a strong under-fade bias there (u
-    # ~ -5 mag, g ~ -2 mag) while ZTF/red bands fit well. Up-weighting u and g
-    # in the TRAINING backward (the recorded per-sample loss stays unweighted so
-    # the val CSV remains a comparable yardstick) pushes gradient toward the
-    # blue fade the model currently ignores. Order matches BAND_KEYS =
+    # ~ -5 mag, g ~ -2 mag). Up-weighting these bands in the TRAINING backward
+    # (the recorded per-sample loss stays unweighted so the val CSV remains a
+    # comparable yardstick) pushes gradient toward the fades the model currently
+    # ignores. The three ZTF bands are also up-weighted (1->2): in autoregressive
+    # rollout they lag because ZTF is realistically sampled near peak/early with
+    # little late-time context to re-anchor, so they get the least gradient
+    # pressure exactly where they fail. Order matches BAND_KEYS =
     # (ztfg, ztfr, ztfi, sdssu, ps1_g, ps1_r, ps1_i, ps1_z, ps1_y). Set to None
     # to recover the exact equal-weight objective.
     BAND_WEIGHTS = torch.tensor(
         [
-            1.0,  # ztfg
-            1.0,  # ztfr
-            1.0,  # ztfi
+            2.0,  # ztfg -- ZTF bands lag in rollout; up-weight from 1->2
+            2.0,  # ztfr -- ZTF bands lag in rollout; up-weight from 1->2
+            2.0,  # ztfi -- ZTF bands lag in rollout; up-weight from 1->2
             3.0,  # sdssu (u) -- worst under-fade, largest up-weight
             2.0,  # ps1__g (g)
             1.0,  # ps1__r (r)
@@ -302,6 +316,16 @@ def main(args, rank, world_size, local_rank, device):
         ],
         dtype=torch.float32,
     )
+
+    # Lead-time loss weighting (window-mode rollout only). The dense truth has far
+    # more points in the slowly-fading late tail than in the 2-5 d rise, so an
+    # equal-per-step objective rewards nailing the flat tail and the forecast
+    # collapses to a plateau. Weighting each rollout step by 1 / (1 + Dt / tau)
+    # gives short-lead steps (the rise, where the model fails) relatively more
+    # gradient. Composes multiplicatively with BAND_WEIGHTS. The recorded
+    # per-sample loss stays unweighted so the val CSV remains comparable. Set to
+    # None to recover the equal-per-step objective. tau ~ a few days.
+    DT_WEIGHT_TAU = 3.0
 
     optimizer_kwargs = {
         "lr": 1e-4,# 1e-4, #1e-5
@@ -384,6 +408,7 @@ def main(args, rank, world_size, local_rank, device):
             hidden=HIDDEN_CHANNELS,
             context_window_days=CONTEXT_WINDOW_DAYS,
             dt_fourier_bands=DT_FOURIER_BANDS,
+            predict_delta=PREDICT_DELTA,
         ).to(device)
 
         # Stage 1: freeze pretrained LodeRunner, train only conditioner + output head
@@ -673,6 +698,7 @@ def main(args, rank, world_size, local_rank, device):
                 context_window_days=CONTEXT_WINDOW_DAYS,
                 max_context_len=MAX_CONTEXT_LEN,
                 band_weights=BAND_WEIGHTS,
+                dt_weight_tau=DT_WEIGHT_TAU,
             )
         else:
             #train_DDP_loderunner_epoch(
@@ -739,6 +765,8 @@ def main(args, rank, world_size, local_rank, device):
                     "backbone_channels": 8,
                     "hidden": HIDDEN_CHANNELS,
                     "dt_fourier_bands": DT_FOURIER_BANDS,
+                    "predict_delta": PREDICT_DELTA,
+                    "dt_weight_tau": DT_WEIGHT_TAU,
                     "band_weights": (
                         BAND_WEIGHTS.tolist()
                         if BAND_WEIGHTS is not None

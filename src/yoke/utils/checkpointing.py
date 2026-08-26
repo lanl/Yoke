@@ -499,6 +499,9 @@ def load_direct_loderunner_checkpoint_9band(
         # 0 for legacy checkpoints (no key) -> Fourier Dt disabled -> the
         # architecture matches the saved weights and strict load succeeds.
         dt_fourier_bands=checkpoint_data.get("dt_fourier_bands", 0),
+        # False for legacy checkpoints (no key) -> absolute head. Adds no params,
+        # so this only changes forward() behavior, never the state_dict.
+        predict_delta=checkpoint_data.get("predict_delta", False),
     ).to(device)
 
     state_dict = checkpoint_data["model_state_dict"]

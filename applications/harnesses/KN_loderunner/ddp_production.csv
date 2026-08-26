@@ -32,5 +32,16 @@ studyIDX,YOKE_TORCH_ENV,KNODES,NGPUS,EMBED_DIM,B0,B1,B2,B3,NUM_WORKERS,BATCH_SIZ
 # are 8-GPU H100 nodes (se*); cpus-per-task=24 in the slurm template fits
 # 24*8=192 cores.
 25,yoke311,1,8,128,1,1,9,1,2,10,125,63,2.0e-3,0.5,0.5,125,63,0.0,train_LodeRunner_ddp.py
+# study 40: Run A (n_rollout_steps=12). 1 GPU, BATCH_SIZE=5 keeps the 12-step
+# rollout under 80GB (5x12=60 activation units vs the OOM'd 10x12=120). Single
+# GPU avoids the multi-GPU Slurm GPU-binding issue on these H100 nodes.
+40,yoke311,1,1,128,1,1,9,1,2,5,1000,500,2.0e-3,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
+# study 41: 12 GPUs = 2 nodes x 6 GPUs/node (8-H100 se* nodes; under the 32-GPU
+# QOS cap). BATCH_SIZE=5 per GPU keeps the 12-step rollout under 80GB. NTRN/NVAL
+# 84/42 per rank hold ~1000/500 samples per epoch across 12 ranks (12*84~=1000).
+# TERMINAL/WARMUP scaled to per-rank batches (84/42) so the LR schedule spans the
+# same epochs. Uses the current train script: PREDICT_DELTA=True + DT_WEIGHT_TAU=3
+# + ZTF band weights bumped to 2 (A+B+ZTF combined, not isolated).
+41,yoke311,2,6,128,1,1,9,1,2,5,84,42,2.0e-3,0.5,0.5,84,42,0.0,train_LodeRunner_ddp.py
 
 

@@ -17,6 +17,13 @@
 #SBATCH --nodes=<KNODES>
 #SBATCH --ntasks-per-node=<NGPUS>
 #SBATCH --gpus-per-node=<NGPUS>
+# nodes have 8 H100s and 192-208 CPUs, i.e. ~24 cores/GPU. One task per GPU
+# (ntasks-per-node=NGPUS), so cpus-per-task=24 gives each rank enough cores for
+# its dataloader workers + OMP threads (24*NGPUS stays within budget for NGPUS
+# up to 8). Must match the continuation template so epoch 1 behaves like later
+# epochs; without it Slurm may hand each task a single core and starve the
+# dataloaders at multi-GPU scale.
+#SBATCH --cpus-per-task=24
 #SBATCH --mem-per-gpu=50G
 #SBATCH --output=study<studyIDX>_epoch0001.out
 #SBATCH --error=study<studyIDX>_epoch0001.err
@@ -54,8 +61,9 @@ module load anaconda/3.12
 source activate
 conda activate <YOKE_TORCH_ENV>
 
-# Set number of threads per GPU
-export OMP_NUM_THREADS=10
+# Set number of threads per GPU. Must be <= cpus-per-task (24). Leaves cores for
+# the dataloader workers (NUM_WORKERS per rank) alongside the OMP compute threads.
+export OMP_NUM_THREADS=8
 
 # Get start time
 export date00=`date`

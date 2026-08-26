@@ -472,6 +472,10 @@ class ScalarTemporalConditionedLodeRunner_9band(nn.Module):
         image_size (tuple): Spatial size (H, W) fed to the backbone.
         backbone_channels (int): Number of pseudo-channels the backbone expects.
         hidden (int): Hidden width of the conditioner/output-head MLPs.
+        predict_delta (bool): When True, the output head predicts a CHANGE relative
+            to the last observed magnitude per band (anchored regression) instead of
+            an absolute magnitude. See ``__init__`` for the anchoring rule. Adds no
+            parameters, so it is backward-compatible with existing checkpoints.
     """
 
     def __init__(
@@ -484,6 +488,7 @@ class ScalarTemporalConditionedLodeRunner_9band(nn.Module):
         hidden: int = 64,
         context_window_days: float = None,
         dt_fourier_bands: int = 0,
+        predict_delta: bool = False,
     ) -> None:
         """Initialize conditioner and output-head around the backbone.
 
@@ -511,8 +516,28 @@ class ScalarTemporalConditionedLodeRunner_9band(nn.Module):
                 non-trainable buffer. The monotone ``log1p(Dt)`` channel gives an
                 explicit long-term trend so the forecast does not curve back up
                 at long lead times (which a purely periodic basis would).
+            predict_delta (bool): When True (default False), the output head predicts
+                a normalized-space DELTA that is added to a per-band anchor -- the
+                most-recent observed value in that band within the context window --
+                so the forecast starts AT the last observation at lead time 0 instead
+                of reconstructing the absolute magnitude from scratch. Bands with no
+                observation in the window fall back to the most-recent observation in
+                ANY band (global-last); if the whole window is empty the anchor is 0
+                (the normalized mean). The anchor is derived from ``x`` inside
+                ``forward`` and requires the ``valid`` column, so this mode is only
+                valid in time-window mode (``context_window_days`` set). It adds NO
+                parameters, so the ``state_dict`` is byte-identical to the absolute
+                model and existing checkpoints load unchanged; the flag is recorded
+                in the checkpoint and restored by the loaders.
         """
         super().__init__()
+
+        if predict_delta and context_window_days is None:
+            raise ValueError(
+                "predict_delta=True requires time-window mode "
+                "(context_window_days set); the per-band anchor needs the "
+                "'valid' column present only in the window layout."
+            )
 
         self.backbone = backbone
         self.context_len = context_len
@@ -521,6 +546,7 @@ class ScalarTemporalConditionedLodeRunner_9band(nn.Module):
         self.backbone_channels = backbone_channels
         self.context_window_days = context_window_days
         self.dt_fourier_bands = dt_fourier_bands
+        self.predict_delta = predict_delta
 
         # Dataset x layout, flattened per event. Fixed-count mode:
         #   [value, rel_t, one_hot_band(n_bands)] * context_len   -> 2 + n_bands
@@ -598,6 +624,63 @@ class ScalarTemporalConditionedLodeRunner_9band(nn.Module):
         mono = torch.log1p(Dt.clamp_min(0.0))  # [B, 1], monotone in lead time
         return torch.cat([torch.sin(angles), torch.cos(angles), mono], dim=1)
 
+    def _band_anchor(self, x: torch.Tensor) -> torch.Tensor:
+        """Per-band last observed value from the windowed context, for delta mode.
+
+        Reconstructs, for each band, the most-recent observed (normalized) value in
+        the trailing context window. The window-mode ``x`` flattens per event as
+        ``[value, rel_t, valid, one_hot_band(n_bands)]`` (see the dataset's
+        ``_getitem_window``); "most recent" is the valid event of that band with the
+        largest ``rel_t``. Bands with no observation in the window fall back to the
+        most-recent observation in ANY band (global-last). A fully empty window (no
+        valid events) yields an all-zero anchor (the normalized mean).
+
+        Args:
+            x (torch.Tensor): Window-mode context, shape
+                [B, context_len * (3 + n_bands)].
+
+        Returns:
+            torch.Tensor: Per-band anchor of shape [B, n_bands] in normalized units.
+        """
+        B = x.shape[0]
+        nb = self.n_bands
+        ev = x.view(B, self.context_len, 3 + nb)  # [B, L, 3+nb]
+
+        value = ev[..., 0]  # [B, L]
+        rel_t = ev[..., 1]  # [B, L]
+        valid = ev[..., 2] > 0.5  # [B, L] bool
+        band_oh = ev[..., 3:]  # [B, L, nb]
+        band_idx = band_oh.argmax(dim=-1)  # [B, L]
+
+        neg_inf = torch.finfo(rel_t.dtype).min
+
+        # Global-last: value of the valid event with the largest rel_t (any band).
+        g_score = torch.where(valid, rel_t, torch.full_like(rel_t, neg_inf))
+        g_any = valid.any(dim=1)  # [B]
+        g_arg = g_score.argmax(dim=1)  # [B]
+        global_last = value.gather(1, g_arg.unsqueeze(1)).squeeze(1)  # [B]
+        global_last = torch.where(g_any, global_last, torch.zeros_like(global_last))
+
+        # Per-band last: for each band b, the valid event of band b with max rel_t.
+        # match[b] over events, scored by rel_t; [B, nb, L].
+        band_match = (
+            valid.unsqueeze(1)
+            & (band_idx.unsqueeze(1) == torch.arange(nb, device=x.device).view(1, nb, 1))
+        )  # [B, nb, L]
+        pb_score = torch.where(
+            band_match,
+            rel_t.unsqueeze(1),
+            torch.full_like(rel_t.unsqueeze(1), neg_inf),
+        )  # [B, nb, L]
+        pb_has = band_match.any(dim=2)  # [B, nb]
+        pb_arg = pb_score.argmax(dim=2)  # [B, nb]
+        per_band_last = torch.gather(
+            value.unsqueeze(1).expand(B, nb, self.context_len), 2, pb_arg.unsqueeze(2)
+        ).squeeze(2)  # [B, nb]
+
+        # Fall back to global-last where a band was never observed in the window.
+        return torch.where(pb_has, per_band_last, global_last.unsqueeze(1))
+
     def forward(
         self,
         x: torch.Tensor,
@@ -661,6 +744,14 @@ class ScalarTemporalConditionedLodeRunner_9band(nn.Module):
         pred = self.output_head(
             torch.cat([pred_channel_vals, dt_feat], dim=1)
         )  # [B, n_bands]
+
+        # Delta mode: the head predicts a change relative to the per-band last
+        # observed value (anchored regression), so the forecast starts at the last
+        # observation at Dt=0 instead of reconstructing the absolute magnitude. The
+        # anchor is derived from x (no parameters), so the disabled path is
+        # byte-identical to the absolute model.
+        if self.predict_delta:
+            pred = pred + self._band_anchor(x)
 
         return pred
 
