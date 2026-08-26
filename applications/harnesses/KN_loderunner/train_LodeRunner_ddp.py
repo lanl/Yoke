@@ -24,6 +24,7 @@ from yoke.utils.training.epoch.loderunner import (
     train_DDP_scalar_temporal_loderunner_epoch_9band,
     train_DDP_scalar_temporal_loderunner_epoch_9band_rollout,
 )
+from yoke.utils.ema import ParamEMA
 from yoke.utils.restart import continuation_setup
 from yoke.utils.dataload import make_distributed_dataloader
 from yoke.utils.checkpointing import load_model_and_optimizer
@@ -106,6 +107,19 @@ parser.add_argument(
     "epoch when starting rollout training as a continuation (e.g. 50 when "
     "continuing from epoch 50) so the ramp is measured from there rather than "
     "from epoch 0. Only used when --n_rollout_steps > 1.",
+)
+
+# Per-step weight EMA (Polyak averaging) of the trainable params (conditioner +
+# output_head). A shadow average that survives the cycle_epochs=1 process restart
+# through the checkpoint. Smooths the jagged per-batch trajectory; eval can opt in
+# via --use_ema.
+parser.add_argument(
+    "--ema_decay",
+    type=float,
+    default=0.999,
+    help="EMA decay for the trainable-parameter shadow (Polyak averaging), "
+    "updated after each optimizer step. Higher = slower/smoother. Set 0 to "
+    "disable EMA entirely.",
 )
 
 # Paired-dataset globs. The realistic set is always used; the dense set (same
@@ -245,6 +259,27 @@ def main(args, rank, world_size, local_rank, device):
     # window mode (needs the per-event validity flag). Set False for the absolute
     # head (byte-identical numerics to the pre-delta model).
     PREDICT_DELTA = True
+
+    # Trend/decay anchor (delta head only). When True, the per-band anchor the
+    # head predicts a residual on top of is no longer the flat last-observed value
+    # but a locally-extrapolated one: anchor[b] = v_last[b] + slope[b] * Dt, with
+    # slope from a least-squares fit over the band's most-recent TREND_SLOPE_K
+    # valid events. This lets the forecast LEAN INTO the fade instead of holding
+    # flat -- targeting the residual blue-band under-fade (u/ztfg/g) that the
+    # flat-hold anchor structurally cannot track. The slope is RAW (unclamped):
+    # bands sampled pre-peak can extrapolate continued brightening (accepted
+    # risk; the head learns a residual on top). To forbid brightening, clamp the
+    # slope non-negative in _band_anchor (one line, flagged there). Adds NO
+    # parameters (derived from x/Dt), so old checkpoints load strict=True; the
+    # flags round-trip via the loaders. Requires PREDICT_DELTA + window mode.
+    TREND_DECAY_ANCHOR = True
+    TREND_SLOPE_K = 3
+
+    # Per-step weight EMA (Polyak averaging) decay for the trainable params. Read
+    # from --ema_decay so it flows through the @input file and survives resubmits.
+    # 0 disables EMA. The shadow is saved into and restored from the .pth each
+    # epoch so it survives the cycle_epochs=1 process restart.
+    EMA_DECAY = args.ema_decay
 
     # Time-window context mode. When CONTEXT_WINDOW_DAYS is not None, the dataset
     # selects context by a trailing lookback in days (all detections within the
@@ -409,6 +444,8 @@ def main(args, rank, world_size, local_rank, device):
             context_window_days=CONTEXT_WINDOW_DAYS,
             dt_fourier_bands=DT_FOURIER_BANDS,
             predict_delta=PREDICT_DELTA,
+            trend_decay_anchor=TREND_DECAY_ANCHOR,
+            trend_slope_k=TREND_SLOPE_K,
         ).to(device)
 
         # Stage 1: freeze pretrained LodeRunner, train only conditioner + output head
@@ -430,6 +467,39 @@ def main(args, rank, world_size, local_rank, device):
     #loss_fn = nn.MSELoss(reduction="none")
     loss_fn = nn.HuberLoss(delta=0.1, reduction="none")
     model = DDP(model, device_ids=[local_rank], output_device=local_rank)
+
+    #############################################
+    # Per-step weight EMA (Polyak averaging)
+    #############################################
+    # Shadow the trainable params only (conditioner + output_head; the frozen
+    # backbone is excluded by the requires_grad filter). Keyed by name so it
+    # round-trips through the .pth and survives the cycle_epochs=1 restart. On a
+    # CONTINUATION, restore the shadow from the checkpoint BEFORE training so the
+    # average is not silently reset to the current weights every epoch.
+    ema = None
+    if EMA_DECAY > 0:
+        ema = ParamEMA(
+            (
+                (n, p)
+                for n, p in model.module.named_parameters()
+                if p.requires_grad
+            ),
+            decay=EMA_DECAY,
+        )
+        if CONTINUATION:
+            ema_ckpt = torch.load(checkpoint, map_location=device, weights_only=False)
+            ema_sd = ema_ckpt.get("ema_state_dict")
+            if ema_sd is not None:
+                ema.load_state_dict(ema_sd)
+                if rank == 0:
+                    print(
+                        f"Restored EMA shadow ({len(ema_sd)} tensors) from checkpoint."
+                    )
+            elif rank == 0:
+                print(
+                    "No ema_state_dict in checkpoint; EMA initialized from current "
+                    "weights (expected on the first EMA-enabled epoch)."
+                )
 
     #############################################
     # Learning Rate Scheduler
@@ -699,6 +769,7 @@ def main(args, rank, world_size, local_rank, device):
                 max_context_len=MAX_CONTEXT_LEN,
                 band_weights=BAND_WEIGHTS,
                 dt_weight_tau=DT_WEIGHT_TAU,
+                ema=ema,
             )
         else:
             #train_DDP_loderunner_epoch(
@@ -719,6 +790,7 @@ def main(args, rank, world_size, local_rank, device):
                 rank=rank,
                 world_size=world_size,
                 band_weights=BAND_WEIGHTS,
+                ema=ema,
             )
 
         print(f"[rank {rank}] finished epoch", flush=True)
@@ -766,6 +838,12 @@ def main(args, rank, world_size, local_rank, device):
                     "hidden": HIDDEN_CHANNELS,
                     "dt_fourier_bands": DT_FOURIER_BANDS,
                     "predict_delta": PREDICT_DELTA,
+                    "trend_decay_anchor": TREND_DECAY_ANCHOR,
+                    "trend_slope_k": TREND_SLOPE_K,
+                    "ema_decay": EMA_DECAY,
+                    "ema_state_dict": (
+                        ema.state_dict() if ema is not None else None
+                    ),
                     "dt_weight_tau": DT_WEIGHT_TAU,
                     "band_weights": (
                         BAND_WEIGHTS.tolist()

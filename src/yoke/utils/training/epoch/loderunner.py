@@ -498,6 +498,7 @@ def train_DDP_scalar_temporal_loderunner_epoch_9band(
     rank: int,
     world_size: int,
     band_weights: torch.Tensor = None,
+    ema: object = None,
 ) -> None:
     """DDP epoch function for the masked 9-band scalar temporal LodeRunner.
 
@@ -520,6 +521,10 @@ def train_DDP_scalar_temporal_loderunner_epoch_9band(
     under-fit; weighting scales each sample by its observed band's weight. The
     RECORDED per-sample loss stays unweighted so the CSV metric is comparable
     across runs. ``None`` (default) reproduces the plain equal-weight behavior.
+
+    ``ema`` (optional :class:`yoke.utils.ema.ParamEMA`) shadows the trainable
+    params and is updated after each ``optimizer.step()`` (Polyak averaging);
+    ``None`` (default) is a no-op.
     """
     train_rcrd_filename = train_rcrd_filename.replace(
         "<epochIDX>",
@@ -581,6 +586,12 @@ def train_DDP_scalar_temporal_loderunner_epoch_9band(
             batch_loss.backward()
             optimizer.step()
             LRsched.step()
+
+            if ema is not None:
+                core = model.module if hasattr(model, "module") else model
+                ema.update(
+                    (n, p) for n, p in core.named_parameters() if p.requires_grad
+                )
 
             if rank == 0:
                 batch_records = np.column_stack(
@@ -1011,6 +1022,7 @@ def train_DDP_scalar_temporal_loderunner_epoch_9band_rollout(
     max_context_len: int = None,
     band_weights: torch.Tensor = None,
     dt_weight_tau: float = None,
+    ema: object = None,
 ) -> None:
     """Multi-step rollout DDP epoch for the masked 9-band scalar temporal model.
 
@@ -1054,6 +1066,12 @@ def train_DDP_scalar_temporal_loderunner_epoch_9band_rollout(
             long-horizon steps so the early rise is not swamped by the many
             late-tail points. The recorded per-sample loss stays unweighted, and
             validation always runs unweighted. ``None`` (default) disables it.
+        ema (object): Optional :class:`yoke.utils.ema.ParamEMA` shadow of the
+            trainable params (conditioner + output_head). When supplied, its
+            ``update`` is called after every ``optimizer.step()`` so the average
+            tracks the per-batch trajectory (Polyak averaging). Only the
+            ``requires_grad`` params of the underlying (DDP-unwrapped) module are
+            shadowed. ``None`` (default) is a no-op.
     """
     def _run_pass(
         data: tuple[torch.Tensor, ...],
@@ -1154,6 +1172,12 @@ def train_DDP_scalar_temporal_loderunner_epoch_9band_rollout(
             batch_loss.backward()
             optimizer.step()
             LRsched.step()
+
+            if ema is not None:
+                core = model.module if hasattr(model, "module") else model
+                ema.update(
+                    (n, p) for n, p in core.named_parameters() if p.requires_grad
+                )
 
             if rank == 0:
                 batch_records = np.column_stack(

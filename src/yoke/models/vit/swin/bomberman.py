@@ -489,6 +489,8 @@ class ScalarTemporalConditionedLodeRunner_9band(nn.Module):
         context_window_days: float = None,
         dt_fourier_bands: int = 0,
         predict_delta: bool = False,
+        trend_decay_anchor: bool = False,
+        trend_slope_k: int = 3,
     ) -> None:
         """Initialize conditioner and output-head around the backbone.
 
@@ -529,6 +531,21 @@ class ScalarTemporalConditionedLodeRunner_9band(nn.Module):
                 parameters, so the ``state_dict`` is byte-identical to the absolute
                 model and existing checkpoints load unchanged; the flag is recorded
                 in the checkpoint and restored by the loaders.
+            trend_decay_anchor (bool): When True (default False), the per-band delta
+                anchor is EXTRAPOLATED along that band's recent local slope instead of
+                held flat: ``anchor[b] = v_last[b] + slope[b] * Dt``. The slope is a
+                least-squares fit of value vs. ``rel_t`` over that band's most-recent
+                ``trend_slope_k`` valid events (bands with < 2 valid events get slope 0,
+                i.e. the flat-hold behavior). This lets the forecast lean into a fade
+                rather than plateau at the last value. Requires ``predict_delta`` (it
+                augments the same anchor) and window mode. The slope is RAW (unclamped):
+                for bands whose recent points are pre-peak and rising this extrapolates
+                continued brightening, so the output head must learn a residual to
+                correct it. Adds NO parameters (derived from ``x``/``Dt``), so the
+                ``state_dict`` is unchanged and existing checkpoints load
+                ``strict=True``.
+            trend_slope_k (int): Number of most-recent valid events per band used to fit
+                the local slope when ``trend_decay_anchor`` is on. Default 3.
         """
         super().__init__()
 
@@ -539,6 +556,12 @@ class ScalarTemporalConditionedLodeRunner_9band(nn.Module):
                 "'valid' column present only in the window layout."
             )
 
+        if trend_decay_anchor and not predict_delta:
+            raise ValueError(
+                "trend_decay_anchor=True requires predict_delta=True; the trend "
+                "slope augments the per-band delta anchor."
+            )
+
         self.backbone = backbone
         self.context_len = context_len
         self.n_bands = n_bands
@@ -547,6 +570,8 @@ class ScalarTemporalConditionedLodeRunner_9band(nn.Module):
         self.context_window_days = context_window_days
         self.dt_fourier_bands = dt_fourier_bands
         self.predict_delta = predict_delta
+        self.trend_decay_anchor = trend_decay_anchor
+        self.trend_slope_k = trend_slope_k
 
         # Dataset x layout, flattened per event. Fixed-count mode:
         #   [value, rel_t, one_hot_band(n_bands)] * context_len   -> 2 + n_bands
@@ -624,8 +649,8 @@ class ScalarTemporalConditionedLodeRunner_9band(nn.Module):
         mono = torch.log1p(Dt.clamp_min(0.0))  # [B, 1], monotone in lead time
         return torch.cat([torch.sin(angles), torch.cos(angles), mono], dim=1)
 
-    def _band_anchor(self, x: torch.Tensor) -> torch.Tensor:
-        """Per-band last observed value from the windowed context, for delta mode.
+    def _band_anchor(self, x: torch.Tensor, Dt: torch.Tensor) -> torch.Tensor:
+        """Per-band anchor from the windowed context, for delta mode.
 
         Reconstructs, for each band, the most-recent observed (normalized) value in
         the trailing context window. The window-mode ``x`` flattens per event as
@@ -635,9 +660,21 @@ class ScalarTemporalConditionedLodeRunner_9band(nn.Module):
         most-recent observation in ANY band (global-last). A fully empty window (no
         valid events) yields an all-zero anchor (the normalized mean).
 
+        When ``self.trend_decay_anchor`` is set, the per-band anchor is additionally
+        extrapolated along that band's recent local slope,
+        ``anchor[b] = v_last[b] + slope[b] * Dt``, where ``slope[b]`` is a
+        least-squares fit of value vs. ``rel_t`` over that band's most-recent
+        ``self.trend_slope_k`` valid events. Bands with < 2 valid events get slope 0
+        (flat hold). The slope is RAW (unclamped): a pre-peak/rising band extrapolates
+        continued brightening. ``Dt`` and ``rel_t`` share the same time units (days),
+        so the extrapolation is unit-consistent.
+
         Args:
             x (torch.Tensor): Window-mode context, shape
                 [B, context_len * (3 + n_bands)].
+            Dt (torch.Tensor): Lead time (days) from the anchor (most-recent event) to
+                the target, shape [B] or broadcastable. Only used when
+                ``self.trend_decay_anchor``; the flat-hold path ignores it.
 
         Returns:
             torch.Tensor: Per-band anchor of shape [B, n_bands] in normalized units.
@@ -679,7 +716,44 @@ class ScalarTemporalConditionedLodeRunner_9band(nn.Module):
         ).squeeze(2)  # [B, nb]
 
         # Fall back to global-last where a band was never observed in the window.
-        return torch.where(pb_has, per_band_last, global_last.unsqueeze(1))
+        v_last = torch.where(pb_has, per_band_last, global_last.unsqueeze(1))
+
+        if not self.trend_decay_anchor:
+            return v_last
+
+        # Trend/decay anchor: extrapolate each band along the local slope of its
+        # most-recent trend_slope_k valid events, anchor = v_last + slope * Dt.
+        # Select those events per band as the top-k by rel_t (pb_score already masks
+        # non-matching/invalid events to -inf), then least-squares-fit value vs rel_t.
+        k = min(self.trend_slope_k, self.context_len)
+        topk_t, topk_idx = pb_score.topk(k, dim=2)  # [B, nb, k]; -inf where < k matches
+        # Robust validity of each selected slot: gather the band-match boolean at the
+        # chosen indices (top-k of an all -inf row lands on non-matching events).
+        topk_valid = torch.gather(
+            band_match.to(value.dtype), 2, topk_idx
+        ) > 0.5  # [B, nb, k]
+        topk_v = torch.gather(
+            value.unsqueeze(1).expand(B, nb, self.context_len), 2, topk_idx
+        )  # [B, nb, k]
+
+        # Weighted (valid-only) least-squares slope of v vs t per (batch, band).
+        w = topk_valid.to(value.dtype)  # [B, nb, k]
+        t = torch.where(topk_valid, topk_t, torch.zeros_like(topk_t))
+        v = torch.where(topk_valid, topk_v, torch.zeros_like(topk_v))
+        n = w.sum(dim=2)  # [B, nb]
+        denom = n.clamp_min(1.0)
+        t_bar = (w * t).sum(dim=2) / denom  # [B, nb]
+        v_bar = (w * v).sum(dim=2) / denom  # [B, nb]
+        dt_ = t - t_bar.unsqueeze(2)
+        dv_ = v - v_bar.unsqueeze(2)
+        cov = (w * dt_ * dv_).sum(dim=2)  # [B, nb]
+        var = (w * dt_ * dt_).sum(dim=2)  # [B, nb]
+        slope = torch.where(
+            (n >= 2.0) & (var > 1e-8), cov / var.clamp_min(1e-8), torch.zeros_like(cov)
+        )  # [B, nb]; bands with < 2 valid events -> 0 (flat hold)
+
+        # RAW slope (no clamp). To forbid brightening, add: slope = slope.clamp_min(0.0)
+        return v_last + slope * Dt.reshape(B, 1)
 
     def forward(
         self,
@@ -751,7 +825,7 @@ class ScalarTemporalConditionedLodeRunner_9band(nn.Module):
         # anchor is derived from x (no parameters), so the disabled path is
         # byte-identical to the absolute model.
         if self.predict_delta:
-            pred = pred + self._band_anchor(x)
+            pred = pred + self._band_anchor(x, Dt)
 
         return pred
 

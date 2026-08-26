@@ -34,6 +34,7 @@ from yoke.datasets.kilonova_dataset import (
     NINE_BAND_KEYS,
     load_or_compute_band_normalization,
 )
+from yoke.utils.ema import ParamEMA
 
 
 matplotlib.rcParams["pdf.fonttype"] = 42
@@ -79,6 +80,14 @@ def get_args():
     parser.add_argument("--study", type=int, default=24)
     parser.add_argument("--epoch", type=int, default=500)
     parser.add_argument("--ckpt", type=str, default=None)
+
+    parser.add_argument(
+        "--use_ema",
+        action="store_true",
+        help="Overlay the EMA (Polyak) shadow of the trainable params instead "
+        "of the raw weights. Falls back to raw weights if the checkpoint has "
+        "no EMA shadow.",
+    )
 
     parser.add_argument(
         "--data_glob",
@@ -157,7 +166,7 @@ def strip_ddp_prefix(state_dict):
     return state_dict
 
 
-def load_9band_model(ckpt_path, device):
+def load_9band_model(ckpt_path, device, use_ema: bool = False):
     ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
 
     model_args = ckpt["model_args"]
@@ -182,6 +191,10 @@ def load_9band_model(ckpt_path, device):
     # False for legacy checkpoints (no key) -> absolute head. Adds no params, so
     # it only changes forward() behavior, never the state_dict shape.
     predict_delta = ckpt.get("predict_delta", False)
+    # False/3 for legacy checkpoints (no key) -> flat-hold anchor. Derived from
+    # x/Dt, so it only changes forward() behavior, never the state_dict shape.
+    trend_decay_anchor = ckpt.get("trend_decay_anchor", False)
+    trend_slope_k = ckpt.get("trend_slope_k", 3)
 
     print("Loaded checkpoint:", ckpt_path)
     print("model_class:", ckpt.get("model_class", "unknown"))
@@ -192,6 +205,7 @@ def load_9band_model(ckpt_path, device):
     print("n_bands:", n_bands)
     print("dt_fourier_bands:", dt_fourier_bands)
     print("predict_delta:", predict_delta)
+    print("trend_decay_anchor:", trend_decay_anchor)
 
     backbone = LodeRunner(**model_args).to(device)
     backbone.noise_scale = noise_scale
@@ -206,6 +220,8 @@ def load_9band_model(ckpt_path, device):
         context_window_days=context_window_days,
         dt_fourier_bands=dt_fourier_bands,
         predict_delta=predict_delta,
+        trend_decay_anchor=trend_decay_anchor,
+        trend_slope_k=trend_slope_k,
     ).to(device)
 
     state_dict = strip_ddp_prefix(ckpt["model_state_dict"])
@@ -213,6 +229,29 @@ def load_9band_model(ckpt_path, device):
 
     print("Missing keys:", missing)
     print("Unexpected keys:", unexpected)
+
+    # Optionally overlay the EMA (Polyak) shadow (conditioner + output_head
+    # only, hence a PARTIAL overlay). Falls back to raw weights with a notice.
+    if use_ema:
+        ema_sd = ckpt.get("ema_state_dict")
+        if ema_sd is None:
+            print("--use_ema requested but checkpoint has no ema_state_dict; "
+                  "using raw weights.")
+        else:
+            ema = ParamEMA(
+                (
+                    (n, p)
+                    for n, p in model.named_parameters()
+                    if p.requires_grad
+                ),
+                decay=ckpt.get("ema_decay", 0.999),
+            )
+            ema.load_state_dict(ema_sd)
+            ema.copy_to(model.named_parameters())
+            print(f"Overlaid EMA weights ({len(ema_sd)} tensors, "
+                  f"decay={ckpt.get('ema_decay', 0.999)}).")
+    else:
+        print("Using raw (non-EMA) weights.")
 
     model.eval()
 
@@ -472,7 +511,7 @@ def main():
         n_bands,
         context_window_days,
         max_context_len,
-    ) = load_9band_model(args.ckpt, device)
+    ) = load_9band_model(args.ckpt, device, use_ema=getattr(args, "use_ema", False))
 
     window_mode = context_window_days is not None
 

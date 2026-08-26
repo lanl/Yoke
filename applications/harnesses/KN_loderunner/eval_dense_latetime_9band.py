@@ -525,6 +525,13 @@ def get_args():
     p.add_argument("--epoch", type=int, default=500)
     p.add_argument("--ckpt", type=str, default=None)
     p.add_argument(
+        "--use_ema",
+        action="store_true",
+        help="Overlay the EMA (Polyak) shadow of the trainable params instead "
+        "of the raw weights. Falls back to raw weights if the checkpoint has "
+        "no EMA shadow.",
+    )
+    p.add_argument(
         "--realistic_glob",
         type=str,
         default=(
@@ -637,7 +644,7 @@ def main():
         n_bands,
         context_window_days,
         max_context_len,
-    ) = load_9band_model(args.ckpt, device)
+    ) = load_9band_model(args.ckpt, device, use_ema=getattr(args, "use_ema", False))
 
     if context_window_days is None:
         raise ValueError(
