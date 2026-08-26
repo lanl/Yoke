@@ -61,6 +61,32 @@ def main():
         help="Shade +/- one epoch standard deviation.",
     )
     parser.add_argument(
+        "--show_percentiles",
+        dest="show_percentiles",
+        action="store_true",
+        default=True,
+        help="Shade the per-epoch percentile band (default 5th-95th) of the "
+        "per-batch loss. Default on for 9-band runs.",
+    )
+    parser.add_argument(
+        "--no_show_percentiles",
+        dest="show_percentiles",
+        action="store_false",
+        help="Disable the per-epoch percentile band shading.",
+    )
+    parser.add_argument(
+        "--pct_lo",
+        type=float,
+        default=5.0,
+        help="Lower percentile for --show_percentiles. Default 5.",
+    )
+    parser.add_argument(
+        "--pct_hi",
+        type=float,
+        default=95.0,
+        help="Upper percentile for --show_percentiles. Default 95.",
+    )
+    parser.add_argument(
         "--require_val",
         action="store_true",
         help=(

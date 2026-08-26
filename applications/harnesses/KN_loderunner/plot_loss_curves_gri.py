@@ -110,6 +110,40 @@ def epoch_stats(epochs, losses):
     return unique_epochs, mean_losses, std_losses
 
 
+def epoch_percentiles(
+    epochs: np.ndarray,
+    losses: np.ndarray,
+    pct_lo: float = 5.0,
+    pct_hi: float = 95.0,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Per-epoch lower/upper percentiles of the per-batch loss.
+
+    Complements ``epoch_stats``: where the std band is symmetric and can dip
+    below zero on a log axis, percentile bands capture the actual spread of the
+    per-batch losses within each epoch (e.g. the 5th and 95th) and are robust to
+    the heavy-tailed batches that make the raw loss curve jagged.
+
+    Args:
+        epochs (np.ndarray): Per-row epoch index, shape [N].
+        losses (np.ndarray): Per-row loss columns, shape [N, n_loss_cols].
+        pct_lo (float): Lower percentile in [0, 100]. Default 5.0.
+        pct_hi (float): Upper percentile in [0, 100]. Default 95.0.
+
+    Returns:
+        unique_epochs (np.ndarray): Sorted unique epoch indices, shape [E].
+        lo_losses (np.ndarray): Lower-percentile loss per epoch, [E, n_loss_cols].
+        hi_losses (np.ndarray): Upper-percentile loss per epoch, [E, n_loss_cols].
+    """
+    unique_epochs = np.array(sorted(set(epochs)))
+    lo_losses = np.vstack(
+        [np.percentile(losses[epochs == e], pct_lo, axis=0) for e in unique_epochs]
+    )
+    hi_losses = np.vstack(
+        [np.percentile(losses[epochs == e], pct_hi, axis=0) for e in unique_epochs]
+    )
+    return unique_epochs, lo_losses, hi_losses
+
+
 def infer_loss_labels(loss_names, n_loss_cols):
     """Make nicer labels for common scalar/GRI cases."""
     if n_loss_cols == 1:
@@ -187,6 +221,17 @@ def plot_epoch_curves(train, val, args):
     n_loss_cols = train["losses"].shape[1]
     loss_labels = infer_loss_labels(train["loss_names"], n_loss_cols)
 
+    # Percentile bands (default 5th/95th) of the per-batch loss within each epoch.
+    show_percentiles = getattr(args, "show_percentiles", False)
+    pct_lo = getattr(args, "pct_lo", 5.0)
+    pct_hi = getattr(args, "pct_hi", 95.0)
+    if show_percentiles:
+        _, train_plo, train_phi = epoch_percentiles(
+            train["epochs"], train["losses"], pct_lo, pct_hi
+        )
+    else:
+        train_plo = train_phi = None
+
     if val is not None:
         val_ep, val_mean, val_std = epoch_stats(
             val["epochs"],
@@ -203,17 +248,27 @@ def plot_epoch_curves(train, val, args):
             val_ep = None
             val_mean = None
             val_std = None
+            val_plo = val_phi = None
+        elif show_percentiles:
+            _, val_plo, val_phi = epoch_percentiles(
+                val["epochs"], val["losses"], pct_lo, pct_hi
+            )
+        else:
+            val_plo = val_phi = None
     else:
         val_ep = None
         val_mean = None
         val_std = None
+        val_plo = val_phi = None
 
     plt.figure(figsize=(9, 5.5))
+
+    band_label = f"{pct_lo:g}-{pct_hi:g} pct"
 
     for idx, label in enumerate(loss_labels):
         suffix = "" if n_loss_cols == 1 else f" {label}"
 
-        plt.plot(
+        (train_line,) = plt.plot(
             train_ep,
             train_mean[:, idx],
             marker="o",
@@ -225,8 +280,20 @@ def plot_epoch_curves(train, val, args):
             hi = train_mean[:, idx] + train_std[:, idx]
             plt.fill_between(train_ep, lo, hi, alpha=0.15)
 
+        if show_percentiles:
+            lo = np.maximum(train_plo[:, idx], 1e-30)
+            hi = train_phi[:, idx]
+            plt.fill_between(
+                train_ep,
+                lo,
+                hi,
+                alpha=0.15,
+                color=train_line.get_color(),
+                label=f"Train {band_label}{suffix}",
+            )
+
         if val is not None:
-            plt.plot(
+            (val_line,) = plt.plot(
                 val_ep,
                 val_mean[:, idx],
                 marker="s",
@@ -238,6 +305,18 @@ def plot_epoch_curves(train, val, args):
                 lo = np.maximum(val_mean[:, idx] - val_std[:, idx], 1e-30)
                 hi = val_mean[:, idx] + val_std[:, idx]
                 plt.fill_between(val_ep, lo, hi, alpha=0.10)
+
+            if show_percentiles:
+                lo = np.maximum(val_plo[:, idx], 1e-30)
+                hi = val_phi[:, idx]
+                plt.fill_between(
+                    val_ep,
+                    lo,
+                    hi,
+                    alpha=0.10,
+                    color=val_line.get_color(),
+                    label=f"Validation {band_label}{suffix}",
+                )
 
     plt.xlabel("Epoch")
     plt.ylabel("Mean loss")
@@ -319,6 +398,25 @@ def main():
         "--show_std",
         action="store_true",
         help="Shade +/- one epoch standard deviation.",
+    )
+
+    parser.add_argument(
+        "--show_percentiles",
+        action="store_true",
+        help="Shade the per-epoch percentile band (default 5th-95th) of the "
+        "per-batch loss.",
+    )
+    parser.add_argument(
+        "--pct_lo",
+        type=float,
+        default=5.0,
+        help="Lower percentile for --show_percentiles. Default 5.",
+    )
+    parser.add_argument(
+        "--pct_hi",
+        type=float,
+        default=95.0,
+        help="Upper percentile for --show_percentiles. Default 95.",
     )
 
     parser.add_argument(
