@@ -116,9 +116,12 @@ parser.add_argument(
 parser.add_argument(
     "--ema_decay",
     type=float,
-    default=0.999,
+    default=0.99,
     help="EMA decay for the trainable-parameter shadow (Polyak averaging), "
-    "updated after each optimizer step. Higher = slower/smoother. Set 0 to "
+    "updated after each optimizer step. Higher = slower/smoother; the averaging "
+    "window is ~1/(1-decay) steps. 0.99 ~= 100 steps ~= 1.2 epochs at "
+    "NTRN_BATCH=84, matched to the 40-epoch run so the shadow tracks the "
+    "trajectory instead of lagging toward the initial weights. Set 0 to "
     "disable EMA entirely.",
 )
 

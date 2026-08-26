@@ -244,12 +244,12 @@ def load_9band_model(ckpt_path, device, use_ema: bool = False):
                     for n, p in model.named_parameters()
                     if p.requires_grad
                 ),
-                decay=ckpt.get("ema_decay", 0.999),
+                decay=ckpt.get("ema_decay", 0.99),
             )
             ema.load_state_dict(ema_sd)
             ema.copy_to(model.named_parameters())
             print(f"Overlaid EMA weights ({len(ema_sd)} tensors, "
-                  f"decay={ckpt.get('ema_decay', 0.999)}).")
+                  f"decay={ckpt.get('ema_decay', 0.99)}).")
     else:
         print("Using raw (non-EMA) weights.")
 
