@@ -278,6 +278,17 @@ def main(args, rank, world_size, local_rank, device):
     TREND_DECAY_ANCHOR = True
     TREND_SLOPE_K = 3
 
+    # Cap on the extrapolated anchor offset slope*Dt, in per-band z-score units
+    # (values are z-scored per band). A steep raw slope times a large Dt (horizon
+    # up to ~8 days, 12-step rollout) can push the anchor far past the last real
+    # point, so the head must learn a big corrective residual -- which floors the
+    # loss and blocks descent (observed in the first raw-slope run). Clamping the
+    # offset symmetrically to +/- TREND_MAX_OFFSET keeps the anchor near the data
+    # while still letting it lean into the fade. Sign-agnostic: bounds both an
+    # over-fast fade and the near-peak brightening the raw slope extrapolates. Set
+    # None to disable the cap (raw slope).
+    TREND_MAX_OFFSET = 1.0
+
     # Per-step weight EMA (Polyak averaging) decay for the trainable params. Read
     # from --ema_decay so it flows through the @input file and survives resubmits.
     # 0 disables EMA. The shadow is saved into and restored from the .pth each
@@ -449,6 +460,7 @@ def main(args, rank, world_size, local_rank, device):
             predict_delta=PREDICT_DELTA,
             trend_decay_anchor=TREND_DECAY_ANCHOR,
             trend_slope_k=TREND_SLOPE_K,
+            trend_max_offset=TREND_MAX_OFFSET,
         ).to(device)
 
         # Stage 1: freeze pretrained LodeRunner, train only conditioner + output head
@@ -843,6 +855,7 @@ def main(args, rank, world_size, local_rank, device):
                     "predict_delta": PREDICT_DELTA,
                     "trend_decay_anchor": TREND_DECAY_ANCHOR,
                     "trend_slope_k": TREND_SLOPE_K,
+                    "trend_max_offset": TREND_MAX_OFFSET,
                     "ema_decay": EMA_DECAY,
                     "ema_state_dict": (
                         ema.state_dict() if ema is not None else None

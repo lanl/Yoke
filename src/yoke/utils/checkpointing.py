@@ -507,6 +507,7 @@ def load_direct_loderunner_checkpoint_9band(
         # state_dict, and strict load stays valid.
         trend_decay_anchor=checkpoint_data.get("trend_decay_anchor", False),
         trend_slope_k=checkpoint_data.get("trend_slope_k", 3),
+        trend_max_offset=checkpoint_data.get("trend_max_offset", None),
     ).to(device)
 
     state_dict = checkpoint_data["model_state_dict"]

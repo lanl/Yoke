@@ -491,6 +491,7 @@ class ScalarTemporalConditionedLodeRunner_9band(nn.Module):
         predict_delta: bool = False,
         trend_decay_anchor: bool = False,
         trend_slope_k: int = 3,
+        trend_max_offset: float = None,
     ) -> None:
         """Initialize conditioner and output-head around the backbone.
 
@@ -546,6 +547,18 @@ class ScalarTemporalConditionedLodeRunner_9band(nn.Module):
                 ``strict=True``.
             trend_slope_k (int): Number of most-recent valid events per band used to fit
                 the local slope when ``trend_decay_anchor`` is on. Default 3.
+            trend_max_offset (float): When set (and ``trend_decay_anchor`` is on), the
+                extrapolated anchor offset ``slope[b] * Dt`` is symmetrically clamped to
+                ``[-trend_max_offset, +trend_max_offset]`` (in per-band normalized /
+                z-score units) before being added to ``v_last``. Values are z-scored per
+                band, so this bounds the anchor displacement to a fixed number of
+                standard deviations regardless of fade direction or lead time -- capping
+                the overshoot that a steep raw slope produces at large ``Dt`` (the head
+                would otherwise have to learn a large corrective residual, flooring the
+                loss). It is deliberately SIGN-AGNOSTIC: it limits both an over-fast fade
+                and the near-peak pre-peak "brightening" extrapolation of the raw slope.
+                When None (default) the offset is RAW (unclamped), matching the original
+                trend-anchor behavior. Adds NO parameters; round-trips via checkpoint.
         """
         super().__init__()
 
@@ -572,6 +585,7 @@ class ScalarTemporalConditionedLodeRunner_9band(nn.Module):
         self.predict_delta = predict_delta
         self.trend_decay_anchor = trend_decay_anchor
         self.trend_slope_k = trend_slope_k
+        self.trend_max_offset = trend_max_offset
 
         # Dataset x layout, flattened per event. Fixed-count mode:
         #   [value, rel_t, one_hot_band(n_bands)] * context_len   -> 2 + n_bands
@@ -665,9 +679,12 @@ class ScalarTemporalConditionedLodeRunner_9band(nn.Module):
         ``anchor[b] = v_last[b] + slope[b] * Dt``, where ``slope[b]`` is a
         least-squares fit of value vs. ``rel_t`` over that band's most-recent
         ``self.trend_slope_k`` valid events. Bands with < 2 valid events get slope 0
-        (flat hold). The slope is RAW (unclamped): a pre-peak/rising band extrapolates
-        continued brightening. ``Dt`` and ``rel_t`` share the same time units (days),
-        so the extrapolation is unit-consistent.
+        (flat hold). When ``self.trend_max_offset`` is set, the offset ``slope[b] * Dt``
+        is symmetrically clamped to ``[-trend_max_offset, +trend_max_offset]`` (z-score
+        units) so a steep slope cannot overshoot at large ``Dt``; when None the slope is
+        RAW (unclamped) and a pre-peak/rising band extrapolates continued brightening.
+        ``Dt`` and ``rel_t`` share the same time units (days), so the extrapolation is
+        unit-consistent.
 
         Args:
             x (torch.Tensor): Window-mode context, shape
@@ -752,8 +769,16 @@ class ScalarTemporalConditionedLodeRunner_9band(nn.Module):
             (n >= 2.0) & (var > 1e-8), cov / var.clamp_min(1e-8), torch.zeros_like(cov)
         )  # [B, nb]; bands with < 2 valid events -> 0 (flat hold)
 
-        # RAW slope (no clamp). To forbid brightening, add: slope = slope.clamp_min(0.0)
-        return v_last + slope * Dt.reshape(B, 1)
+        # Extrapolated offset in z-score units. Symmetrically clamp its MAGNITUDE when
+        # trend_max_offset is set: a steep raw slope times a large Dt would otherwise
+        # push the anchor far past the data, forcing the head to learn a large
+        # corrective residual (which floors the loss). The cap is sign-agnostic, so it
+        # bounds both an over-fast fade and the near-peak pre-peak brightening the raw
+        # slope produces. When None, the offset is raw (unclamped).
+        offset = slope * Dt.reshape(B, 1)
+        if self.trend_max_offset is not None:
+            offset = offset.clamp(-self.trend_max_offset, self.trend_max_offset)
+        return v_last + offset
 
     def forward(
         self,

@@ -223,6 +223,7 @@ def load_9band_model(ckpt_path, device, use_ema: bool = False):
     # x/Dt, so it only changes forward() behavior, never the state_dict shape.
     trend_decay_anchor = ckpt.get("trend_decay_anchor", False)
     trend_slope_k = ckpt.get("trend_slope_k", 3)
+    trend_max_offset = ckpt.get("trend_max_offset", None)
 
     print("Loaded checkpoint:", ckpt_path)
     print("model_class:", ckpt.get("model_class", "unknown"))
@@ -238,6 +239,7 @@ def load_9band_model(ckpt_path, device, use_ema: bool = False):
     print("dt_fourier_bands:", dt_fourier_bands)
     print("predict_delta:", predict_delta)
     print("trend_decay_anchor:", trend_decay_anchor)
+    print("trend_max_offset:", trend_max_offset)
 
     backbone = LodeRunner(**model_args).to(device)
     backbone.noise_scale = noise_scale
@@ -254,6 +256,7 @@ def load_9band_model(ckpt_path, device, use_ema: bool = False):
         predict_delta=predict_delta,
         trend_decay_anchor=trend_decay_anchor,
         trend_slope_k=trend_slope_k,
+        trend_max_offset=trend_max_offset,
     ).to(device)
 
     state_dict = strip_ddp_prefix(ckpt["model_state_dict"])
