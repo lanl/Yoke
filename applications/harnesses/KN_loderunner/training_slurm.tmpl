@@ -69,55 +69,60 @@ conda activate <YOKE_TORCH_ENV>
 # the dataloader workers (NUM_WORKERS per rank) alongside the OMP compute threads.
 export OMP_NUM_THREADS=8
 
-# ---------------------------------------------------------------------------
-# Fabric-ready gate. On these NVSwitch (multi-GPU NVLink) nodes, the NVIDIA
-# Fabric Manager must finish initializing the fabric before any process calls
-# CUDA on more than one GPU. If a rank calls torch.cuda.set_device() before FM
-# is up, it dies with
-#   "Error 802: system not yet initialized"
-# on a perfectly healthy node. This is a launch-time RACE between FM readiness
-# and our CUDA init, seen only on multi-GPU jobs (single-GPU needs no fabric),
-# and it clears on resubmit.
-#
-# nvidia-smi is NOT a usable readiness probe here: it only queries the DRIVER,
-# which is up long before the fabric, so it "passes" while set_device() still
-# throws 802. So we probe the ACTUAL failing operation instead -- initialize a
-# real CUDA context on this node's assigned GPU -- and retry until it succeeds.
-# Each attempt runs in a FRESH `python -c` process: CUDA device state is cached
-# per-process, so a too-early attempt that saw 0 usable GPUs must be discarded
-# with the process or it would poison every later check. One probe per node
-# (fabric readiness is per-node), then launch. Falls through after a timeout so
-# the job can't hang forever -- the training srun then succeeds or fails loudly
-# exactly as before.
-FABRIC_WAIT_TIMEOUT=${FABRIC_WAIT_TIMEOUT:-180}  # seconds, per node
-srun --ntasks=${SLURM_NNODES} --ntasks-per-node=1 --cpu-bind=none bash -c '
-  deadline=$(( SECONDS + '"${FABRIC_WAIT_TIMEOUT}"' ))
-  attempt=0
-  while true; do
-    attempt=$(( attempt + 1 ))
-    # Fresh process each time: force a real CUDA context (device 0 is the only
-    # GPU this task sees under per-task binding). Exit 0 only if init succeeds.
-    if python -c "import torch; torch.cuda.init(); torch.zeros(1, device=\"cuda:0\"); torch.cuda.synchronize()" >/dev/null 2>&1; then
-      echo "[$(hostname)] CUDA/fabric ready after ${attempt} attempt(s)."
-      exit 0
-    fi
-    if [ $SECONDS -ge $deadline ]; then
-      echo "[$(hostname)] WARNING: CUDA not ready after '"${FABRIC_WAIT_TIMEOUT}"'s (${attempt} attempts); proceeding anyway."
-      exit 0
-    fi
-    sleep 3
-  done
-'
-
 # Get start time
 export date00=`date`
 
-# Start the Code
-# Default Slurm per-task GPU binding is correct here: each task sees exactly one
-# GPU (as cuda:0), and setup_distributed() selects that device. Do NOT add
-# --gpu-bind=none -- it exposes partial GPU subsets per task and causes ranks to
-# collide on the same device ("Duplicate GPU detected" in NCCL).
-srun -vv --cpu-bind=verbose python -u <train_script> @<INPUTFILE>
+# ---------------------------------------------------------------------------
+# 802 retry loop. On these NVSwitch (multi-GPU NVLink) nodes the NVIDIA Fabric
+# Manager must finish initializing the fabric before a rank calls
+# torch.cuda.set_device(). If a rank gets there first it dies at CUDA init with
+#   "Error 802: system not yet initialized"
+# on a perfectly healthy node -- device_count() already succeeded, it's the
+# context-init-on-a-device step that loses the race. Seen only on multi-GPU
+# jobs (single-GPU needs no fabric); it clears on resubmit.
+#
+# We do NOT pre-probe with a separate srun: this job runs in all-visible mode
+# (each task sees all GPUs, ntasks-per-node=NGPUS), so a probe srun with a
+# different --ntasks shape can't get a step created under the implicit --exact
+# and silently no-ops (which is exactly why the earlier gate printed nothing).
+# Instead we retry the TRAINING srun itself. A relaunch reuses this job's exact
+# allocation (no step-shape mismatch) and starts fresh processes for every rank
+# (which also clears the per-process CUDA error state that 802 leaves behind).
+# We only retry when the run's output shows the 802 signature -- any other
+# non-zero exit is a real failure and surfaces immediately instead of looping.
+MAX_802_RETRIES=${MAX_802_RETRIES:-5}
+RUN_LOG=study<studyIDX>_epoch<epochIDX>.runlog
+attempt=0
+while true; do
+  attempt=$(( attempt + 1 ))
+
+  # Start the Code
+  # Default Slurm per-task GPU binding is correct here: each task sees exactly
+  # one GPU (as cuda:0), and setup_distributed() selects that device. Do NOT add
+  # --gpu-bind=none -- it exposes partial GPU subsets per task and causes ranks
+  # to collide on the same device ("Duplicate GPU detected" in NCCL).
+  # tee: keep the live .out/.err stream AND capture a copy to scan for 802.
+  srun -vv --cpu-bind=verbose python -u <train_script> @<INPUTFILE> 2>&1 | tee "$RUN_LOG"
+  rc=${PIPESTATUS[0]}
+
+  if [ $rc -eq 0 ]; then
+    echo "[802-retry] training srun succeeded on attempt ${attempt}."
+    break
+  fi
+
+  if grep -q "Error 802: system not yet initialized" "$RUN_LOG"; then
+    if [ $attempt -ge $MAX_802_RETRIES ]; then
+      echo "[802-retry] hit Error 802 on attempt ${attempt} (max ${MAX_802_RETRIES}); giving up."
+      exit $rc
+    fi
+    echo "[802-retry] Error 802 (fabric not ready) on attempt ${attempt}; relaunching in 15s."
+    sleep 15
+    continue
+  fi
+
+  echo "[802-retry] training srun failed (rc=${rc}) with no Error 802 signature; not a fabric race, exiting."
+  exit $rc
+done
 
 # Get end time and print to stdout
 export date01=`date`
