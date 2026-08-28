@@ -52,4 +52,11 @@ studyIDX,YOKE_TORCH_ENV,KNODES,NGPUS,EMBED_DIM,B0,B1,B2,B3,NUM_WORKERS,BATCH_SIZ
 #49,yoke311,1,1,128,1,1,9,1,2,5,125,63,2.0e-3,0.5,0.5,100,50,0.0,train_LodeRunner_ddp.py
 #50,yoke311,1,1,128,1,1,9,1,2,5,125,63,2.0e-3,0.5,0.5,100,50,0.0,train_LodeRunner_ddp.py
 #51,yoke311,1,1,128,1,1,9,1,2,5,125,63,2.0e-3,0.5,0.5,100,50,0.0,train_LodeRunner_ddp.py
-52,yoke311,1,1,128,1,1,9,1,2,5,125,63,2.0e-3,0.5,0.5,100,50,0.0,train_LodeRunner_ddp.py
+#52,yoke311,1,1,128,1,1,9,1,2,5,125,63,2.0e-3,0.5,0.5,100,50,0.0,train_LodeRunner_ddp.py
+# Study 56: reproduce study 54's DESCENDING schedule on current KN code.
+# 1 node x 1 GPU (no NVSwitch fabric -> no Error 802), NTRN_BATCH=84, and the
+# long schedule TERMINAL_STEPS=500/WARMUP=100 that let study 54's validation
+# descend 1.0->0.3 (study 55 at 84/42 never left warmup and looked flat).
+# Model config matches study 44: PREDICT_DELTA=True, TREND_DECAY_ANCHOR=False,
+# Huber delta=0.1. Once this descends, layer features back one at a time.
+56,yoke311,1,1,128,1,1,9,1,2,5,84,42,2.0e-3,0.5,0.5,500,100,0.0,train_LodeRunner_ddp.py

@@ -491,15 +491,15 @@ def main(args, rank, world_size, local_rank, device):
         )
 
     #loss_fn = nn.MSELoss(reduction="none")
-    # delta=0.1 was in place since the harness was created (studies 24/25 too), so
-    # it is NOT what newly flattened the loss -- but it does throttle descent: with
-    # z-scored targets (sigma~=1) and a mean loss ~0.09, typical errors are ~0.95
-    # sigma, deep in Huber's LINEAR regime where the per-point gradient is capped
-    # at delta=0.1. Raising delta to 1.0 gives an error-proportional gradient (~10x
-    # stronger here) so the model can actually push down the bulk error, and only
-    # reverts to the robust linear regime past 1 sigma. delta=1.0 ~= MSE for the
-    # in-sigma bulk while still clipping the heavy-tailed outliers.
-    loss_fn = nn.HuberLoss(delta=1.0, reduction="none")
+    # delta=0.1 to MATCH study 44's config exactly (the RMSE-1.52 run we are
+    # reproducing on current code). The flat-loss investigation cleared the model
+    # code -- baseline == study-44 config still trained -- and showed the real
+    # descent driver is the SCHEDULE (study 54's TERMINAL_STEPS=500/WARMUP=100
+    # descends; study 55's 84/42 stays in warmup and looks flat). Once a clean
+    # study-44 reproduction is in hand, delta=1.0 is a deliberate next experiment
+    # (error-proportional gradient ~10x stronger for the in-sigma bulk); it also
+    # rescales the loss magnitude, so do NOT compare curve heights across the two.
+    loss_fn = nn.HuberLoss(delta=0.1, reduction="none")
     model = DDP(model, device_ids=[local_rank], output_device=local_rank)
 
     #############################################
