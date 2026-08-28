@@ -491,7 +491,15 @@ def main(args, rank, world_size, local_rank, device):
         )
 
     #loss_fn = nn.MSELoss(reduction="none")
-    loss_fn = nn.HuberLoss(delta=0.1, reduction="none")
+    # delta=0.1 was in place since the harness was created (studies 24/25 too), so
+    # it is NOT what newly flattened the loss -- but it does throttle descent: with
+    # z-scored targets (sigma~=1) and a mean loss ~0.09, typical errors are ~0.95
+    # sigma, deep in Huber's LINEAR regime where the per-point gradient is capped
+    # at delta=0.1. Raising delta to 1.0 gives an error-proportional gradient (~10x
+    # stronger here) so the model can actually push down the bulk error, and only
+    # reverts to the robust linear regime past 1 sigma. delta=1.0 ~= MSE for the
+    # in-sigma bulk while still clipping the heavy-tailed outliers.
+    loss_fn = nn.HuberLoss(delta=1.0, reduction="none")
     model = DDP(model, device_ids=[local_rank], output_device=local_rank)
 
     #############################################
