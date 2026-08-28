@@ -275,7 +275,18 @@ def main(args, rank, world_size, local_rank, device):
     # slope non-negative in _band_anchor (one line, flagged there). Adds NO
     # parameters (derived from x/Dt), so old checkpoints load strict=True; the
     # flags round-trip via the loaders. Requires PREDICT_DELTA + window mode.
-    TREND_DECAY_ANCHOR = True
+    #
+    # ABLATION (set False): the trend anchor is disabled to isolate whether it is
+    # what floored the training loss. Studies 24/40 (flat-hold anchor) descended;
+    # studies 049 (raw slope) and its capped variant (TREND_MAX_OFFSET=1.0) both
+    # stayed flat, so the offset cap did NOT restore descent -- ruling out
+    # raw-slope overshoot as the cause. With this False the head predicts a
+    # residual on the flat last-observed anchor again (EMA stays on but is inert
+    # for the training loss). If the loss now descends -> the trend anchor is the
+    # cause and stays off; if it stays flat -> the cause is elsewhere (12-step
+    # rollout, DT_WEIGHT_TAU, ZTF weight bump, or Huber delta). TREND_MAX_OFFSET
+    # below is ignored while this is False.
+    TREND_DECAY_ANCHOR = False
     TREND_SLOPE_K = 3
 
     # Cap on the extrapolated anchor offset slope*Dt, in per-band z-score units
