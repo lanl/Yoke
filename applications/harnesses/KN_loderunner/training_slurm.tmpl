@@ -72,35 +72,37 @@ export OMP_NUM_THREADS=8
 # ---------------------------------------------------------------------------
 # Fabric-ready gate. On these NVSwitch (multi-GPU NVLink) nodes, the NVIDIA
 # Fabric Manager must finish initializing the fabric before any process calls
-# CUDA on more than one GPU. nvidia-smi (above) only QUERIES the driver, so it
-# succeeds even when the fabric is not up yet -- and then the first
-# torch.cuda.set_device() in setup_distributed() fails with
+# CUDA on more than one GPU. If a rank calls torch.cuda.set_device() before FM
+# is up, it dies with
 #   "Error 802: system not yet initialized"
 # on a perfectly healthy node. This is a launch-time RACE between FM readiness
 # and our CUDA init, seen only on multi-GPU jobs (single-GPU needs no fabric),
-# and it clears on resubmit. Rather than manually resubmit, wait here until each
-# allocated node reports the fabric ready (nvidia-smi -q "Fabric ... State:
-# Completed"), then launch. Falls through after a timeout so a node that never
-# reports (or a non-NVSwitch node with no Fabric section) can't hang the job --
-# the training srun then either succeeds or fails loudly as before.
-FABRIC_WAIT_TIMEOUT=${FABRIC_WAIT_TIMEOUT:-120}  # seconds, per node
+# and it clears on resubmit.
+#
+# nvidia-smi is NOT a usable readiness probe here: it only queries the DRIVER,
+# which is up long before the fabric, so it "passes" while set_device() still
+# throws 802. So we probe the ACTUAL failing operation instead -- initialize a
+# real CUDA context on this node's assigned GPU -- and retry until it succeeds.
+# Each attempt runs in a FRESH `python -c` process: CUDA device state is cached
+# per-process, so a too-early attempt that saw 0 usable GPUs must be discarded
+# with the process or it would poison every later check. One probe per node
+# (fabric readiness is per-node), then launch. Falls through after a timeout so
+# the job can't hang forever -- the training srun then succeeds or fails loudly
+# exactly as before.
+FABRIC_WAIT_TIMEOUT=${FABRIC_WAIT_TIMEOUT:-180}  # seconds, per node
 srun --ntasks=${SLURM_NNODES} --ntasks-per-node=1 --cpu-bind=none bash -c '
   deadline=$(( SECONDS + '"${FABRIC_WAIT_TIMEOUT}"' ))
+  attempt=0
   while true; do
-    # Grab the Fabric "State" lines from nvidia-smi. No Fabric section (older
-    # driver / non-NVSwitch) -> nothing to wait for, proceed immediately.
-    fabric=$(nvidia-smi -q 2>/dev/null | grep -A3 -i "^\s*Fabric" | grep -i "State")
-    if [ -z "$fabric" ]; then
-      echo "[$(hostname)] no Fabric section reported; proceeding."
-      exit 0
-    fi
-    # Ready when every reported State is Completed (no not-yet-Completed lines).
-    if ! echo "$fabric" | grep -viq "Completed"; then
-      echo "[$(hostname)] fabric ready: $fabric"
+    attempt=$(( attempt + 1 ))
+    # Fresh process each time: force a real CUDA context (device 0 is the only
+    # GPU this task sees under per-task binding). Exit 0 only if init succeeds.
+    if python -c "import torch; torch.cuda.init(); torch.zeros(1, device=\"cuda:0\"); torch.cuda.synchronize()" >/dev/null 2>&1; then
+      echo "[$(hostname)] CUDA/fabric ready after ${attempt} attempt(s)."
       exit 0
     fi
     if [ $SECONDS -ge $deadline ]; then
-      echo "[$(hostname)] WARNING: fabric not ready after '"${FABRIC_WAIT_TIMEOUT}"'s; proceeding anyway. Last: $fabric"
+      echo "[$(hostname)] WARNING: CUDA not ready after '"${FABRIC_WAIT_TIMEOUT}"'s (${attempt} attempts); proceeding anyway."
       exit 0
     fi
     sleep 3
