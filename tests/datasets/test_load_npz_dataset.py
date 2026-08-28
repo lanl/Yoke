@@ -326,6 +326,58 @@ def test_labeled_data_invalid_kinematic_raises(tmp_path: pathlib.Path) -> None:
         _ = m.LabeledData(npz, csv, kinematic_variables="nope")
 
 
+def test_labeled_data_flyerplate_active_fields(
+    tmp_path: pathlib.Path,
+) -> None:
+    """LabeledData configures Flyerplate active fields and channel map."""
+    csv = tmp_path / "flyer_design.csv"
+    csv.write_text(
+        "\n".join(
+            [
+                "key,list,authority,custFile,expcustFile,jobcust,expname,jobkey,dimension,flyer_thickness,target_thickness,flyer_velocity,flyer_radius,target_radius,flyer_material,target_material",
+                "flyer260625_id00001,[runs],sapa,custFlyerGeom.py,,fly00001,test2d,flyer260625_id00001,2d,0.2,0.3,0.1,1,1,Cu,Cu",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    npz = tmp_path / "flyer260625_id00001_pvi_idx00010.npz"
+    _write_npz(npz, dummy=np.zeros((1,), dtype=float))
+
+    ld = m.LabeledData(
+        npz,
+        csv,
+        kinematic_variables="both",
+        thermodynamic_variables="all",
+    )
+
+    assert ld.key == "flyer260625_id00001"
+    assert ld.study == "flyer"
+
+    active_npz = ld.get_active_npz_field_names()
+    active_hydro = ld.get_active_hydro_field_names()
+    channel_map = ld.get_channel_map()
+
+    assert active_npz[:4] == ["Rcoord", "Zcoord", "Uvelocity", "Wvelocity"]
+
+    assert "density_Air" in active_npz
+    assert "density_layer000" in active_npz
+    assert "density_layer001" in active_npz
+    assert "density_layer005" in active_npz
+
+    assert "pressure_Air" in active_npz
+    assert "pressure_layer000" in active_npz
+    assert "pressure_layer001" in active_npz
+
+    assert "energy_Air" in active_npz
+    assert "energy_layer000" in active_npz
+    assert "energy_layer001" in active_npz
+
+    assert active_npz == active_hydro
+    assert len(channel_map) == len(active_hydro)
+
+
 def test_temporal_dataset_len_is_constant(tmp_path: pathlib.Path) -> None:
     """TemporalDataSet has a fixed training length."""
     npz_dir = tmp_path / "npz"
@@ -779,6 +831,398 @@ def test_temporal_dataset_init_with_nondefault_variable_modes(
 
     assert ds.kinematic_variables == "both"
     assert ds.thermodynamic_variables == "density and pressure"
+
+
+def test_temporal_dataset_flyerplate_filters_missing_layers(
+    tmp_path: pathlib.Path,
+) -> None:
+    """TemporalDataSet keeps only Flyerplate fields present in the NPZ files."""
+    npz_dir = tmp_path / "npz"
+    npz_dir.mkdir()
+
+    prefix = "flyer260625_id00001"
+    prefix_file = tmp_path / "prefixes.txt"
+    _write_prefix_file(prefix_file, [prefix])
+
+    csv = tmp_path / "flyer_design.csv"
+    csv.write_text(
+        "\n".join(
+            [
+                "key,list,authority,custFile,expcustFile,jobcust,expname,jobkey,dimension,flyer_thickness,target_thickness,flyer_velocity,flyer_radius,target_radius,flyer_material,target_material",
+                "flyer260625_id00001,[runs],sapa,custFlyerGeom.py,,fly00001,test2d,flyer260625_id00001,2d,0.2,0.3,0.1,1,1,Cu,Cu",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    rcoord = np.array([0.0, 1.0], dtype=float)
+    zcoord = np.array([0.0, 1.0], dtype=float)
+    img = np.ones((2, 2), dtype=float)
+
+    f0 = npz_dir / f"{prefix}_pvi_idx00000.npz"
+    f1 = npz_dir / f"{prefix}_pvi_idx00001.npz"
+
+    _write_npz(
+        f0,
+        Rcoord=rcoord,
+        Zcoord=zcoord,
+        Uvelocity=img,
+        Wvelocity=img,
+        density_Air=img,
+        density_layer000=img,
+        density_layer001=img,
+        pressure_Air=img,
+        pressure_layer000=img,
+        pressure_layer001=img,
+        energy_Air=img,
+        energy_layer000=img,
+        energy_layer001=img,
+        vofm_Air=img,
+        vofm_layer000=img,
+        vofm_layer001=img,
+    )
+    _write_npz(
+        f1,
+        Rcoord=rcoord,
+        Zcoord=zcoord,
+        Uvelocity=img,
+        Wvelocity=img,
+        density_Air=img,
+        density_layer000=img,
+        density_layer001=img,
+        pressure_Air=img,
+        pressure_layer000=img,
+        pressure_layer001=img,
+        energy_Air=img,
+        energy_layer000=img,
+        energy_layer001=img,
+        vofm_Air=img,
+        vofm_layer000=img,
+        vofm_layer001=img,
+    )
+
+    ds = m.TemporalDataSet(
+        npz_dir=str(npz_dir) + "/",
+        csv_filepath=str(csv),
+        file_prefix_list=str(prefix_file),
+        max_timeIDX_offset=1,
+        max_file_checks=1,
+        half_image=True,
+        kinematic_variables="both",
+        thermodynamic_variables="all",
+    )
+    ds.rng = _FakeRNG([1, 0])  # seq_len=1, start_idx=0 -> end_idx=1
+
+    start_img, cm1, end_img, cm2, dt = ds[0]
+
+    assert start_img.shape == (13, 2, 2)
+    assert end_img.shape == (13, 2, 2)
+    assert cm1.tolist() == cm2.tolist()
+    assert len(cm1) == 13
+    assert dt.item() == pytest.approx(0.25)
+
+    active_names = ds.active_hydro_field_names
+    assert active_names == [
+        "Rcoord",
+        "Zcoord",
+        "Uvelocity",
+        "Wvelocity",
+        "density_Air",
+        "density_layer000",
+        "density_layer001",
+        "pressure_Air",
+        "pressure_layer000",
+        "pressure_layer001",
+        "energy_Air",
+        "energy_layer000",
+        "energy_layer001",
+    ]
+
+
+def test_temporal_dataset_getitem_supports_nested_prefix_dirs(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: pathlib.Path,
+) -> None:
+    """TemporalDataSet supports NPZ files stored under per-prefix subdirectories."""
+    npz_dir = tmp_path / "npz"
+    npz_dir.mkdir()
+    prefix = "cx241203_id00001"
+    run_dir = npz_dir / prefix
+    run_dir.mkdir()
+
+    prefix_file = tmp_path / "prefixes.txt"
+    _write_prefix_file(prefix_file, [prefix])
+    csv = tmp_path / "design.csv"
+    _write_design_csv(csv, [(prefix, "Air", "Al")])
+
+    start = run_dir / f"{prefix}_pvi_idx00000.npz"
+    end = run_dir / f"{prefix}_pvi_idx00001.npz"
+    _write_npz(start, dummy=np.zeros((1,), dtype=float))
+    _write_npz(end, dummy=np.zeros((1,), dtype=float))
+
+    class FakeLabeledData:
+        """Minimal stub that matches the tiny NPZ fields used in this test."""
+
+        def __init__(
+            self,
+            npz_filepath: str,
+            csv_filepath: str,
+            kinematic_variables: str = "velocity",
+            thermodynamic_variables: str = "density",
+        ) -> None:
+            _ = (
+                npz_filepath,
+                csv_filepath,
+                kinematic_variables,
+                thermodynamic_variables,
+            )
+
+        def get_active_npz_field_names(self) -> list[str]:
+            return ["dummy"]
+
+        def get_active_hydro_field_names(self) -> list[str]:
+            return ["dummy"]
+
+        def get_channel_map(self) -> list[int]:
+            return [0]
+
+        def get_all_hydro_field_names(self) -> list[str]:
+            return ["dummy"]
+
+    monkeypatch.setattr(m, "LabeledData", FakeLabeledData)
+    monkeypatch.setattr(m, "import_img_from_npz", lambda npz, fld: np.ones((2, 2)))
+    monkeypatch.setattr(
+        m,
+        "process_channel_data",
+        lambda cm, imgs, names: (cm, imgs, names),
+    )
+
+    ds = m.TemporalDataSet(
+        npz_dir=str(npz_dir) + "/",
+        csv_filepath=str(csv),
+        file_prefix_list=str(prefix_file),
+        max_timeIDX_offset=1,
+        max_file_checks=1,
+        half_image=True,
+        kinematic_variables="velocity",
+        thermodynamic_variables="density",
+    )
+    ds.rng = _FakeRNG([1, 0])  # seq_len=1, start_idx=0 -> end_idx=1
+
+    start_img, cm1, end_img, cm2, dt = ds[0]
+    assert start_img.shape == (1, 2, 2)
+    assert end_img.shape == (1, 2, 2)
+    assert cm1.tolist() == [0]
+    assert cm2.tolist() == [0]
+    assert dt.item() == pytest.approx(0.25)
+
+
+def test_sequential_dataset_getitem_supports_nested_prefix_dirs(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: pathlib.Path,
+) -> None:
+    """SequentialDataSet supports NPZ files stored under per-prefix subdirectories."""
+    npz_dir = tmp_path / "npz"
+    npz_dir.mkdir()
+    prefix = "cx241203_id00001"
+    run_dir = npz_dir / prefix
+    run_dir.mkdir()
+
+    prefix_file = tmp_path / "prefixes.txt"
+    _write_prefix_file(prefix_file, [prefix])
+    csv = tmp_path / "design.csv"
+    _write_design_csv(csv, [(prefix, "Air", "Al")])
+
+    f0 = run_dir / f"{prefix}_pvi_idx00000.npz"
+    f1 = run_dir / f"{prefix}_pvi_idx00001.npz"
+    _write_npz(f0, dummy=np.zeros((1,), dtype=float))
+    _write_npz(f1, dummy=np.zeros((1,), dtype=float))
+
+    class FakeLabeledData:
+        """Minimal stub that matches the tiny NPZ fields used in this test."""
+
+        def __init__(
+            self,
+            npz_filepath: str,
+            csv_filepath: str,
+            kinematic_variables: str = "velocity",
+            thermodynamic_variables: str = "density",
+        ) -> None:
+            _ = (
+                npz_filepath,
+                csv_filepath,
+                kinematic_variables,
+                thermodynamic_variables,
+            )
+
+        def get_active_npz_field_names(self) -> list[str]:
+            return ["dummy"]
+
+        def get_active_hydro_field_names(self) -> list[str]:
+            return ["dummy"]
+
+        def get_channel_map(self) -> list[int]:
+            return [0]
+
+    monkeypatch.setattr(m, "LabeledData", FakeLabeledData)
+    monkeypatch.setattr(m, "import_img_from_npz", lambda npz, fld: np.ones((2, 2)))
+    monkeypatch.setattr(
+        m,
+        "process_channel_data",
+        lambda cm, imgs, names: (cm, imgs, names),
+    )
+
+    ds = m.SequentialDataSet(
+        npz_dir=str(npz_dir),
+        csv_filepath=str(csv),
+        file_prefix_list=str(prefix_file),
+        seq_len=2,
+        timeIDX_offset=1,
+        half_image=True,
+        kinematic_variables="velocity",
+        thermodynamic_variables="density",
+    )
+
+    assert len(ds) == 1
+
+    img_seq, dt, cm = ds[0]
+    assert isinstance(img_seq, torch.Tensor)
+    assert img_seq.shape == (2, 1, 2, 2)
+    assert dt.item() == pytest.approx(0.25)
+    assert cm == [0]
+
+
+def test_temporal_dataset_flyerplate_channel_map_matches_default_vars(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Flyerplate TemporalDataSet channel_map is valid under harness default_vars."""
+    npz_dir = tmp_path / "npz"
+    npz_dir.mkdir()
+
+    prefix = "flyer260625_id00001"
+    prefix_file = tmp_path / "prefixes.txt"
+    _write_prefix_file(prefix_file, [prefix])
+
+    csv = tmp_path / "flyer_design.csv"
+    csv.write_text(
+        "\n".join(
+            [
+                "key,list,authority,custFile,expcustFile,jobcust,expname,jobkey,dimension,flyer_thickness,target_thickness,flyer_velocity,flyer_radius,target_radius,flyer_material,target_material",
+                "flyer260625_id00001,[runs],sapa,custFlyerGeom.py,,fly00001,test2d,flyer260625_id00001,2d,0.2,0.3,0.1,1,1,Cu,Cu",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    rcoord = np.array([0.0, 1.0], dtype=float)
+    zcoord = np.array([0.0, 1.0], dtype=float)
+    img = np.ones((2, 2), dtype=float)
+
+    f0 = npz_dir / f"{prefix}_pvi_idx00000.npz"
+    f1 = npz_dir / f"{prefix}_pvi_idx00001.npz"
+
+    _write_npz(
+        f0,
+        Rcoord=rcoord,
+        Zcoord=zcoord,
+        Uvelocity=img,
+        Wvelocity=img,
+        density_Air=img,
+        density_layer000=img,
+        density_layer001=img,
+        pressure_Air=img,
+        pressure_layer000=img,
+        pressure_layer001=img,
+        energy_Air=img,
+        energy_layer000=img,
+        energy_layer001=img,
+        vofm_Air=img,
+        vofm_layer000=img,
+        vofm_layer001=img,
+    )
+    _write_npz(
+        f1,
+        Rcoord=rcoord,
+        Zcoord=zcoord,
+        Uvelocity=img,
+        Wvelocity=img,
+        density_Air=img,
+        density_layer000=img,
+        density_layer001=img,
+        pressure_Air=img,
+        pressure_layer000=img,
+        pressure_layer001=img,
+        energy_Air=img,
+        energy_layer000=img,
+        energy_layer001=img,
+        vofm_Air=img,
+        vofm_layer000=img,
+        vofm_layer001=img,
+    )
+
+    def flyerplate_layer_fields(prefixes: list[str]) -> list[str]:
+        fields: list[str] = []
+        for layer_idx in range(6):
+            layer_name = f"layer{layer_idx:03d}"
+            for prefix_name in prefixes:
+                fields.append(f"{prefix_name}_{layer_name}")
+        return fields
+
+    default_vars = [
+        "sim_time",
+        "av_density",
+        "av_pressure",
+        "av_temperature",
+        "density_Air",
+        "energy_Air",
+        "pressure_Air",
+        "sound_speed_Air",
+        "vofm_Air",
+        "Uvelocity",
+        "Wvelocity",
+        "Rcoord",
+        "Zcoord",
+    ] + flyerplate_layer_fields(
+        [
+            "density",
+            "energy",
+            "plst_strain",
+            "pressure",
+            "shear_modulus",
+            "sound_speed",
+            "strain_rate",
+            "Sxxm",
+            "Sxzm",
+            "Syym",
+            "Szzm",
+            "vofm",
+            "yield",
+        ]
+    )
+
+    ds = m.TemporalDataSet(
+        npz_dir=str(npz_dir) + "/",
+        csv_filepath=str(csv),
+        file_prefix_list=str(prefix_file),
+        max_timeIDX_offset=1,
+        max_file_checks=1,
+        half_image=True,
+        kinematic_variables="both",
+        thermodynamic_variables="all",
+    )
+    ds.rng = _FakeRNG([1, 0])  # seq_len=1, start_idx=0 -> end_idx=1
+
+    start_img, cm1, end_img, cm2, dt = ds[0]
+
+    assert start_img.shape[0] == len(cm1)
+    assert end_img.shape[0] == len(cm2)
+    assert cm1.tolist() == cm2.tolist()
+    assert all(0 <= idx < len(default_vars) for idx in cm1.tolist())
+
+    mapped_names = [default_vars[idx] for idx in cm1.tolist()]
+    assert mapped_names == ds.active_hydro_field_names
 
 
 def test_sequential_dataset_init_with_nondefault_variable_modes(

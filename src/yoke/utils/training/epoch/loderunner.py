@@ -3,6 +3,7 @@
 import torch
 import numpy as np
 import time
+import inspect
 from contextlib import nullcontext
 
 from yoke.utils.training.datastep.loderunner import (
@@ -24,6 +25,11 @@ DATASTEP_FN = {
         "eval": "eval_loderunner_datastep"
     },
     "cylex": {
+        "train_ddp": "train_DDP_loderunner_datastep_cylex",
+        "eval_ddp": "eval_DDP_loderunner_datastep_cylex",
+        "eval": "eval_loderunner_datastep_cylex"
+    },
+    "flyerplate": {
         "train_ddp": "train_DDP_loderunner_datastep_cylex",
         "eval_ddp": "eval_DDP_loderunner_datastep_cylex",
         "eval": "eval_loderunner_datastep_cylex"
@@ -351,7 +357,6 @@ def train_DDP_loderunner_epoch(
     num_train_batches: int,
     num_val_batches: int,
     model: torch.nn.Module,
-    channel_map: list[int],
     optimizer: torch.optim.Optimizer,
     loss_fn: torch.nn.Module,
     LRsched: torch.optim.lr_scheduler._LRScheduler,
@@ -363,6 +368,7 @@ def train_DDP_loderunner_epoch(
     rank: int,
     world_size: int,
     dataset: str = "pli",
+    channel_map: list[int] | None = None,
 ) -> None:
     """Distributed data-parallel LodeRunner Epoch.
 
@@ -403,6 +409,14 @@ def train_DDP_loderunner_epoch(
     train_fn = globals()[dataset_fns["train_ddp"]]
     eval_fn  = globals()[dataset_fns["eval_ddp"]]
 
+    train_uses_channel_map = "channel_map" in inspect.signature(train_fn).parameters
+    eval_uses_channel_map = "channel_map" in inspect.signature(eval_fn).parameters
+
+    if (train_uses_channel_map or eval_uses_channel_map) and channel_map is None:
+        raise ValueError(
+            f"Dataset '{dataset}' requires explicit channel_map but none was provided."
+        )
+
     # Training loop
     model.train()
     train_rcrd_filename = train_rcrd_filename.replace("<epochIDX>", f"{epochIDX:04d}")
@@ -415,9 +429,14 @@ def train_DDP_loderunner_epoch(
                 break
 
             # Training
-            truth, pred, train_losses = train_fn(
-                traindata, model, optimizer, loss_fn, device, rank, world_size, channel_map,
-            )
+            if train_uses_channel_map:
+                truth, pred, train_losses = train_fn(
+                    traindata, model, optimizer, loss_fn, device, rank, world_size, channel_map,
+                )
+            else:
+                truth, pred, train_losses = train_fn(
+                    traindata, model, optimizer, loss_fn, device, rank, world_size,
+                )
 
             # Increment the learning-rate scheduler
             LRsched.step()
@@ -446,16 +465,27 @@ def train_DDP_loderunner_epoch(
                     # Stop when number of training batches is reached
                     if valbatch_ID >= num_val_batches:
                         break
+                    
+                    if eval_uses_channel_map:
+                        end_img, pred_img, val_losses = eval_fn(
+                            valdata,
+                            model,
+                            loss_fn,
+                            device,
+                            rank,
+                            world_size,
+                            channel_map,
+                        )
+                    else:
+                        end_img, pred_img, val_losses = eval_fn(
+                            valdata,
+                            model,
+                            loss_fn,
+                            device,
+                            rank,
+                            world_size,
+                        )
 
-                    end_img, pred_img, val_losses = eval_fn(
-                        valdata,
-                        model,
-                        loss_fn,
-                        device,
-                        rank,
-                        world_size,
-                        channel_map,
-                    )
 
                     # Save validation record (rank 0 only)
                     if rank == 0:
