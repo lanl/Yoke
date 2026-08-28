@@ -69,6 +69,44 @@ conda activate <YOKE_TORCH_ENV>
 # the dataloader workers (NUM_WORKERS per rank) alongside the OMP compute threads.
 export OMP_NUM_THREADS=8
 
+# ---------------------------------------------------------------------------
+# Fabric-ready gate. On these NVSwitch (multi-GPU NVLink) nodes, the NVIDIA
+# Fabric Manager must finish initializing the fabric before any process calls
+# CUDA on more than one GPU. nvidia-smi (above) only QUERIES the driver, so it
+# succeeds even when the fabric is not up yet -- and then the first
+# torch.cuda.set_device() in setup_distributed() fails with
+#   "Error 802: system not yet initialized"
+# on a perfectly healthy node. This is a launch-time RACE between FM readiness
+# and our CUDA init, seen only on multi-GPU jobs (single-GPU needs no fabric),
+# and it clears on resubmit. Rather than manually resubmit, wait here until each
+# allocated node reports the fabric ready (nvidia-smi -q "Fabric ... State:
+# Completed"), then launch. Falls through after a timeout so a node that never
+# reports (or a non-NVSwitch node with no Fabric section) can't hang the job --
+# the training srun then either succeeds or fails loudly as before.
+FABRIC_WAIT_TIMEOUT=${FABRIC_WAIT_TIMEOUT:-120}  # seconds, per node
+srun --ntasks=${SLURM_NNODES} --ntasks-per-node=1 --cpu-bind=none bash -c '
+  deadline=$(( SECONDS + '"${FABRIC_WAIT_TIMEOUT}"' ))
+  while true; do
+    # Grab the Fabric "State" lines from nvidia-smi. No Fabric section (older
+    # driver / non-NVSwitch) -> nothing to wait for, proceed immediately.
+    fabric=$(nvidia-smi -q 2>/dev/null | grep -A3 -i "^\s*Fabric" | grep -i "State")
+    if [ -z "$fabric" ]; then
+      echo "[$(hostname)] no Fabric section reported; proceeding."
+      exit 0
+    fi
+    # Ready when every reported State is Completed (no not-yet-Completed lines).
+    if ! echo "$fabric" | grep -viq "Completed"; then
+      echo "[$(hostname)] fabric ready: $fabric"
+      exit 0
+    fi
+    if [ $SECONDS -ge $deadline ]; then
+      echo "[$(hostname)] WARNING: fabric not ready after '"${FABRIC_WAIT_TIMEOUT}"'s; proceeding anyway. Last: $fabric"
+      exit 0
+    fi
+    sleep 3
+  done
+'
+
 # Get start time
 export date00=`date`
 

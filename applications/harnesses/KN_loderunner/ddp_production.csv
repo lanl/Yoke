@@ -24,34 +24,32 @@ studyIDX,YOKE_TORCH_ENV,KNODES,NGPUS,EMBED_DIM,B0,B1,B2,B3,NUM_WORKERS,BATCH_SIZ
 #21,yoke311,1,1,128,1,1,9,1,2,10,1000,500,2.0e-3,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
 #22,yoke311,1,1,128,1,1,9,1,2,10,1000,500,2.0e-3,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
 #23,yoke311,1,1,128,1,1,9,1,2,10,1000,500,2.0e-3,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
-24,yoke311,1,1,128,1,1,9,1,2,10,1000,500,2.0e-3,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
-# study 25: full 8-GPU node for ~8x faster wall-clock than 1 GPU. NTRN_BATCH
-# 1000->125 and NVAL_BATCH 500->63 keep total samples/epoch the same as study 24
-# (8 ranks x 125 = 1000). TERMINAL/WARMUP steps scaled ~8x down (counted in
-# per-rank batches) so the LR schedule spans the same number of epochs. These
-# are 8-GPU H100 nodes (se*); cpus-per-task=24 in the slurm template fits
-# 24*8=192 cores.
-25,yoke311,1,8,128,1,1,9,1,2,10,125,63,2.0e-3,0.5,0.5,125,63,0.0,train_LodeRunner_ddp.py
-# study 40: Run A (n_rollout_steps=12). 1 GPU, BATCH_SIZE=5 keeps the 12-step
-# rollout under 80GB (5x12=60 activation units vs the OOM'd 10x12=120). Single
-# GPU avoids the multi-GPU Slurm GPU-binding issue on these H100 nodes.
-40,yoke311,1,1,128,1,1,9,1,2,5,1000,500,2.0e-3,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
-# study 41: 12 GPUs = 2 nodes x 6 GPUs/node (8-H100 se* nodes; under the 32-GPU
-# QOS cap). BATCH_SIZE=5 per GPU keeps the 12-step rollout under 80GB. NTRN/NVAL
-# 84/42 per rank hold ~1000/500 samples per epoch across 12 ranks (12*84~=1000).
-# TERMINAL/WARMUP scaled to per-rank batches (84/42) so the LR schedule spans the
-# same epochs. Uses the current train script: PREDICT_DELTA=True + DT_WEIGHT_TAU=3
-# + ZTF band weights bumped to 2 (A+B+ZTF combined, not isolated).
-#41,yoke311,2,6,128,1,1,9,1,2,5,84,42,2.0e-3,0.5,0.5,84,42,0.0,train_LodeRunner_ddp.py
-# study 42: single node, all 8 GPUs (the max on these 8-H100 se* nodes). Replaces
-# the 2-node study 41, whose cross-node job kept hanging in Slurm step creation
-# ("Requested nodes are busy") -- a single-node job needs only one node free and
-# has no cross-node NCCL/IB teardown between the cycle_epochs=1 per-epoch jobs.
-# BATCH_SIZE=5 keeps the 12-step rollout under 80GB (same as study 40/41). NTRN/NVAL
-# 125/63 per rank hold ~1000/500 samples per epoch across 8 ranks (8*125=1000),
-# identical epoch size to studies 24/25/40/41. TERMINAL/WARMUP=125/63 (per-rank
-# batches) so the LR schedule spans the same epochs. Same model settings as 41:
-# PREDICT_DELTA + trend/decay anchor (now offset-capped) + EMA + ZTF band weights.
-42,yoke311,1,8,128,1,1,9,1,2,5,125,63,2.0e-3,0.5,0.5,125,63,0.0,train_LodeRunner_ddp.py
-
-
+#24,yoke311,1,1,128,1,1,9,1,2,10,1000,500,2.0e-3,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
+#25,yoke311,1,1,128,1,1,9,1,2,10,1000,500,2.0e-3,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
+#26,yoke311,1,1,128,1,1,9,1,2,10,1000,500,2.0e-3,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
+#27,yoke311,1,1,128,1,1,9,1,2,10,1000,500,2.0e-3,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
+#28,yoke311,1,1,128,1,1,9,1,2,10,1000,500,2.0e-3,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
+#29,yoke311,1,8,128,1,1,9,1,2,10,125,63,2.0e-3,0.5,0.5,125,63,0.0,train_LodeRunner_ddp.py 
+#30,yoke311,1,8,128,1,1,9,1,2,10,125,63,2.0e-3,0.5,0.5,125,63,0.0,train_LodeRunner_ddp.py
+#31,yoke311,1,8,128,1,1,9,1,2,10,125,63,2.0e-3,0.5,0.5,125,63,0.0,train_LodeRunner_ddp.py
+#32,yoke311,1,8,128,1,1,9,1,2,10,125,63,2.0e-3,0.5,0.5,125,63,0.0,train_LodeRunner_ddp.py
+#33,yoke311,1,8,128,1,1,9,1,2,10,125,63,2.0e-3,0.5,0.5,125,63,0.0,train_LodeRunner_ddp.py
+#34,yoke311,1,1,128,1,1,9,1,2,10,125,63,2.0e-3,0.5,0.5,125,63,0.0,train_LodeRunner_ddp.py
+#35,yoke311,1,1,128,1,1,9,1,2,10,125,63,2.0e-3,0.5,0.5,125,63,0.0,train_LodeRunner_ddp.py
+#36,yoke311,1,4,128,1,1,9,1,2,10,125,63,2.0e-3,0.5,0.5,125,63,0.0,train_LodeRunner_ddp.py
+#37,yoke311,1,1,128,1,1,9,1,2,10,125,63,2.0e-3,0.5,0.5,125,63,0.0,train_LodeRunner_ddp.py
+#38,yoke311,1,1,128,1,1,9,1,2,10,125,63,2.0e-3,0.5,0.5,125,63,0.0,train_LodeRunner_ddp.py
+#39,yoke311,1,1,128,1,1,9,1,2,10,125,63,2.0e-3,0.5,0.5,125,63,0.0,train_LodeRunner_ddp.py
+#40,yoke311,1,2,128,1,1,9,1,2,5,125,63,2.0e-3,0.5,0.5,125,63,0.0,train_LodeRunner_ddp.py
+#41,yoke311,1,1,128,1,1,9,1,2,5,1000,500,2.0e-3,0.5,0.5,1000,500,0.0,train_LodeRunner_ddp.py
+#42,yoke311,1,2,128,1,1,9,1,2,5,125,63,2.0e-3,0.5,0.5,125,63,0.0,train_LodeRunner_ddp.py
+#43,yoke311,1,8,128,1,1,9,1,2,5,125,63,2.0e-3,0.5,0.5,125,63,0.0,train_LodeRunner_ddp.py
+#44,yoke311,2,6,128,1,1,9,1,2,5,84,42,2.0e-3,0.5,0.5,84,42,0.0,train_LodeRunner_ddp.py
+#45,yoke311,2,6,128,1,1,9,1,2,5,84,42,2.0e-3,0.5,0.5,84,42,0.0,train_LodeRunner_ddp.py
+#46,yoke311,2,6,128,1,1,9,1,2,5,84,42,2.0e-3,0.5,0.5,84,42,0.0,train_LodeRunner_ddp.py
+#47,yoke311,2,6,128,1,1,9,1,2,5,84,42,2.0e-3,0.5,0.5,84,42,0.0,train_LodeRunner_ddp.py
+#48,yoke311,1,8,128,1,1,9,1,2,5,125,63,2.0e-3,0.5,0.5,125,63,0.0,train_LodeRunner_ddp.py
+#49,yoke311,1,1,128,1,1,9,1,2,5,125,63,2.0e-3,0.5,0.5,100,50,0.0,train_LodeRunner_ddp.py
+#50,yoke311,1,1,128,1,1,9,1,2,5,125,63,2.0e-3,0.5,0.5,100,50,0.0,train_LodeRunner_ddp.py
+#51,yoke311,1,1,128,1,1,9,1,2,5,125,63,2.0e-3,0.5,0.5,100,50,0.0,train_LodeRunner_ddp.py
+52,yoke311,1,1,128,1,1,9,1,2,5,125,63,2.0e-3,0.5,0.5,100,50,0.0,train_LodeRunner_ddp.py
