@@ -284,17 +284,16 @@ def main(args, rank, world_size, local_rank, device):
     # parameters (derived from x/Dt), so old checkpoints load strict=True; the
     # flags round-trip via the loaders. Requires PREDICT_DELTA + window mode.
     #
-    # ABLATION (set False): the trend anchor is disabled to isolate whether it is
-    # what floored the training loss. Studies 24/40 (flat-hold anchor) descended;
-    # studies 049 (raw slope) and its capped variant (TREND_MAX_OFFSET=1.0) both
-    # stayed flat, so the offset cap did NOT restore descent -- ruling out
-    # raw-slope overshoot as the cause. With this False the head predicts a
-    # residual on the flat last-observed anchor again (EMA stays on but is inert
-    # for the training loss). If the loss now descends -> the trend anchor is the
-    # cause and stays off; if it stays flat -> the cause is elsewhere (12-step
-    # rollout, DT_WEIGHT_TAU, ZTF weight bump, or Huber delta). TREND_MAX_OFFSET
-    # below is ignored while this is False.
-    TREND_DECAY_ANCHOR = False
+    # Re-enabled (production): the trend anchor is back ON after the flat-loss
+    # ablation. The ablation set this False to isolate whether the trend anchor
+    # floored the training loss -- studies 24/40 (flat-hold anchor) descended,
+    # while studies 049 (raw slope) and its capped variant (TREND_MAX_OFFSET=1.0)
+    # both stayed flat, so the offset cap did NOT restore descent, ruling out
+    # raw-slope overshoot as the sole cause. The flat loss was ultimately traced
+    # to scheduled-sampling moving difficulty (validation descended), not the
+    # anchor, so the trend anchor returns as a production feature. The offset cap
+    # (TREND_MAX_OFFSET below) is active while this is True.
+    TREND_DECAY_ANCHOR = True
     TREND_SLOPE_K = 3
 
     # Cap on the extrapolated anchor offset slope*Dt, in per-band z-score units
