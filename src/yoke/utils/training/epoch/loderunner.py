@@ -1023,6 +1023,7 @@ def train_DDP_scalar_temporal_loderunner_epoch_9band_rollout(
     band_weights: torch.Tensor = None,
     dt_weight_tau: float = None,
     ema: object = None,
+    train_diag_rcrd_filename: str = None,
 ) -> None:
     """Multi-step rollout DDP epoch for the masked 9-band scalar temporal model.
 
@@ -1072,6 +1073,18 @@ def train_DDP_scalar_temporal_loderunner_epoch_9band_rollout(
             tracks the per-batch trajectory (Polyak averaging). Only the
             ``requires_grad`` params of the underlying (DDP-unwrapped) module are
             shadowed. ``None`` (default) is a no-op.
+        train_diag_rcrd_filename (str): Optional record file for a FIXED-DIFFICULTY
+            train diagnostic. The recorded *training* loss above is measured on a
+            moving target -- scheduled sampling anneals ``teacher_forcing_ratio``
+            from 1 (easy, teacher-forced) to 0 (hard, free-run) over training, so
+            the train curve conflates "model improving" with "task getting harder"
+            and looks flat even while the model learns. When this filename is
+            given, on every validation epoch we additionally run a free-running
+            (ratio 0.0) pass over ``num_val_batches`` TRAIN batches in eval mode --
+            the exact same task validation uses -- and record it here. That curve
+            has constant difficulty, so it descends with real skill and is
+            directly comparable to validation (their gap is the pure train/val
+            generalization gap). ``None`` (default) skips the diagnostic.
     """
     def _run_pass(
         data: tuple[torch.Tensor, ...],
@@ -1221,6 +1234,48 @@ def train_DDP_scalar_temporal_loderunner_epoch_9band_rollout(
                             ]
                         )
                         np.savetxt(val_rcrd_file, batch_records, fmt="%d, %d, %.8f")
+
+        # Fixed-difficulty TRAIN diagnostic. The recorded train loss above is on a
+        # moving target (scheduled sampling hardens the task as the model learns),
+        # so it looks flat even during real improvement. Here we measure TRAIN data
+        # under the SAME task validation uses -- free-running rollout (ratio 0.0),
+        # eval mode, no grad, unweighted -- so this curve descends with real skill
+        # and is directly comparable to validation. Runs on validation epochs only.
+        # model is already in eval() from the validation block above.
+        if train_diag_rcrd_filename is not None:
+            train_diag_rcrd_filename = train_diag_rcrd_filename.replace(
+                "<epochIDX>",
+                f"{epochIDX:04d}",
+            )
+
+            with (
+                open(train_diag_rcrd_filename, "a") if rank == 0 else nullcontext()
+            ) as train_diag_rcrd_file:
+
+                with torch.no_grad():
+                    for diagbatch_ID, data in enumerate(training_data):
+                        # Match the validation batch budget so the two curves are
+                        # summarized over comparable sample counts.
+                        if diagbatch_ID >= num_val_batches:
+                            break
+
+                        per_sample_loss, _ = _run_pass(data, 0.0)
+
+                        if rank == 0:
+                            batch_records = np.column_stack(
+                                [
+                                    np.full(len(per_sample_loss), epochIDX),
+                                    np.full(len(per_sample_loss), diagbatch_ID),
+                                    per_sample_loss.detach().cpu().numpy().flatten(),
+                                ]
+                            )
+                            np.savetxt(
+                                train_diag_rcrd_file, batch_records, fmt="%d, %d, %.8f"
+                            )
+
+        # Restore train mode for the next epoch's optimization (the caller loops
+        # over epochs and expects the model back in training mode).
+        model.train()
 
 
 def train_DDP_loderunner_epoch(

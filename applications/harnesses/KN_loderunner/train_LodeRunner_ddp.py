@@ -206,6 +206,14 @@ def main(args, rank, world_size, local_rank, device):
     train_per_val = args.TRAIN_PER_VAL
     trn_rcrd_filename = args.trn_rcrd_filename
     val_rcrd_filename = args.val_rcrd_filename
+    # Fixed-difficulty train diagnostic record file. Derived from the validation
+    # filename (same dir + epoch templating) so no new CLI arg is needed. The
+    # recorded train loss is on a moving target (scheduled sampling), so it looks
+    # flat; this free-run pass over TRAIN data descends with real skill and is
+    # directly comparable to validation. Plotted as "Train (free-run diag)".
+    traindiag_rcrd_filename = val_rcrd_filename.replace(
+        "validation_study", "traindiag_study"
+    )
     CONTINUATION = args.continuation
     checkpoint = args.checkpoint
 
@@ -804,6 +812,7 @@ def main(args, rank, world_size, local_rank, device):
                 band_weights=BAND_WEIGHTS,
                 dt_weight_tau=DT_WEIGHT_TAU,
                 ema=ema,
+                train_diag_rcrd_filename=traindiag_rcrd_filename,
             )
         else:
             #train_DDP_loderunner_epoch(

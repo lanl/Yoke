@@ -99,15 +99,30 @@ def load_records(pattern, columns_arg=DEFAULT_COLUMNS):
     }
 
 
-def epoch_stats(epochs, losses):
+def epoch_stats(epochs, losses, central="mean"):
+    """Per-epoch central tendency (+ spread) of the per-batch loss.
+
+    Args:
+        central (str): "mean" (default) or "median". The loss distribution is
+            heavy-tailed (the blue-band minority drags the mean up ~an order of
+            magnitude above the bulk), so "median" tracks the TYPICAL sample and
+            is the more honest progress metric; "mean" reports the tail-weighted
+            average. The returned spread column is the std either way (the
+            percentile band is the better spread visual for the median).
+    """
     unique_epochs = np.array(sorted(set(epochs)))
-    mean_losses = np.vstack(
-        [losses[epochs == e].mean(axis=0) for e in unique_epochs]
-    )
+    if central == "median":
+        central_losses = np.vstack(
+            [np.median(losses[epochs == e], axis=0) for e in unique_epochs]
+        )
+    else:
+        central_losses = np.vstack(
+            [losses[epochs == e].mean(axis=0) for e in unique_epochs]
+        )
     std_losses = np.vstack(
         [losses[epochs == e].std(axis=0) for e in unique_epochs]
     )
-    return unique_epochs, mean_losses, std_losses
+    return unique_epochs, central_losses, std_losses
 
 
 def epoch_percentiles(
@@ -212,10 +227,12 @@ def shade_tf_regimes(ax, ramp_start, ramp_epochs):
             )
 
 
-def plot_epoch_curves(train, val, args):
+def plot_epoch_curves(train, val, args, diag=None):
+    central = getattr(args, "central", "mean")
     train_ep, train_mean, train_std = epoch_stats(
         train["epochs"],
         train["losses"],
+        central=central,
     )
 
     n_loss_cols = train["losses"].shape[1]
@@ -236,6 +253,7 @@ def plot_epoch_curves(train, val, args):
         val_ep, val_mean, val_std = epoch_stats(
             val["epochs"],
             val["losses"],
+            central=central,
         )
 
         if val_mean.shape[1] != n_loss_cols:
@@ -260,6 +278,24 @@ def plot_epoch_curves(train, val, args):
         val_mean = None
         val_std = None
         val_plo = val_phi = None
+
+    # Fixed-difficulty train diagnostic (free-run rollout over train data). Same
+    # task as validation, so it descends with real skill and is directly
+    # comparable to the validation curve -- unlike the raw train loss, which is on
+    # a moving (annealing) difficulty and looks flat.
+    if diag is not None:
+        diag_ep, diag_central, _ = epoch_stats(
+            diag["epochs"], diag["losses"], central=central
+        )
+        if diag_central.shape[1] != n_loss_cols:
+            print(
+                "Train diagnostic has a different number of loss columns "
+                f"({diag_central.shape[1]}) than training ({n_loss_cols}); "
+                "skipping diagnostic."
+            )
+            diag = None
+    else:
+        diag_ep = diag_central = None
 
     plt.figure(figsize=(9, 5.5))
 
@@ -318,8 +354,18 @@ def plot_epoch_curves(train, val, args):
                     label=f"Validation {band_label}{suffix}",
                 )
 
+        if diag is not None:
+            plt.plot(
+                diag_ep,
+                diag_central[:, idx],
+                marker="^",
+                linestyle="-.",
+                color="tab:green",
+                label=f"Train (free-run diag){suffix}",
+            )
+
     plt.xlabel("Epoch")
-    plt.ylabel("Mean loss")
+    plt.ylabel(f"{central.capitalize()} loss")
     plt.title(args.title)
     plt.grid(True, alpha=0.3)
     plt.legend()
