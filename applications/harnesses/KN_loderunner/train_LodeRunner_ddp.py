@@ -252,6 +252,17 @@ def main(args, rank, world_size, local_rank, device):
     CONTEXT_LEN = 5 #3
     HIDDEN_CHANNELS = 64
 
+    # Output-head spatial pooling. The backbone emits a [B, 8, H, W] image that
+    # is collapsed to the 8-scalar summary the head consumes. "mean" (legacy) is
+    # a global average that discards all spatial structure -- byte-identical to
+    # old checkpoints. "meanstdmax" concatenates the per-channel spatial mean,
+    # std, and max, tripling the head's real input (8 -> 24 backbone dims) so it
+    # surfaces the structure the mean throws away, at near-zero cost. This CHANGES
+    # the output_head's first-layer shape, so it is NOT compatible with a "mean"
+    # checkpoint; start it as a fresh (epoch-0) study. The flag round-trips via
+    # the checkpoint so the cycle_epochs=1 restarts rebuild the matching head.
+    POOL_MODE = "meanstdmax"
+
     # Fourier lead-time conditioning. When > 0, the trainable conditioner and
     # output head receive a 2*DT_FOURIER_BANDS sinusoidal encoding of the lead
     # time Dt, so they can learn a real per-band decay curve instead of a flat
@@ -479,6 +490,7 @@ def main(args, rank, world_size, local_rank, device):
             trend_decay_anchor=TREND_DECAY_ANCHOR,
             trend_slope_k=TREND_SLOPE_K,
             trend_max_offset=TREND_MAX_OFFSET,
+            pool_mode=POOL_MODE,
         ).to(device)
 
         # Stage 1: freeze pretrained LodeRunner, train only conditioner + output head
@@ -883,6 +895,7 @@ def main(args, rank, world_size, local_rank, device):
                     "trend_decay_anchor": TREND_DECAY_ANCHOR,
                     "trend_slope_k": TREND_SLOPE_K,
                     "trend_max_offset": TREND_MAX_OFFSET,
+                    "pool_mode": POOL_MODE,
                     "ema_decay": EMA_DECAY,
                     "ema_state_dict": (
                         ema.state_dict() if ema is not None else None

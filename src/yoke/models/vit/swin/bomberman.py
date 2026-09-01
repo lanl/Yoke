@@ -492,6 +492,7 @@ class ScalarTemporalConditionedLodeRunner_9band(nn.Module):
         trend_decay_anchor: bool = False,
         trend_slope_k: int = 3,
         trend_max_offset: float = None,
+        pool_mode: str = "mean",
     ) -> None:
         """Initialize conditioner and output-head around the backbone.
 
@@ -559,6 +560,17 @@ class ScalarTemporalConditionedLodeRunner_9band(nn.Module):
                 and the near-peak pre-peak "brightening" extrapolation of the raw slope.
                 When None (default) the offset is RAW (unclamped), matching the original
                 trend-anchor behavior. Adds NO parameters; round-trips via checkpoint.
+            pool_mode (str): How the backbone output image [B, C, H, W] is collapsed
+                to the per-channel summary the output head consumes. ``"mean"``
+                (default) is a global spatial average -- byte-identical to the legacy
+                model, so old checkpoints load strict=True. ``"meanstdmax"``
+                concatenates the spatial mean, std, and max per channel, tripling the
+                head's real input width (``3 * backbone_channels`` instead of
+                ``backbone_channels``) so it surfaces spatial structure the mean alone
+                discards. This CHANGES the output_head's first-layer shape, so a
+                checkpoint trained with a different ``pool_mode`` will NOT load that
+                layer (the rest of the head/conditioner/backbone still load); the flag
+                is recorded in the checkpoint and restored by the loaders.
         """
         super().__init__()
 
@@ -586,6 +598,14 @@ class ScalarTemporalConditionedLodeRunner_9band(nn.Module):
         self.trend_decay_anchor = trend_decay_anchor
         self.trend_slope_k = trend_slope_k
         self.trend_max_offset = trend_max_offset
+
+        if pool_mode not in ("mean", "meanstdmax"):
+            raise ValueError(
+                f"pool_mode must be 'mean' or 'meanstdmax', got {pool_mode!r}."
+            )
+        self.pool_mode = pool_mode
+        # Number of pooled statistics per backbone channel fed to the output head.
+        pool_channels = backbone_channels * (3 if pool_mode == "meanstdmax" else 1)
 
         # Dataset x layout, flattened per event. Fixed-count mode:
         #   [value, rel_t, one_hot_band(n_bands)] * context_len   -> 2 + n_bands
@@ -633,7 +653,7 @@ class ScalarTemporalConditionedLodeRunner_9band(nn.Module):
         # Maps the backbone-channel summary (plus the Fourier Dt encoding, when
         # enabled) back to one prediction per band.
         self.output_head = nn.Sequential(
-            nn.Linear(backbone_channels + dt_extra, hidden),
+            nn.Linear(pool_channels + dt_extra, hidden),
             nn.GELU(),
             nn.Linear(hidden, n_bands),
         )
@@ -835,8 +855,21 @@ class ScalarTemporalConditionedLodeRunner_9band(nn.Module):
             Dt,
         )  # [B, backbone_channels, H, W]
 
-        # Collapse spatial dimensions to backbone-channel summaries.
-        pred_channel_vals = pred_img.mean(dim=(2, 3))  # [B, backbone_channels]
+        # Collapse spatial dimensions to backbone-channel summaries. The mean
+        # alone throws away all spatial structure the backbone produced; the
+        # meanstdmax mode also carries the per-channel spatial spread and peak,
+        # tripling the head's real input width for near-zero cost.
+        if self.pool_mode == "meanstdmax":
+            pred_channel_vals = torch.cat(
+                [
+                    pred_img.mean(dim=(2, 3)),
+                    pred_img.flatten(2).std(dim=2),
+                    pred_img.amax(dim=(2, 3)),
+                ],
+                dim=1,
+            )  # [B, 3 * backbone_channels]
+        else:
+            pred_channel_vals = pred_img.mean(dim=(2, 3))  # [B, backbone_channels]
 
         # Convert backbone channels to per-band predictions, conditioning the
         # head on lead time via the same Fourier encoding ([B, 0] when disabled).
