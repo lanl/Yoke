@@ -196,6 +196,10 @@ def load_9band_model(ckpt_path, device, use_ema: bool = False):
     trend_decay_anchor = ckpt.get("trend_decay_anchor", False)
     trend_slope_k = ckpt.get("trend_slope_k", 3)
     trend_max_offset = ckpt.get("trend_max_offset", None)
+    # "mean" for legacy checkpoints (no key) -> global average pool, matching the
+    # saved output_head first-layer shape. "meanstdmax" triples the pooled width,
+    # so this MUST match the training config or the strict load fails.
+    pool_mode = ckpt.get("pool_mode", "mean")
 
     print("Loaded checkpoint:", ckpt_path)
     print("model_class:", ckpt.get("model_class", "unknown"))
@@ -208,6 +212,7 @@ def load_9band_model(ckpt_path, device, use_ema: bool = False):
     print("predict_delta:", predict_delta)
     print("trend_decay_anchor:", trend_decay_anchor)
     print("trend_max_offset:", trend_max_offset)
+    print("pool_mode:", pool_mode)
 
     backbone = LodeRunner(**model_args).to(device)
     backbone.noise_scale = noise_scale
@@ -225,6 +230,7 @@ def load_9band_model(ckpt_path, device, use_ema: bool = False):
         trend_decay_anchor=trend_decay_anchor,
         trend_slope_k=trend_slope_k,
         trend_max_offset=trend_max_offset,
+        pool_mode=pool_mode,
     ).to(device)
 
     state_dict = strip_ddp_prefix(ckpt["model_state_dict"])
