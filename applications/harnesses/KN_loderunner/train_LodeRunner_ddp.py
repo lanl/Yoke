@@ -510,15 +510,16 @@ def main(args, rank, world_size, local_rank, device):
         )
 
     #loss_fn = nn.MSELoss(reduction="none")
-    # delta=0.1 to MATCH study 44's config exactly (the RMSE-1.52 run we are
-    # reproducing on current code). The flat-loss investigation cleared the model
-    # code -- baseline == study-44 config still trained -- and showed the real
-    # descent driver is the SCHEDULE (study 54's TERMINAL_STEPS=500/WARMUP=100
-    # descends; study 55's 84/42 stays in warmup and looks flat). Once a clean
-    # study-44 reproduction is in hand, delta=1.0 is a deliberate next experiment
-    # (error-proportional gradient ~10x stronger for the in-sigma bulk); it also
-    # rescales the loss magnitude, so do NOT compare curve heights across the two.
-    loss_fn = nn.HuberLoss(delta=0.1, reduction="none")
+    # delta=1.0 (was 0.1, study 44's value). At delta=0.1 nearly every scored
+    # point is in the LINEAR regime (residuals mostly exceed 0.1 sigma), so the
+    # per-point gradient is capped at the constant 0.1 -- a large residual and a
+    # 0.15-sigma residual pull equally hard, which flattens descent and floors
+    # the loss. delta=1.0 keeps most in-sigma points in the QUADRATIC regime, so
+    # the gradient scales with the error (~10x stronger for the bulk) and only
+    # true outliers are clipped -- restoring an error-proportional descent signal.
+    # NOTE: delta also rescales the loss magnitude, so do NOT compare curve
+    # heights against the delta=0.1 runs; compare denormalized RMSE from eval.
+    loss_fn = nn.HuberLoss(delta=1.0, reduction="none")
     model = DDP(model, device_ids=[local_rank], output_device=local_rank)
 
     #############################################
