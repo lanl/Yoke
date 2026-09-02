@@ -246,10 +246,9 @@ def train_DDP_loderunner_datastep_cylex(
     channel_map: list[int] = None,
     grad_clip: float | None = None,
 ):
-
     """A DDP-compatible training step for multi-input, multi-output data.
 
-        Args:
+    Args:
         data (tuple): tuple of model input, corresponding ground truth, and lead time
         model (loaded pytorch model): model to train
         optimizer (torch.optim): optimizer for training set

@@ -1,3 +1,9 @@
+"""DDP training script for DiffusionLodeRunner.
+
+This script trains the DiffusionLodeRunner model using distributed data parallel (DDP)
+on the LSC dataset with score-based diffusion modeling.
+"""
+
 import os
 import time
 import argparse
@@ -7,15 +13,16 @@ import torch.nn as nn
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-from yoke.models.vit.swin.bomberman import LodeRunner
-from yoke.datasets.lsc_dataset import LSC_rho2rho_temporal_DataSet
-from yoke.utils.training.epoch.loderunner import train_DDP_loderunner_epoch
+from yoke.models.vit.swin.diffusion_bomberman import DiffusionLodeRunner
+from yoke.datasets.diffusion_dataset import DiffusionLSC_temporal_DataSet
+from yoke.utils.diffusion.noise_schedulers import VPCosineNoiseSchedule
+from yoke.utils.training.epoch.diff_loderunner import train_DDP_diffusion_loderunner_epoch
 from yoke.utils.restart import continuation_setup
 from yoke.utils.dataload import make_distributed_dataloader
 from yoke.utils.checkpointing import load_model_and_optimizer
 from yoke.utils.checkpointing import save_model_and_optimizer
 from yoke.utils.parallel import setup_distributed, cleanup_distributed
-from yoke.lr_schedulers import ConstantWithWarmupScheduler
+from yoke.lr_schedulers import CosineWithWarmupScheduler
 from yoke.helpers import cli
 
 
@@ -23,11 +30,13 @@ from yoke.helpers import cli
 # Inputs
 #############################################
 descr_str = (
-    "Uses DDP to train LodeRunner architecture on single-timstep input and output "
-    "of the lsc240420 per-material density fields."
+    "Uses DDP to train DiffusionLodeRunner architecture on temporal prediction "
+    "of the lsc240420 per-material density fields using score-clearbased diffusion."
 )
 parser = argparse.ArgumentParser(
-    prog="DDP LodeRunner Training", description=descr_str, fromfile_prefix_chars="@"
+    prog="DDP DiffusionLodeRunner Training",
+    description=descr_str,
+    fromfile_prefix_chars="@",
 )
 parser = cli.add_default_args(parser=parser)
 parser = cli.add_filepath_args(parser=parser)
@@ -36,36 +45,28 @@ parser = cli.add_model_args(parser=parser)
 parser = cli.add_training_args(parser=parser)
 parser = cli.add_cosine_lr_scheduler_args(parser=parser)
 
-# DPOT‐style noise parameter
-parser.add_argument(
-    "--noise_scale",
-    type=float,
-    default=0.0,
-    help="Relative magnitude ε for Gaussian noise injection (e.g. 5e-5).",
-)
-
+# Diffusion-specific parameters
 parser.add_argument(
     "--max_timeIDX_offset",
     type=int,
-    default=1,
+    default=10,
     help="Maximum time offset for input/output image pairs.",
 )
 
-# Change some default filepaths.
+# Change some default filepaths
 parser.set_defaults(
     train_filelist="lsc240420_prefixes_train_80pct.txt",
     validation_filelist="lsc240420_prefixes_validation_10pct.txt",
     test_filelist="lsc240420_prefixes_test_10pct.txt",
 )
 
+
 def main(args, rank, world_size, local_rank, device):
+    """Main training function."""
     #############################################
     # Process Inputs
     #############################################
-    # Study ID
     studyIDX = args.studyIDX
-
-    # Resources
     Ngpus = args.Ngpus
     Knodes = args.Knodes
 
@@ -79,13 +80,7 @@ def main(args, rank, world_size, local_rank, device):
 
     # Training parameters
     max_timeIDX_offset = args.max_timeIDX_offset
-
-    # Number of workers controls how batches of data are prefetched and,
-    # possibly, pre-loaded onto GPUs. If the number of workers is large they
-    # will swamp memory and jobs will fail.
     num_workers = args.num_workers
-
-    # Epoch Parameters
     batch_size = args.batch_size
     total_epochs = args.total_epochs
     cycle_epochs = args.cycle_epochs
@@ -98,133 +93,68 @@ def main(args, rank, world_size, local_rank, device):
     checkpoint = args.checkpoint
 
     #############################################
-    # Model Arguments for Dynamic Reconstruction
+    # Model Arguments
     #############################################
     # Dictionary of available models.
     available_models = {
-        "LodeRunner": LodeRunner
+        "DiffusionLodeRunner": DiffusionLodeRunner
     }
 
-    # Not all channels are available for every PLI simulation. The burn-fraction of the
-    # maincharge as well as the yield strength, stress components, and shear modulus for
-    # metal materials are missing in many PLI simulations.
-    # available_pli_channels = [
-    #     'sim_time',
-    #     'av_density',
-    #     'av_pressure',
-    #     'av_temperature',
-    #     'burn_frac_maincharge',
-    #     'density_case',
-    #     'density_cushion',
-    #     'density_maincharge',
-    #     'density_outside_air',
-    #     'density_striker',
-    #     'density_throw',
-    #     'energy_case',
-    #     'energy_cushion',
-    #     'energy_maincharge',
-    #     'energy_outside_air',
-    #     'energy_striker',
-    #     'energy_throw',
-    #     'plst_strain_case',
-    #     'plst_strain_striker',
-    #     'plst_strain_throw',
-    #     'pressure_case',
-    #     'pressure_cushion',
-    #     'pressure_maincharge',
-    #     'pressure_outside_air',
-    #     'pressure_striker',
-    #     'pressure_throw',
-    #     'shear_modulus_case',
-    #     'shear_modulus_striker',
-    #     'shear_modulus_throw',
-    #     'sound_speed_case',
-    #     'sound_speed_cushion',
-    #     'sound_speed_maincharge',
-    #     'sound_speed_outside_air',
-    #     'sound_speed_striker',
-    #     'sound_speed_throw',
-    #     'strain_rate_case',
-    #     'strain_rate_striker',
-    #     'strain_rate_throw',
-    #     'Sxxm_case',
-    #     'Sxxm_striker',
-    #     'Sxxm_throw',
-    #     'Sxzm_case',
-    #     'Sxzm_striker',
-    #     'Sxzm_throw',
-    #     'Syym_case',
-    #     'Syym_striker',
-    #     'Syym_throw',
-    #     'Szzm_case',
-    #     'Szzm_striker',
-    #     'Szzm_throw',
-    #     'temperature_case',
-    #     'temperature_throw',
-    #     'Uvelocity',
-    #     'vofm_case',
-    #     'vofm_cushion',
-    #     'vofm_maincharge',
-    #     'vofm_outside_air',
-    #     'vofm_striker',
-    #     'vofm_throw',
-    #     'vofm_Void',
-    #     'Wvelocity',
-    #     'yield_case',
-    #     'yield_striker',
-    #     'yield_throw',
-    #     'Rcoord',
-    #     'Zcoord',
-    # ]
-
+    # Define channels
     channel_list = [
-        'density_case',
-        'energy_case',
-        'pressure_case',
-        'density_cushion',
-        'energy_cushion',
-        'pressure_cushion',
-        'density_maincharge',
-        'energy_maincharge',
-        'pressure_maincharge',
-        'density_outside_air',
-        'energy_outside_air',
-        'pressure_outside_air',
-        'density_striker',
-        'energy_striker',
-        'pressure_striker',
-        'density_throw',
-        'energy_throw',
-        'pressure_throw',
-        'Uvelocity',
-        'Wvelocity',
+        "density_case",
+        #"energy_case",
+        #"pressure_case",
+        "density_cushion",
+        #"energy_cushion",
+        #"pressure_cushion",
+        "density_maincharge",
+        #"energy_maincharge",
+        #"pressure_maincharge",
+        "density_outside_air",
+        #"energy_outside_air",
+        #"pressure_outside_air",
+        "density_striker",
+        #"energy_striker",
+        #"pressure_striker",
+        "density_throw",
+        #"energy_throw",
+        #"pressure_throw",
+        "Uvelocity",
+        "Wvelocity",
     ]
 
-    # Model arguments for LodeRunner.
+    # Model arguments for DiffusionLodeRunner
     model_args = {
         "default_vars": channel_list,
         "image_size": (1120, 400),
-        "patch_size": (5, 5),
+        "patch_size": (10, 10),
         "embed_dim": embed_dim,
         "emb_factor": 2,
         "num_heads": 8,
         "block_structure": block_structure,
         "window_sizes": [(2, 2), (2, 2), (2, 2), (2, 2)],
         "patch_merge_scales": [(2, 2), (2, 2), (2, 2)],
-        "noise_scale": 0.0,
     }
 
+    # Variable indices (using all channels for both input and output)
+    in_vars = torch.tensor(list(range(len(channel_list)))).to(device)
+    out_vars = torch.tensor(list(range(len(channel_list)))).to(device)
+
     #############################################
-    # Load Model for Continuation (Rank 0 only)
+    # Initialize Noise Schedule
     #############################################
-    # Wait to move model to GPU until after the checkpoint load. Then
-    # explicitly move model and optimizer state to GPU.
+    noise_schedule = VPCosineNoiseSchedule()
+
+    #############################################
+    # Load Model for Continuation
+    #############################################
     if CONTINUATION:
         model, optimizer, starting_epoch = load_model_and_optimizer(
             checkpoint,
             optimizer_class=torch.optim.AdamW,
             optimizer_kwargs={
-                "lr": 1e-6,
+                "lr": 1e-4,
                 "betas": (0.9, 0.999),
                 "eps": 1e-08,
                 "weight_decay": 0.01,
@@ -232,22 +162,19 @@ def main(args, rank, world_size, local_rank, device):
             available_models=available_models,
             device=device,
         )
-        print("Model state loaded for continuation.")
+        if rank == 0:
+            print("Model state loaded for continuation.")
     else:
-        # Initialize model and optimizer state.
-        # If not continuing, set starting_epoch to 0.
         starting_epoch = 0
-        model = LodeRunner(**model_args)
-        # Move model to GPU before instantiating optimizer and DDP.
+        model = DiffusionLodeRunner(**model_args)
         model.to(device)
 
-        # Instantiate optimizer and move state to GPU.
         optimizer = torch.optim.AdamW(
             model.parameters(),
             lr=1e-4,
             betas=(0.9, 0.999),
             eps=1e-08,
-            weight_decay=0.01
+            weight_decay=0.01,
         )
 
         for state in optimizer.state.values():
@@ -258,7 +185,6 @@ def main(args, rank, world_size, local_rank, device):
     #############################################
     # Initialize Loss
     #############################################
-    # Use `reduction='none'` so loss on each sample in batch can be recorded.
     loss_fn = nn.MSELoss(reduction="none")
 
     #############################################
@@ -269,40 +195,49 @@ def main(args, rank, world_size, local_rank, device):
     #############################################
     # Learning Rate Scheduler
     #############################################
-    print("Starting epoch: ", starting_epoch)
+    if rank == 0:
+        print(f"Starting epoch: {starting_epoch}")
+
     if starting_epoch == 0:
         last_epoch = -1
     else:
         last_epoch = train_batches * (starting_epoch - 1)
 
-    LRsched = ConstantWithWarmupScheduler(
+    LRsched = CosineWithWarmupScheduler(
         optimizer,
-        warmup_steps=0,
-        lr_constant=1e-4,
+        warmup_steps=args.warmup_steps,
+        anchor_lr=args.anchor_lr,
+        terminal_steps=args.terminal_steps,
+        num_cycles=args.num_cycles,
+        min_fraction=args.min_fraction,
         last_epoch=last_epoch,
     )
 
     #############################################
-    # Data Initialization (Distributed Dataloader)
+    # Data Initialization
     #############################################
-    train_dataset = LSC_rho2rho_temporal_DataSet(
-        args.LSC_NPZ_DIR,
+    train_dataset = DiffusionLSC_temporal_DataSet(
+        LSC_NPZ_DIR=args.LSC_NPZ_DIR,
         file_prefix_list=train_filelist,
         max_timeIDX_offset=max_timeIDX_offset,
         max_file_checks=10,
-        hydro_fields=np.array(channel_list),
         half_image=True,
+        in_vars=np.array(channel_list),
+        out_vars=np.array(channel_list),
+        noise_schedule=noise_schedule,
     )
-    val_dataset = LSC_rho2rho_temporal_DataSet(
-        args.LSC_NPZ_DIR,
+
+    val_dataset = DiffusionLSC_temporal_DataSet(
+        LSC_NPZ_DIR=args.LSC_NPZ_DIR,
         file_prefix_list=validation_filelist,
         max_timeIDX_offset=max_timeIDX_offset,
         max_file_checks=10,
-        hydro_fields=np.array(channel_list),
         half_image=True,
+        in_vars=np.array(channel_list),
+        out_vars=np.array(channel_list),
+        noise_schedule=noise_schedule,
     )
 
-    # NOTE: For DDP the batch_size is the per-GPU batch_size!!!
     train_dataloader = make_distributed_dataloader(
         train_dataset,
         batch_size,
@@ -311,6 +246,7 @@ def main(args, rank, world_size, local_rank, device):
         rank=rank,
         world_size=world_size,
     )
+
     val_dataloader = make_distributed_dataloader(
         val_dataset,
         batch_size,
@@ -321,10 +257,11 @@ def main(args, rank, world_size, local_rank, device):
     )
 
     #############################################
-    # Training Loop (Modified for DDP)
+    # Training Loop
     #############################################
-    # Train Model
-    print("Training Model . . .")
+    if rank == 0:
+        print("Training Model . . .")
+
     starting_epoch += 1
     ending_epoch = min(starting_epoch + cycle_epochs, total_epochs + 1)
 
@@ -333,22 +270,20 @@ def main(args, rank, world_size, local_rank, device):
         train_sampler = train_dataloader.sampler
         train_sampler.set_epoch(epochIDX)
 
-        # For timing epochs
         if TIME_EPOCH:
-            # Synchronize before starting the timer
-            dist.barrier()  # Ensure that all nodes sync
-            torch.cuda.synchronize(device)  # Ensure GPUs on each node sync
-            # Time each epoch and print to stdout
+            dist.barrier()
+            torch.cuda.synchronize(device)
             startTime = time.time()
 
         # Train and Validate
-        train_DDP_loderunner_epoch(
+        train_DDP_diffusion_loderunner_epoch(
             training_data=train_dataloader,
             validation_data=val_dataloader,
             num_train_batches=train_batches,
             num_val_batches=val_batches,
             model=model,
-            channel_map=list(range(len(channel_list))),
+            in_vars=in_vars,
+            out_vars=out_vars,
             optimizer=optimizer,
             loss_fn=loss_fn,
             LRsched=LRsched,
@@ -362,33 +297,30 @@ def main(args, rank, world_size, local_rank, device):
         )
 
         if TIME_EPOCH:
-            # Synchronize before stopping the timer
-            torch.cuda.synchronize(device)  # Ensure GPUs on each node sync
-            dist.barrier()  # Ensure that all nodes sync
-            # Time each epoch and print to stdout
+            torch.cuda.synchronize(device)
+            dist.barrier()
             endTime = time.time()
 
         epoch_time = (endTime - startTime) / 60
 
-        # Print Summary Results
         if rank == 0:
             print(f"Completed epoch {epochIDX}...", flush=True)
             print(f"Epoch time (minutes): {epoch_time:.2f}", flush=True)
 
     # Save model and optimizer
-    chkpt_name_str = f'study{studyIDX:03d}_modelState_epoch{epochIDX:04d}.pth'
-    new_chkpt_path = os.path.join("./", chkpt_name_str)
-
-    save_model_and_optimizer(
-        model,
-        optimizer,
-        epochIDX,
-        new_chkpt_path,
-        model_class=LodeRunner,
-        model_args=model_args,
-    )
-
     if rank == 0:
+        chkpt_name_str = f"study{studyIDX:03d}_modelState_epoch{epochIDX:04d}.pth"
+        new_chkpt_path = os.path.join("./", chkpt_name_str)
+
+        save_model_and_optimizer(
+            model.module,  # Save the underlying model, not the DDP wrapper
+            optimizer,
+            epochIDX,
+            new_chkpt_path,
+            model_class=DiffusionLodeRunner,
+            model_args=model_args,
+        )
+
         #############################################
         # Continue if Necessary
         #############################################

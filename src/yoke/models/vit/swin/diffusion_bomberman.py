@@ -448,6 +448,8 @@ class Lightning_DiffusionLodeRunner(LightningModule):
                 # Final step: return predicted x0
                 y_tau = y0_pred
 
+            # NOTE: the case where eta>0 (DDPM) is not implemented here.
+
         return y_tau
 
 
@@ -455,6 +457,7 @@ if __name__ == "__main__":
     from yoke.utils.parameters import count_torch_params
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    print("Torch Device:", device)
 
     default_vars = [
         "cu_pressure",
