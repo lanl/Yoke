@@ -962,6 +962,7 @@ class LSC_rho2rho_temporal_2frame_DataSet(Dataset):
                 img_list.append(tmp_img)
         finally:
             npz.close()
+
         return torch.tensor(np.stack(img_list, axis=0)).to(torch.float32)
 
     def __getitem__(

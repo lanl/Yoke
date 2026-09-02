@@ -8,7 +8,7 @@ import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 from yoke.models.vit.swin.bomberman import LodeRunnerViT
-from yoke.datasets.lsc_dataset import LSC_rho2rho_temporal_DataSet
+from yoke.datasets.lsc_dataset import LSC_rho2rho_temporal_2frame_DataSet
 from yoke.utils.training.epoch.loderunner import train_DDP_loderunner_epoch
 from yoke.utils.restart import continuation_setup
 from yoke.utils.dataload import make_distributed_dataloader
@@ -322,9 +322,14 @@ def main(args, rank, world_size, local_rank, device):
         "num_attention_heads": vit_num_heads,
         "attention_head_dim": int(vit_embed_dim/vit_num_heads),
         "num_layers": vit_num_layers,
+        "rope_theta":,
+        "rope_scale":,
         "mlp_ratio": 1.0,  # UMich uses MLP-ratio=1.0
         "concat_mlp": True,
         "verbose": False,
+        "num_input_frames": 2,
+        "eps": 1e-7,
+        "bias": True,
     }
 
     #############################################
@@ -487,7 +492,7 @@ def main(args, rank, world_size, local_rank, device):
     #############################################
     # Data Initialization (Distributed Dataloader)
     #############################################
-    train_dataset = LSC_rho2rho_temporal_DataSet(
+    train_dataset = LSC_rho2rho_temporal_2frame_DataSet(
         args.LSC_NPZ_DIR,
         file_prefix_list=train_filelist,
         max_timeIDX_offset=max_timeIDX_offset,
@@ -495,7 +500,7 @@ def main(args, rank, world_size, local_rank, device):
         hydro_fields=np.array(channel_list),
         half_image=True,
     )
-    val_dataset = LSC_rho2rho_temporal_DataSet(
+    val_dataset = LSC_rho2rho_temporal_2frame_DataSet(
         args.LSC_NPZ_DIR,
         file_prefix_list=validation_filelist,
         max_timeIDX_offset=max_timeIDX_offset,
@@ -561,6 +566,7 @@ def main(args, rank, world_size, local_rank, device):
             device=device,
             rank=rank,
             world_size=world_size,
+            dataset="pli_2frame",
             ema_model=ema_model,
             global_step=global_step,
             ema_update_after_step=ema_update_after_step,
