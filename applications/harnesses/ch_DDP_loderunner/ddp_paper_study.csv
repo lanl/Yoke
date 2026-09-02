@@ -1,11 +1,11 @@
 studyIDX,KNODES,NGPUS,EMBED_DIM,B0,B1,B2,B3,MAX_TIME_OFFSET,NUM_WORKERS,BATCH_SIZE,NTRN_BATCH,NVAL_BATCH,train_script
 # This is a set of training runs for the LodeRunner-18channel paper
 # FTherm_PLI_tiny_DT1
-#1,1,4,96,1,1,3,1,1,2,10,1000,500,train_LodeRunner_ddp.py
+1,1,4,96,1,1,3,1,1,2,10,1000,500,train_LodeRunner_ddp.py
 # FTherm_PLI_small_DT1
-#2,1,4,96,1,1,9,1,1,2,10,1000,500,train_LodeRunner_ddp.py
+2,1,4,96,1,1,9,1,1,2,10,1000,500,train_LodeRunner_ddp.py
 # FTherm_PLI_big_DT1
-# Schodt 3,1,4,128,1,1,9,1,1,2,10,1000,500,train_LodeRunner_ddp.py
+3,1,4,128,1,1,9,1,1,2,10,1000,500,train_LodeRunner_ddp.py
 # FTherm_PLI_big_DT2
 # Schodt 4,1,4,128,1,1,9,1,2,2,10,1000,500,train_LodeRunner_ddp.py
 # FTherm_PLI_big_DT4
@@ -16,10 +16,10 @@ studyIDX,KNODES,NGPUS,EMBED_DIM,B0,B1,B2,B3,MAX_TIME_OFFSET,NUM_WORKERS,BATCH_SI
 # Schodt 7,1,4,128,1,1,9,1,8,2,10,1000,500,train_LodeRunner_ddp.py
 # FTherm_PLI_big_DT10
 #8,1,4,128,1,1,9,1,10,2,10,1000,500,train_LodeRunner_ddp.py
-# Large/Huge/Giant all CUDA OOM error on Chicoma
+# Large/Huge/Giant all CUDA OOM error on Chicoma with batch_size=10
 # FTherm_PLI_large_DT1
-#9,1,4,192,1,1,9,1,1,2,10,1000,500,train_LodeRunner_ddp.py
+9,1,4,192,1,1,9,1,1,2,1,1000,500,train_LodeRunner_ddp.py
 # FTherm_PLI_huge_DT1
 10,10,4,352,1,1,9,1,1,2,1,1000,500,train_LodeRunner_ddp.py
 # FTherm_PLI_giant_DT1
-11,10,4,512,1,1,11,2,1,2,1,1000,500,train_LodeRunner_ddp.py
+#11,10,4,512,1,1,11,2,1,2,1,1000,500,train_LodeRunner_ddp.py

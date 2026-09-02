@@ -397,6 +397,7 @@ def main(args, rank, world_size, local_rank, device):
             device=device,
             rank=rank,
             world_size=world_size,
+            dataset="pli",
         )
 
         if TIME_EPOCH:
