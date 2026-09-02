@@ -399,7 +399,8 @@ def train_DDP_loderunner_epoch(
         device (torch.device): device index to select
         rank (int): rank of process
         world_size (int): number of total processes
-        dataset (string): name of dataset being analyzed. Options are "pli" and "cylex".
+        dataset (string): name of dataset being analyzed. Options are "pli", "cylex",
+                          and "pli_2frame".
         ema_model (torch.nn.Module): Optional EMA (``AveragedModel``) shadow of
             the underlying model, updated after each optimizer/scheduler step
             once ``global_step`` exceeds ``ema_update_after_step``. When ``None``
