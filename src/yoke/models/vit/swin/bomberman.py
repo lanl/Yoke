@@ -35,7 +35,7 @@ class LodeRunner(nn.Module):
 
     Parallel-patch embedding with SWIN U-Net backbone and
     unpatchification. This module will take in a variable-channel image format
-    and output an equivalent variable-channel image formate. This will serves
+    and output an equivalent variable-channel image format. This will serves
     as a prototype foundational architecture for multi-material, multi-physics,
     surrogate models.
 
@@ -386,7 +386,11 @@ if __name__ == "__main__":
     embed_dim = 96
     block_structure = (1, 1, 3, 1)
 
-    # Test LodeRunner architecture.
+    # Test LodeRunner architecture
+    print("\n" + "=" * 60)
+    print("Testing LodeRunner Architecture")
+    print("=" * 60)
+
     lode_runner = LodeRunner(
         default_vars=default_vars,
         image_size=image_size,
@@ -399,12 +403,20 @@ if __name__ == "__main__":
         patch_merge_scales=patch_merge_scales,
         verbose=False,
     ).to(device)
-    loderunner_out = lode_runner(x, x_vars, out_vars, lead_times)
-    print("LodeRunner-tiny output shape:", loderunner_out.shape)
-    print("LodeRunner-tiny output has NaNs:", torch.isnan(loderunner_out).any())
-    print("LodeRunner-tiny parameters:", count_torch_params(lode_runner, trainable=True))
 
-    # Test lightning wrapper initialization.
+    loderunner_out = lode_runner(x, x_vars, out_vars, lead_times)
+    print(f"\nLodeRunner-tiny output shape: {loderunner_out.shape}")
+    print(f"LodeRunner-tiny output has NaNs: {torch.isnan(loderunner_out).any()}")
+    print(
+        f"LodeRunner-tiny parameters: "
+        f"{count_torch_params(lode_runner, trainable=True):,}"
+    )
+
+    # Test Lightning wrapper initialization
+    print("\n" + "-" * 60)
+    print("Testing Lightning Wrapper")
+    print("-" * 60)
+
     L_loderunner = Lightning_LodeRunner(
         lode_runner,
         in_vars=x_vars,
@@ -420,100 +432,37 @@ if __name__ == "__main__":
         },
     )
     L_loderunner_out = L_loderunner(x, lead_times)
-    print("Lightning LodeRunner-tiny output shape:", L_loderunner_out.shape)
+    print(f"\nLightning LodeRunner-tiny output shape: {L_loderunner_out.shape}")
 
-    # Small size
-    embed_dim = 96
-    block_structure = (1, 1, 9, 1)
+    # Test different model sizes
+    print("\n" + "=" * 60)
+    print("Testing Different Model Sizes")
+    print("=" * 60)
 
-    lode_runner = LodeRunner(
-        default_vars=default_vars,
-        image_size=image_size,
-        patch_size=patch_size,
-        embed_dim=embed_dim,
-        emb_factor=emb_factor,
-        num_heads=num_heads,
-        block_structure=block_structure,
-        window_sizes=window_sizes,
-        patch_merge_scales=patch_merge_scales,
-        verbose=False,
-    ).to(device)
-    print(
-        "LodeRunner-small parameters:", count_torch_params(lode_runner, trainable=True)
-    )
+    sizes = [
+        ("small", 96, (1, 1, 9, 1)),
+        ("big", 128, (1, 1, 9, 1)),
+        ("large", 192, (1, 1, 9, 1)),
+        ("huge", 352, (1, 1, 9, 1)),
+        ("giant", 512, (1, 1, 11, 2)),
+    ]
 
-    # Big size
-    embed_dim = 128
-    block_structure = (1, 1, 9, 1)
+    for size_name, embed_dim, block_structure in sizes:
+        lode_runner = LodeRunner(
+            default_vars=default_vars,
+            image_size=image_size,
+            patch_size=patch_size,
+            embed_dim=embed_dim,
+            emb_factor=emb_factor,
+            num_heads=num_heads,
+            block_structure=block_structure,
+            window_sizes=window_sizes,
+            patch_merge_scales=patch_merge_scales,
+            verbose=False,
+        ).to(device)
+        param_count = count_torch_params(lode_runner, trainable=True)
+        print(f"\nLodeRunner-{size_name} parameters: {param_count:,}")
 
-    lode_runner = LodeRunner(
-        default_vars=default_vars,
-        image_size=image_size,
-        patch_size=patch_size,
-        embed_dim=embed_dim,
-        emb_factor=emb_factor,
-        num_heads=num_heads,
-        block_structure=block_structure,
-        window_sizes=window_sizes,
-        patch_merge_scales=patch_merge_scales,
-        verbose=False,
-    ).to(device)
-    print("LodeRunner-big parameters:", count_torch_params(lode_runner, trainable=True))
-
-    # Large size
-    embed_dim = 192
-    block_structure = (1, 1, 9, 1)
-
-    lode_runner = LodeRunner(
-        default_vars=default_vars,
-        image_size=image_size,
-        patch_size=patch_size,
-        embed_dim=embed_dim,
-        emb_factor=emb_factor,
-        num_heads=num_heads,
-        block_structure=block_structure,
-        window_sizes=window_sizes,
-        patch_merge_scales=patch_merge_scales,
-        verbose=False,
-    ).to(device)
-    print(
-        "LodeRunner-large parameters:", count_torch_params(lode_runner, trainable=True)
-    )
-
-    # Huge size
-    embed_dim = 352
-    block_structure = (1, 1, 9, 1)
-
-    lode_runner = LodeRunner(
-        default_vars=default_vars,
-        image_size=image_size,
-        patch_size=patch_size,
-        embed_dim=embed_dim,
-        emb_factor=emb_factor,
-        num_heads=num_heads,
-        block_structure=block_structure,
-        window_sizes=window_sizes,
-        patch_merge_scales=patch_merge_scales,
-        verbose=False,
-    ).to(device)
-    print("LodeRunner-huge parameters:", count_torch_params(lode_runner, trainable=True))
-
-    # Giant size
-    embed_dim = 512
-    block_structure = (1, 1, 11, 2)
-
-    lode_runner = LodeRunner(
-        default_vars=default_vars,
-        image_size=image_size,
-        patch_size=patch_size,
-        embed_dim=embed_dim,
-        emb_factor=emb_factor,
-        num_heads=num_heads,
-        block_structure=block_structure,
-        window_sizes=window_sizes,
-        patch_merge_scales=patch_merge_scales,
-        verbose=False,
-    ).to(device)
-    print(
-        "LodeRunner-giant parameters:", count_torch_params(lode_runner, trainable=True)
-    )
+    print("\n" + "=" * 60)
+    print("All tests completed successfully!")
+    print("=" * 60)

@@ -14,7 +14,7 @@ from yoke.utils.training.datastep.loderunner import (
     train_DDP_loderunner_datastep,
     eval_DDP_loderunner_datastep,
     train_DDP_loderunner_datastep_cylex,
-    eval_DDP_loderunner_datastep_cylex,
+    eval_DDP_loderunner_datastep_cylex
 )
 
 DATASTEP_FN = {
@@ -446,7 +446,7 @@ def train_DDP_loderunner_epoch(
                     # Stop when number of training batches is reached
                     if valbatch_ID >= num_val_batches:
                         break
-                    
+
                     end_img, pred_img, val_losses = eval_fn(
                         valdata,
                         model,

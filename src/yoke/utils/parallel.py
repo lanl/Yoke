@@ -4,10 +4,67 @@ Some models within Yoke require specific modifications to PyTorch multi-GPU
 training utilities.
 
 """
-
+import os
 import torch
 import torch.nn as nn
+import torch.distributed as dist
 
+
+def setup_distributed() -> tuple[int, int, int, torch.device]:
+    """Setup distributed training environment using SLURM environment variables.
+
+    Required Environment Variables:
+        SLURM_PROCID: Global rank of this process across all nodes
+        SLURM_NTASKS: Total number of processes (world size)
+        SLURM_LOCALID: Local rank on this node (GPU index)
+        MASTER_ADDR: Address of the master node for communication
+        MASTER_PORT: Port for distributed communication
+
+    Returns:
+        tuple: A 4-tuple containing:
+            - rank (int): Global rank of this process (0 to world_size-1)
+            - world_size (int): Total number of processes across all nodes
+            - local_rank (int): Local rank on this node (GPU index)
+            - device (torch.device): CUDA device object for this process
+    """
+    # ----- 1) Basic setup & environment variables -----
+    rank = int(os.environ["SLURM_PROCID"])  # global rank
+    world_size = int(os.environ["SLURM_NTASKS"])  # total number of processes
+    local_rank = int(os.environ["SLURM_LOCALID"])  # local rank (GPU index on this node)
+
+    master_addr = os.environ["MASTER_ADDR"]
+    master_port = os.environ["MASTER_PORT"]
+
+    print("============================", flush=True)
+    print(f"[Rank {rank}] DDP setup, master_addr: {master_addr}", flush=True)
+    print(f"[Rank {rank}] DDP setup, master_port: {master_port}", flush=True)
+    print(f"[Rank {rank}] DDP setup, rank: {rank}", flush=True)
+    print(f"[Rank {rank}] DDP setup, local_rank: {local_rank}", flush=True)
+    print(f"[Rank {rank}] DDP setup, world_size: {world_size}", flush=True)
+    print("============================", flush=True)
+
+    # ----- 2) Set the current GPU device for this process -----
+    torch.cuda.set_device(local_rank)
+    device = torch.device(f"cuda:{local_rank}")
+
+    # ----- 3) Initialize the process group -----
+    dist.init_process_group(
+        backend="nccl",
+        init_method=f"tcp://{master_addr}:{master_port}",
+        world_size=world_size,
+        rank=rank,
+    )
+
+    return rank, world_size, local_rank, device
+
+
+def cleanup_distributed() -> None:
+    """Clean up distributed training environment.
+
+    This function destroys the PyTorch distributed process group that was
+    initialized by setup_distributed().
+    """
+    dist.destroy_process_group()
 
 # Custom nn.DataParallel class to handle input to LodeRunner that should not be
 # split by batch.
