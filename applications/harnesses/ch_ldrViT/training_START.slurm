@@ -6,7 +6,7 @@
 # #SBATCH --partition=gpu
 # #SBATCH --time=08:00:00
 #DEBUG  
-#SBATCH --time=1:00:00
+#SBATCH --time=4:00:00
 #SBATCH --qos=debug
 #SBATCH --reservation=gpu_debug
 #SBATCH --partition=gpu_debug
