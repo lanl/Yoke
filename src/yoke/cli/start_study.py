@@ -39,6 +39,7 @@ def main() -> None:
         rundir=args.rundir,
         template_dir=".",
         cp_file=args.cpFile,
+        submission_type=args.submissionType,
         dryrun=args.dryrun,
     )
     study_list = harness.load_hyperparameters(args.csv)

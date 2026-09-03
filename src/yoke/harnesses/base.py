@@ -17,15 +17,33 @@ class HarnessStudy:
         rundir (str or Path): Output directory for the study run
         template_dir (str or Path): Directory containing .tmpl files
         cp_file (str or Path): File listing training files to copy per study
+        submission_type (str): Job-submission system to prepare files for. One of
+            ``"slurm"`` or ``"shell"``.
         dryrun (bool): Flag to turn off job submission.
 
     """
+
+    #: Dispatch table mapping a submission system to its template filename, the
+    #: output-script extension, and the command used to submit the script.
+    SUBMISSION_SYSTEMS: dict[str, dict[str, str]] = {
+        "slurm": {
+            "template": "training_slurm.tmpl",
+            "ext": "slurm",
+            "submit": "sbatch",
+        },
+        "shell": {
+            "template": "training_shell.tmpl",
+            "ext": "sh",
+            "submit": "source",
+        },
+    }
 
     def __init__(
         self,
         rundir: str = "./runs",
         template_dir: str = ".",
         cp_file: str = "cp_files.txt",
+        submission_type: str = "slurm",
         dryrun: bool = False,
     ) -> None:
         """Initialization for HarnessStudy."""
@@ -34,9 +52,19 @@ class HarnessStudy:
         self.cp_file = Path(cp_file)
         self.DRYRUN = dryrun
 
+        submission_type = submission_type.lower()
+        if submission_type not in self.SUBMISSION_SYSTEMS:
+            valid = ", ".join(sorted(self.SUBMISSION_SYSTEMS))
+            raise ValueError(
+                f"Unknown submission type {submission_type!r}. "
+                f"Supported types are: {valid}."
+            )
+        self.submission_type = submission_type
+        self.submission_config = self.SUBMISSION_SYSTEMS[submission_type]
+
         # Template and base files
         self.input_template = self.template_dir / "training_input.tmpl"
-        self.slurm_template = self.template_dir / "training_slurm.tmpl"
+        self.submission_template = self.template_dir / self.submission_config["template"]
         self.slurm_json = self.template_dir / "slurm_config.json"
 
         self.rundir.mkdir(parents=True, exist_ok=True)
@@ -117,7 +145,7 @@ class HarnessStudy:
                     print(f"[COPY] {file_path} -> {study_dir}")
 
     def generate_initial_inputs(self, study_dir: Path, study: dict) -> Path:
-        """Generate the input and SLURM scripts for the first submission.
+        """Generate the input and submission scripts for the first submission.
 
         Args:
             study_dir (Path): Directory in which to write the first-launch files.
@@ -134,23 +162,24 @@ class HarnessStudy:
         # intialization inputs.
         study.pop("CONTINUATION", None)
 
-        # Render input and SLURM templates
+        # Render input and submission templates
         input_rendered = self.render_template(self.input_template, study)
-        slurm_rendered = self._get_slurm_template(study)
+        submit_rendered = self._render_submission_template(study)
 
         # Modify START files with substitutions
+        ext = self.submission_config["ext"]
         input_path = study_dir / f"study{sid:03d}_START.input"
-        slurm_path = study_dir / f"study{sid:03d}_START.slurm"
+        submit_path = study_dir / f"study{sid:03d}_START.{ext}"
 
         with open(input_path, "w") as f:
             f.write(input_rendered)
-        with open(slurm_path, "w") as f:
-            f.write(slurm_rendered)
+        with open(submit_path, "w") as f:
+            f.write(submit_rendered)
 
-        return slurm_path
+        return submit_path
 
     def generate_tmpl_inputs(self, study_dir: Path, study: dict) -> None:
-        """Generate the input and SLURM templates for job continuation.
+        """Generate the input and submission templates for job continuation.
 
         Args:
             study_dir (Path): Directory in which to write the continuation
@@ -162,45 +191,50 @@ class HarnessStudy:
         study.pop("INPUTFILE", None)
         study["CONTINUATION"] = True
 
-        # Render input and SLURM templates
+        # Render input and submission templates
         input_rendered = self.render_template(self.input_template, study)
-        slurm_rendered = self._get_slurm_template(study)
+        submit_rendered = self._render_submission_template(study)
 
-        # Modify START files with substitutions
+        # Modify template files with substitutions
         input_path = study_dir / "training_input.tmpl"
-        slurm_path = study_dir / "training_slurm.tmpl"
+        submit_path = study_dir / self.submission_config["template"]
 
         with open(input_path, "w") as f:
             f.write(input_rendered)
-        with open(slurm_path, "w") as f:
-            f.write(slurm_rendered)
+        with open(submit_path, "w") as f:
+            f.write(submit_rendered)
 
-    def _get_slurm_template(self, study: dict) -> str:
-        """Return rendered SLURM script, either from JSON or template.
+    def _render_submission_template(self, study: dict) -> str:
+        """Return the rendered submission script for the selected system.
+
+        For SLURM, a ``slurm_config.json`` in the template directory is used to
+        synthesize the script if present; otherwise the submission template file
+        is used directly.
 
         Args:
             study (dict): Study substitution dictionary.
 
         Returns:
-            str: The rendered SLURM submission script.
+            str: The rendered submission script.
         """
-        if self.slurm_json.exists():
+        if self.submission_type == "slurm" and self.slurm_json.exists():
             slurm_obj = create_slurm_files.MkSlurm(config_path=str(self.slurm_json))
             tmpl = slurm_obj.generateSlurm()
         else:
-            with open(self.slurm_template) as f:
+            with open(self.submission_template) as f:
                 tmpl = f.read()
 
         return strings.replace_keys(study, tmpl)
 
-    def submit_job(self, study_dir: Path, slurm_path: Path) -> None:
-        """Submit a SLURM job.
+    def submit_job(self, study_dir: Path, submit_path: Path) -> None:
+        """Submit a job using the configured submission system.
 
         Args:
             study_dir (Path): Directory containing the submission script.
-            slurm_path (Path): Path to the submission script to submit.
+            submit_path (Path): Path to the submission script to submit.
         """
-        submit_str = f"cd {study_dir}; sbatch {slurm_path.name}; cd .."
+        submit_cmd = self.submission_config["submit"]
+        submit_str = f"cd {study_dir}; {submit_cmd} {submit_path.name}; cd .."
 
         if self.DRYRUN:
             # Just print what would be executed
@@ -221,5 +255,5 @@ class HarnessStudy:
 
         self.copy_files(study_dir)
         self.generate_tmpl_inputs(study_dir, study)
-        slurm_path = self.generate_initial_inputs(study_dir, study)
-        self.submit_job(study_dir, slurm_path)
+        submit_path = self.generate_initial_inputs(study_dir, study)
+        self.submit_job(study_dir, submit_path)
