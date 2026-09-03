@@ -68,6 +68,7 @@ parser.add_argument(
 parser.add_argument(
     "--use_ema",
     action="store_true",
+    default=True,
     help="Maintain a Diffusers-style warmup EMA shadow of the model and save "
     "the EMA weights as a companion production checkpoint.",
 )
@@ -313,6 +314,25 @@ def main(args, rank, world_size, local_rank, device):
     ]
     
     # Model arguments for LodeRunner-ViT.
+    #
+    # From `train_vit_finest.yaml` and the architecture notes, the ArtIMich ViT
+    # (finest) backbone (ignoring its data pipeline / channel layout, which we are
+    # **not** reproducing) is defined by:
+
+    # | Reference key | Value |
+    # |---|---:|
+    # | `num_layers` | 6 |
+    # | `num_attention_heads` | 12 |
+    # | `attention_head_dim` | 192 |
+    # | embedding dim (= heads × head_dim) | 2304 |
+    # | `mlp_ratio` | 1.0 |
+    # | `rope_theta` | 10000 |
+    # | `rope_axes_dim` | `[96, 96]` |
+    # | `rope_scale` | `[80, 224]` |
+    # | `eps` | 1e-7 |
+    # | spatial patch size (on 1120×400) | `[10, 5]` |
+    # | spatial token grid | 112 × 80 = 8960 |
+
     model_args = {
         "default_vars": channel_list,
         "image_size": (1120, 400),
@@ -322,9 +342,9 @@ def main(args, rank, world_size, local_rank, device):
         "num_attention_heads": vit_num_heads,
         "attention_head_dim": int(vit_embed_dim/vit_num_heads),
         "num_layers": vit_num_layers,
-        "rope_theta":,
-        "rope_scale":,
-        "mlp_ratio": 1.0,  # UMich uses MLP-ratio=1.0
+        "rope_theta": 10000,
+        "rope_scale": (80, 224),
+        "mlp_ratio": 1.0,
         "concat_mlp": True,
         "verbose": False,
         "num_input_frames": 2,
