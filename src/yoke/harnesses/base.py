@@ -4,7 +4,7 @@ import os
 import shutil
 import pandas as pd
 from pathlib import Path
-from yoke.helpers import strings, create_slurm_files
+from yoke.helpers import strings
 
 
 class HarnessStudy:
@@ -65,7 +65,6 @@ class HarnessStudy:
         # Template and base files
         self.input_template = self.template_dir / "training_input.tmpl"
         self.submission_template = self.template_dir / self.submission_config["template"]
-        self.slurm_json = self.template_dir / "slurm_config.json"
 
         self.rundir.mkdir(parents=True, exist_ok=True)
 
@@ -207,9 +206,8 @@ class HarnessStudy:
     def _render_submission_template(self, study: dict) -> str:
         """Return the rendered submission script for the selected system.
 
-        For SLURM, a ``slurm_config.json`` in the template directory is used to
-        synthesize the script if present; otherwise the submission template file
-        is used directly.
+        The submission template file supplied by the harness is a complete
+        submission script; its ``<KEY>`` tokens are substituted from ``study``.
 
         Args:
             study (dict): Study substitution dictionary.
@@ -217,12 +215,8 @@ class HarnessStudy:
         Returns:
             str: The rendered submission script.
         """
-        if self.submission_type == "slurm" and self.slurm_json.exists():
-            slurm_obj = create_slurm_files.MkSlurm(config_path=str(self.slurm_json))
-            tmpl = slurm_obj.generateSlurm()
-        else:
-            with open(self.submission_template) as f:
-                tmpl = f.read()
+        with open(self.submission_template) as f:
+            tmpl = f.read()
 
         return strings.replace_keys(study, tmpl)
 

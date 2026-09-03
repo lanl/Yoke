@@ -10,7 +10,7 @@ import pandas as pd
 import subprocess
 from pathlib import Path
 
-from yoke.helpers import cli, strings, create_slurm_files
+from yoke.helpers import cli, strings
 
 
 ####################################
@@ -41,12 +41,7 @@ elif args.submissionType.lower() == "batch":
     training_START_batch = "./training_START.bat"
     training_batch_tmpl = "./training_batch.tmpl"
 
-training_json = "./slurm_config.json"
-
 slurm_tmpl_data = None
-if os.path.exists(training_json):
-    slrm_obj = create_slurm_files.MkSlurm(config_path=training_json)
-    slurm_tmpl_data = slrm_obj.generateSlurm()
 
 # List of files to copy
 with open(args.cpFile) as cp_text_file:
