@@ -12,20 +12,22 @@ Expected Files in Harness Directory:
     - cp_files.txt
     - <study_parameters>.csv
     - <training_routine>.py
-    - slurm_config.json (optional)
 
 """
 
-import os
-import shutil
 import argparse
-import pandas as pd
 
-from yoke.helpers import cli, strings, create_slurm_files
+from yoke.helpers import cli
 from yoke.harnesses.base import HarnessStudy
 
 
-def main():
+def main() -> None:
+    """Entry point for the ``yoke-start-study`` console script.
+
+    Parses command-line arguments, constructs a :class:`HarnessStudy` from the
+    harness configuration in the current directory, loads the hyperparameter CSV,
+    and runs each study row.
+    """
     parser = argparse.ArgumentParser(
         prog="yoke-start-study",
         description="Starts execution of a Yoke training harness study.",
@@ -34,11 +36,11 @@ def main():
     args = parser.parse_args()
 
     harness = HarnessStudy(
-        rundir=args.rundir, 
-        template_dir=".", 
+        rundir=args.rundir,
+        template_dir=".",
         cp_file=args.cpFile,
-        dryrun=args.dryrun
-        )
+        dryrun=args.dryrun,
+    )
     study_list = harness.load_hyperparameters(args.csv)
 
     for study in study_list:

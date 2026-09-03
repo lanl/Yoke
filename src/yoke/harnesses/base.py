@@ -20,15 +20,15 @@ class HarnessStudy:
         dryrun (bool): Flag to turn off job submission.
 
     """
-    def __init__(
-            self, 
-            rundir: str="./runs", 
-            template_dir: str=".", 
-            cp_file: str="cp_files.txt",
-            dryrun: bool=False
-            ):
-        """Initialization for HarnessStudy."""
 
+    def __init__(
+        self,
+        rundir: str = "./runs",
+        template_dir: str = ".",
+        cp_file: str = "cp_files.txt",
+        dryrun: bool = False,
+    ) -> None:
+        """Initialization for HarnessStudy."""
         self.rundir = Path(rundir)
         self.template_dir = Path(template_dir)
         self.cp_file = Path(cp_file)
@@ -41,17 +41,26 @@ class HarnessStudy:
 
         self.rundir.mkdir(parents=True, exist_ok=True)
 
-    def load_hyperparameters(self, csv_path):
-        """Read hyperparameters from a CSV into a list of dicts."""
+    def load_hyperparameters(self, csv_path: str) -> list[dict]:
+        """Read hyperparameters from a CSV into a list of dicts.
+
+        Args:
+            csv_path (str): Path to the hyperparameter CSV. The first column is
+                treated as the study index (``studyIDX``).
+
+        Returns:
+            list[dict]: One dictionary per study row, with the study index stored
+            under the ``studyIDX`` key.
+        """
         df = pd.read_csv(
-            csv_path, 
-            sep=",", 
-            header=0, 
-            index_col=0, 
-            comment="#", 
-            engine="python"
-            )
-        
+            csv_path,
+            sep=",",
+            header=0,
+            index_col=0,
+            comment="#",
+            engine="python",
+        )
+
         study_list = []
         for idx in df.index.values:
             study = df.loc[idx].to_dict()
@@ -60,9 +69,22 @@ class HarnessStudy:
 
         return study_list
 
-    def render_template(self, template_path, substitutions):
-        """Render template with conditional optional blocks."""
-        with open(template_path, "r") as f:
+    def render_template(self, template_path: Path, substitutions: dict) -> str:
+        """Render a template file, honoring optional conditional blocks.
+
+        Lines bounded by ``# <<optional:KEY>>`` and ``# <<end>>`` are included in
+        the rendered output only when ``KEY`` is present in ``substitutions``.
+        All remaining ``<KEY>`` tokens are substituted via
+        :func:`yoke.helpers.strings.replace_keys`.
+
+        Args:
+            template_path (Path): Path to the template file to render.
+            substitutions (dict): Mapping of keys to values for substitution.
+
+        Returns:
+            str: The rendered template contents.
+        """
+        with open(template_path) as f:
             lines = f.readlines()
 
         rendered = []
@@ -81,17 +103,29 @@ class HarnessStudy:
 
         return "".join(rendered)
 
-    def copy_files(self, study_dir):
-        """Copy the files listed in cp_file into the study directory."""
-        with open(self.cp_file, "r") as f:
+    def copy_files(self, study_dir: Path) -> None:
+        """Copy the files listed in ``cp_file`` into the study directory.
+
+        Args:
+            study_dir (Path): Destination directory for the copied files.
+        """
+        with open(self.cp_file) as f:
             for line in f:
                 file_path = line.strip()
                 if file_path:
                     shutil.copy(file_path, study_dir)
                     print(f"[COPY] {file_path} -> {study_dir}")
 
-    def generate_initial_inputs(self, study_dir, study):
-        """Generate the input and SLURM scripts for the first submission."""
+    def generate_initial_inputs(self, study_dir: Path, study: dict) -> Path:
+        """Generate the input and SLURM scripts for the first submission.
+
+        Args:
+            study_dir (Path): Directory in which to write the first-launch files.
+            study (dict): Study substitution dictionary.
+
+        Returns:
+            Path: Path to the generated first-launch submission script.
+        """
         sid = study["studyIDX"]
         study["epochIDX"] = f"{sid:03d}"
         study["INPUTFILE"] = f"study{sid:03d}_START.input"
@@ -115,10 +149,14 @@ class HarnessStudy:
 
         return slurm_path
 
-    def generate_tmpl_inputs(self, study_dir, study):
-        """Generate the input and SLURM templates for job continuation."""
-        sid = study["studyIDX"]
+    def generate_tmpl_inputs(self, study_dir: Path, study: dict) -> None:
+        """Generate the input and SLURM templates for job continuation.
 
+        Args:
+            study_dir (Path): Directory in which to write the continuation
+                templates.
+            study (dict): Study substitution dictionary.
+        """
         # For templates epochIDX and INPUTFILE should be left as variables.
         study.pop("epochIDX", None)
         study.pop("INPUTFILE", None)
@@ -136,25 +174,33 @@ class HarnessStudy:
             f.write(input_rendered)
         with open(slurm_path, "w") as f:
             f.write(slurm_rendered)
-    
-    def _get_slurm_template(self, study):
-        """Return rendered SLURM script, either from JSON or template."""
+
+    def _get_slurm_template(self, study: dict) -> str:
+        """Return rendered SLURM script, either from JSON or template.
+
+        Args:
+            study (dict): Study substitution dictionary.
+
+        Returns:
+            str: The rendered SLURM submission script.
+        """
         if self.slurm_json.exists():
             slurm_obj = create_slurm_files.MkSlurm(config_path=str(self.slurm_json))
             tmpl = slurm_obj.generateSlurm()
         else:
-            with open(self.slurm_template, "r") as f:
+            with open(self.slurm_template) as f:
                 tmpl = f.read()
 
         return strings.replace_keys(study, tmpl)
 
-    def submit_job(self, study_dir: str, slurm_path: str) -> None:
-        """Submit a SLURM job."""
-        submit_str = (
-            f"cd {study_dir}; "
-            f"sbatch {slurm_path.name}; "
-            f"cd .."
-        )
+    def submit_job(self, study_dir: Path, slurm_path: Path) -> None:
+        """Submit a SLURM job.
+
+        Args:
+            study_dir (Path): Directory containing the submission script.
+            slurm_path (Path): Path to the submission script to submit.
+        """
+        submit_str = f"cd {study_dir}; sbatch {slurm_path.name}; cd .."
 
         if self.DRYRUN:
             # Just print what would be executed
@@ -163,8 +209,12 @@ class HarnessStudy:
             # Submit Job
             os.system(submit_str)
 
-    def run_study(self, study):
-        """Run a single study: generate inputs, copy files, and submit job."""
+    def run_study(self, study: dict) -> None:
+        """Run a single study: generate inputs, copy files, and submit job.
+
+        Args:
+            study (dict): Study substitution dictionary for a single CSV row.
+        """
         # Make Study Directory
         study_dir = self.rundir / "study_{:03d}".format(study["studyIDX"])
         study_dir.mkdir(parents=True, exist_ok=True)

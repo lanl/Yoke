@@ -28,13 +28,6 @@ def add_default_args(parser: argparse.ArgumentParser = None) -> argparse.Argumen
         default="./hyperparameters.csv",
         help="CSV file containing study hyperparameters",
     )
-    # parser.add_argument(
-    #     "--studyIDX",
-    #     action="store",
-    #     type=int,
-    #     default=1,
-    #     help="Study ID number to match hyperparameters",
-    # )
     parser.add_argument(
         "--rundir",
         action="store",
@@ -62,6 +55,14 @@ def add_default_args(parser: argparse.ArgumentParser = None) -> argparse.Argumen
         help=(
             "Which job‐submission wrapper to use (defaults to slurm, "
             "choices: slurm, flux, shell, batch)."
+        ),
+    )
+    parser.add_argument(
+        "--dryrun",
+        action="store_true",
+        help=(
+            "Prepare study directories and render submission files without "
+            "submitting any jobs. The submit command is printed instead of run."
         ),
     )
 
