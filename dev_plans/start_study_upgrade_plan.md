@@ -45,7 +45,8 @@ re-submits via `sbatch`.
   presence/absence of `--continuation`/`--checkpoint`). This is a frequent source of drift
   and copy errors.
 - **Four submission systems, four code paths.** slurm / flux / shell / batch are handled by
-  large parallel `if/elif` blocks that are hard to keep in sync.
+  large parallel `if/elif` blocks that are hard to keep in sync. (Decision: flux and batch
+  are being dropped — see Section 3.4 / Section 8 Q1.)
 - **JSON-to-SLURM generation (deprecated).** `slurm_config.json` +
   `yoke.helpers.create_slurm_files.MkSlurm` was an attempt to synthesize SLURM scripts from
   JSON. This has been **abandoned** — there are too many possible SLURM configurations for a
@@ -85,18 +86,20 @@ These are concrete issues found in the current checkout that the plan must addre
    `cli.add_default_args` does not add a `--dryrun` argument. Running the CLI as-is raises
    `AttributeError`.
 2. **Submission is SLURM-only.** `HarnessStudy.submit_job` hardcodes `sbatch` and
-   `submit_job`/`run_study` ignore `args.submissionType` (flux / shell / batch). The old
-   multi-scheduler support has effectively been dropped.
+   `submit_job`/`run_study` ignore `args.submissionType`. Per the decision in Section 8 Q1,
+   the target set is **SLURM + shell**; `shell` support still needs to be added, and the
+   `--submissionType` choices should be narrowed to `{slurm, shell}`.
 3. **Still depends on deprecated JSON-to-SLURM.** `base.py._get_slurm_template` and
    `start_study.py` still import and use `yoke.helpers.create_slurm_files`. This should be
    removed per the deprecation decision (see Section 5).
 4. **Unused imports** in `start_study.py` (`os`, `shutil`, `pd`, `strings`,
    `create_slurm_files`) — will trip `ruff` (F401).
-5. **Continuation contract mismatch.** `yoke.utils.restart.continuation_setup` (run on the
-   compute node) still hardcodes `<INPUTFILE>`, `<epochIDX>`, `<CHECKPOINT>` substitutions
-   and the `training_input.tmpl` / `training_slurm.tmpl` filenames. The new
-   `generate_tmpl_inputs` writes those same template names, so the two must be kept
-   contract-compatible; this coupling is currently implicit and untested.
+5. **Continuation contract mismatch (to be consolidated).** `yoke.utils.restart.continuation_setup`
+   (run on the compute node) hardcodes `<INPUTFILE>`, `<epochIDX>`, `<CHECKPOINT>`
+   substitutions and the `training_input.tmpl` / `training_slurm.tmpl` filenames. The new
+   `generate_tmpl_inputs` writes those same template names, so the two are implicitly coupled
+   and untested. Per Decision Q4 this logic is being **moved into `HarnessStudy`** so the
+   contract lives in one class (see Section 3.2 / Phase D).
 6. **No tests** exist for `HarnessStudy` or the `yoke-start-study` entry point.
 7. **Missing docstrings / type annotations** on several `HarnessStudy` methods
    (`load_hyperparameters`, `render_template`, etc.), which violates the repo's `ruff`
@@ -125,7 +128,11 @@ Responsibilities of `main()`:
 
 ### 3.2 `HarnessStudy` class
 
-Keep the class as the single source of truth for the per-study workflow. Concretely:
+**Design intent (Q3): a single generic class, no per-harness subclasses or registry.** A
+harness is defined entirely by its configuration files (`training_input.tmpl`, submission
+template, `cp_files.txt`, hyperparameter CSV). "Class instantiation" means `yoke-start-study`
+constructs one `HarnessStudy` from that configuration and drives the study. Keep the class as
+the single source of truth for the per-study workflow. Concretely:
 
 - **Constructor** takes `rundir`, `template_dir`, `cp_file`, `submission_type`, `dryrun`.
   Validate existence of `training_input.tmpl` and the submission template up front and fail
@@ -138,11 +145,16 @@ Keep the class as the single source of truth for the per-study workflow. Concret
   is missing.
 - **`generate_initial_inputs` / `generate_tmpl_inputs`** — produce the first-launch pair and
   the continuation template pair from the *single* source templates. Keep the emitted
-  filenames (`training_input.tmpl`, `training_slurm.tmpl`, `study###_START.*`) stable so the
-  compute-node continuation path keeps working.
+  filenames (`training_input.tmpl`, submission template, `study###_START.*`) stable so the
+  continuation path keeps working.
+- **Continuation entry point (Q4)** — a `@staticmethod`/`@classmethod` that supersedes
+  `yoke.utils.restart.continuation_setup`. Runs on the compute node from within a train
+  script (no pre-built instance required): reads the local templates, substitutes
+  `<CHECKPOINT>`/`<INPUTFILE>`/`<epochIDX>`, writes the restart files, returns the new submit
+  script path. Supports `slurm` and `shell` only.
 - **`submit_job(study_dir, script_path)`** — dispatch on `submission_type`:
-  slurm -> `sbatch`, flux -> `flux batch`, shell -> `source`, batch -> `cmd.exe /c`.
-  Honor `dryrun` by printing the command instead of executing.
+  `slurm` -> `sbatch`, `shell` -> `source`. Honor `dryrun` by printing the command instead of
+  executing.
 - **`run_study(study)`** — orchestrate the above.
 
 ### 3.3 Template convention (single-file templates)
@@ -162,12 +174,25 @@ it.
 
 ### 3.4 Submission-system abstraction
 
+**Decision (Q1): support SLURM + shell only.** flux and batch are dropped.
+
 Replace the four parallel `if/elif` blocks with a small dispatch table keyed on
-`submission_type`, mapping each system to (a) its template file name and (b) its submit
-command. This keeps flux/shell/batch working without duplicating orchestration logic. If we
-decide to drop non-slurm systems entirely, do so explicitly and document it — but the current
-`main` behavior supports all four, so preserve unless a decision says otherwise (see Open
-Questions).
+`submission_type`, mapping each supported system to (a) its template file name and (b) its
+submit command:
+
+- `slurm` -> template `training_slurm.tmpl`, submit `sbatch <script>`.
+- `shell` -> template `training_shell.tmpl`, submit `source <script>` (for local/dev runs).
+
+Narrow the `--submissionType` argument `choices` to `{slurm, shell}`. Removal of the flux and
+batch code paths spans:
+
+- `HarnessStudy` / `yoke.cli.start_study` (this branch).
+- `applications/harnesses/START_study.py` (deleted at end of migration anyway).
+- The continuation logic being moved into `HarnessStudy` per Q4 (keep only `slurm` / `shell`;
+  the old `yoke.utils.restart.continuation_setup` is removed — see Phase D).
+
+Also remove any `training_flux.tmpl` / `training_batch.tmpl` / `*.flux` / `*.bat` files from
+harnesses during migration (Phase F).
 
 ---
 
@@ -176,19 +201,24 @@ Questions).
 Ordered, each item small enough to review independently.
 
 ### Phase A — make the branch correct and runnable
-- [ ] A1. Add `--dryrun` (store_true) to `cli.add_default_args`; remove the commented-out
-      `--studyIDX` block or restore it if still needed by any harness input template
-      (`training_input.tmpl` still emits `--studyIDX <studyIDX>`, so the *train script* arg
-      is still needed — confirm the CLI-level `--studyIDX` truly is obsolete).
+- [ ] A1. Add `--dryrun` (store_true) to `cli.add_default_args`. Permanently delete the
+      commented-out CLI-level `--studyIDX` block (Decision Q2): `studyIDX` comes from the
+      CSV's first column (`index_col=0`) and drives both the `study_###` directory names and
+      the `<studyIDX>` template substitution passed to the train script. The old
+      single-target CLI flag is redundant now that `yoke-start-study` iterates all rows.
 - [ ] A2. Remove unused imports from `src/yoke/cli/start_study.py`.
 - [ ] A3. Add docstrings + type annotations to all `HarnessStudy` methods (satisfy `D`/`ANN`).
 - [ ] A4. Run `ruff check` / `ruff format` and fix.
 
-### Phase B — restore full submission-system support
+### Phase B — submission-system support (SLURM + shell)
 - [ ] B1. Thread `submission_type` from `args` -> `HarnessStudy` -> `submit_job`.
-- [ ] B2. Introduce a dispatch table for {template filename, submit command} per system.
+- [ ] B2. Introduce a dispatch table for {template filename, submit command} for
+      `slurm` and `shell` only.
 - [ ] B3. Generalize `generate_initial_inputs` / `_get_slurm_template` to the selected
-      submission template (not slurm-only).
+      submission template (slurm or shell).
+- [ ] B4. Narrow `--submissionType` choices to `{slurm, shell}` in `cli.add_default_args`.
+- [ ] B5. (See Phase D — flux/batch removal from the continuation logic happens as part of
+      moving that logic into `HarnessStudy`.)
 
 ### Phase C — decouple from deprecated JSON-to-SLURM
 - [ ] C1. Remove `create_slurm_files` usage from `base.py` and `start_study.py`; harnesses
@@ -200,13 +230,26 @@ Ordered, each item small enough to review independently.
 - [ ] C3. Remove `slurm_config.json` from the one harness that still ships it
       (`chicoma_lsc_loderunner-ch-subsampling`) as part of that harness's migration.
 
-### Phase D — continuation contract
-- [ ] D1. Document and lock the contract between `HarnessStudy.generate_tmpl_inputs` (writes
-      `training_input.tmpl` / `training_slurm.tmpl`) and
-      `yoke.utils.restart.continuation_setup` (consumes them on the compute node).
-- [ ] D2. Add a round-trip test: generate templates, run `continuation_setup` against them in
-      a temp dir, assert the restart `.input`/`.slurm` are well-formed (correct `epochIDX`,
-      `INPUTFILE`, `CHECKPOINT`).
+### Phase D — move continuation logic into `HarnessStudy` (Q4)
+- [ ] D1. Add a continuation entry point to `HarnessStudy` (a `@staticmethod`/`@classmethod`,
+      or a cheap in-script constructor) that reproduces the current
+      `yoke.utils.restart.continuation_setup` behavior: read the local `training_input.tmpl` +
+      submission template, substitute `<CHECKPOINT>`, `<INPUTFILE>`, `<epochIDX>`, write the
+      `study###_restart_training_epoch####.{input,slurm|sh}` files, and return the new submit
+      script path. Support only `slurm` and `shell` (Q1).
+- [ ] D2. Document and lock the templating contract in one place (now entirely inside
+      `HarnessStudy`): the keys `<studyIDX>`, `<epochIDX>`, `<INPUTFILE>`, `<CONTINUATION>`,
+      `<CHECKPOINT>` and how `generate_tmpl_inputs` and the continuation method share them.
+- [ ] D3. Update every train script that imports `continuation_setup` to call the new
+      `HarnessStudy` location. Known callers include
+      `applications/harnesses/ch_DDP_loderunner/train_LodeRunner_ddp.py` (and the other DDP /
+      loderunner / policy / surrogate train scripts) — grep for
+      `from yoke.utils.restart import continuation_setup` across `applications/`.
+- [ ] D4. Remove `yoke.utils.restart` (and its flux/batch branches) once no train script
+      imports it; update/replace `tests/*` that reference it.
+- [ ] D5. Add a round-trip test: `generate_tmpl_inputs` then the continuation method in a temp
+      dir; assert the restart `.input`/`.slurm` (and `.sh`) are well-formed (correct
+      `epochIDX`, `INPUTFILE`, `CHECKPOINT`).
 
 ### Phase E — tests
 - [ ] E1. Create `tests/harnesses/test_base.py` and `tests/cli/test_start_study.py`.
@@ -253,7 +296,8 @@ A new guide should make harness creation a recipe rather than a copy job:
    blocks for continuation-only args.
 4. Write one submission template (e.g. `training_slurm.tmpl`) — a complete script.
 5. Write `cp_files.txt` (files copied into each study dir) and a hyperparameter CSV.
-6. Launch: `yoke-start-study --csv <csv> --submissionType slurm [--dryrun]`.
+6. Launch: `yoke-start-study --csv <csv> --submissionType slurm [--dryrun]`
+   (or `--submissionType shell` for local/dev runs).
 7. Document the reserved keys and the continuation lifecycle.
 
 ---
@@ -265,27 +309,53 @@ A new guide should make harness creation a recipe rather than a copy job:
 - A single `training_input.tmpl` + single submission template generate both first-launch and
   continuation artifacts; no `training_START.*` files remain in migrated harnesses.
 - All four submission systems (slurm/flux/shell/batch) work, OR a documented decision drops
-  some of them.
+  some of them. **(Decision Q1: only `slurm` and `shell` are supported; flux/batch removed.)**
 - No runtime dependency on `create_slurm_files`; it and `slurm_config.json` are marked
   deprecated.
+- Continuation logic lives in `HarnessStudy` (Q4); `yoke.utils.restart` is removed and no
+  train script imports `continuation_setup` from the old location.
 - New unit tests cover `HarnessStudy` and the CLI; `ruff check`, `ruff format --check`, and
   `pytest -Werror --cov` pass.
 - `docs/` contains an "Authoring a Harness" guide; harness `README.md`s show the new CLI.
 
 ---
 
-## 8. Open questions
+## 8. Resolved decisions
 
-- **Keep flux/shell/batch?** `main` supports all four; the branch's `base.py` currently only
-  does slurm. Confirm whether non-slurm systems remain first-class or are dropped.
-- **CLI-level `--studyIDX`.** It was commented out, but `training_input.tmpl` still passes
-  `--studyIDX <studyIDX>` to the *train script*. Confirm the CLI-level flag is truly
-  obsolete (it appears the studyIDX now always comes from the CSV index).
-- **Registry vs. convention.** Should harnesses register themselves (e.g., a
-  `Harness` subclass per harness) for stronger "class instantiation", or is the current
-  "one generic `HarnessStudy` + per-harness template files" the intended end state? The task
-  description mentions a "class instantiation methodology" — clarify how far to take it
-  (generic class parameterized by files vs. subclass-per-harness).
-- **`continuation_setup` placement.** Should the compute-node continuation logic move into
-  `HarnessStudy` (as a method) so the templating contract lives in one class, rather than
-  split between `harnesses/base.py` and `utils/restart.py`?
+All open questions have been resolved. Summary:
+
+- **Q1 — Submission systems:** SLURM + shell only; flux and batch dropped.
+- **Q2 — CLI `--studyIDX`:** removed permanently; `studyIDX` is the CSV's first column.
+- **Q3 — Class methodology:** single generic `HarnessStudy` + template files (no subclasses/registry).
+- **Q4 — Continuation logic:** moved into `HarnessStudy`; all train scripts updated; `utils/restart.py` removed.
+
+Details:
+
+- **Keep flux/shell/batch?** **RESOLVED (Q1):** support **SLURM + shell only**. flux and
+  batch are dropped from `HarnessStudy`, the `--submissionType` choices, and the continuation
+  logic (which is itself being relocated into `HarnessStudy` per Q4). Their template files are
+  removed during harness migration. `shell` is retained for local/dev testing.
+- **CLI-level `--studyIDX`.** **RESOLVED (Q2):** remove it permanently. `studyIDX` is the
+  CSV's first column (`index_col=0`); it names the `study_###` directory and is substituted
+  into the train-script args via `<studyIDX>`. This one-to-one mapping between a CSV row and
+  its `study_###` directory is intentional and supports debugging (locate the failed
+  `study_###` dir, read the matching CSV row for its parameters). The old single-target CLI
+  flag is redundant since the CLI iterates every row; to re-run one study, reduce the CSV to
+  that single row.
+- **Registry vs. convention.** **RESOLVED (Q3):** use the **generic class + template files**
+  approach (Option A). There is a single generic `HarnessStudy` class; "class instantiation"
+  means constructing a `HarnessStudy` from a harness's configuration (its `training_input.tmpl`,
+  submission template, `cp_files.txt`, and hyperparameter CSV). Authoring a harness means
+  writing those files, not writing a Python subclass. No per-harness subclasses or harness
+  registry are introduced. SLURM/shell scripts remain first-class files supplied by the
+  harness. This keeps per-harness code at zero and centralizes all orchestration logic in one
+  tested class.
+- **`continuation_setup` placement.** **RESOLVED (Q4):** move the compute-node continuation
+  logic into `HarnessStudy` so the entire templating contract (generation *and* continuation)
+  lives in one class. All train scripts are updated to call the new location instead of
+  `from yoke.utils.restart import continuation_setup`. Since train scripts run standalone on
+  compute nodes without a pre-built `HarnessStudy` instance, expose the continuation entry
+  point as a `@staticmethod`/`@classmethod` (or a constructor cheap enough to build in-script
+  from the local `./training_input.tmpl` + submission template). `yoke.utils.restart` is
+  removed (or reduced to nothing) once all train scripts are migrated. Restrict the moved
+  logic to the SLURM + shell systems per Q1.
