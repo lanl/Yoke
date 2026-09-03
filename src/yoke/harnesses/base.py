@@ -13,6 +13,30 @@ class HarnessStudy:
     Defines class containing attributes for a Yoke Harness object. Methods of this
     class are then used to submit entries of a Yoke study.
 
+    Templating contract:
+        A harness is defined by a single input template (``training_input.tmpl``)
+        and a single submission template (``training_slurm.tmpl`` or
+        ``training_shell.tmpl``). Both are rendered by literal ``<KEY>``
+        substitution (see :func:`yoke.helpers.strings.replace_keys`). The
+        following keys are reserved and injected by this class rather than the
+        hyperparameter CSV:
+
+        - ``<studyIDX>`` — the study index; zero-padded to three digits.
+        - ``<epochIDX>`` — the epoch index; zero-padded to four digits in the
+          continuation submission script, left as a placeholder in the
+          continuation templates written by :meth:`generate_tmpl_inputs`.
+        - ``<INPUTFILE>`` — the input file the submission script should read; set
+          to the first-launch input by :meth:`generate_initial_inputs` and to the
+          per-epoch restart input by :meth:`continuation_setup`.
+        - ``<CONTINUATION>`` — present only in the continuation form; used with
+          ``# <<optional:CONTINUATION>>`` blocks to include ``--continuation``.
+        - ``<CHECKPOINT>`` — the checkpoint path to resume from; left as a
+          placeholder in the continuation templates and substituted per epoch by
+          :meth:`continuation_setup`.
+
+        Lines bounded by ``# <<optional:KEY>>`` and ``# <<end>>`` are included in
+        the rendered output only when ``KEY`` is present in the substitution dict.
+
     Args:
         rundir (str or Path): Output directory for the study run
         template_dir (str or Path): Directory containing .tmpl files
@@ -251,3 +275,75 @@ class HarnessStudy:
         self.generate_tmpl_inputs(study_dir, study)
         submit_path = self.generate_initial_inputs(study_dir, study)
         self.submit_job(study_dir, submit_path)
+
+    @staticmethod
+    def continuation_setup(
+        checkpointpath: str,
+        studyIDX: int,
+        last_epoch: int,
+        submission_type: str = "slurm",
+    ) -> str:
+        """Prepare restart submission files for continued training.
+
+        This runs on the compute node from within a train script, using the
+        continuation templates written by :meth:`generate_tmpl_inputs` (i.e.
+        ``./training_input.tmpl`` and the submission template for the selected
+        system). It substitutes ``<CHECKPOINT>`` into the input file and
+        ``<INPUTFILE>`` / ``<epochIDX>`` into the submission script, writes the
+        per-epoch restart files, and returns the new submission-script filename.
+
+        Args:
+            checkpointpath (str): Path to the model checkpoint to resume from.
+            studyIDX (int): Study index, used in the generated file names.
+            last_epoch (int): Number of epochs completed at this checkpoint.
+            submission_type (str): Job-submission system, either ``"slurm"`` or
+                ``"shell"``. Defaults to ``"slurm"``.
+
+        Returns:
+            str: Filename of the submission script for continued training.
+
+        Raises:
+            ValueError: If ``submission_type`` is not a supported system.
+        """
+        submission_type = submission_type.lower()
+        if submission_type not in HarnessStudy.SUBMISSION_SYSTEMS:
+            valid = ", ".join(sorted(HarnessStudy.SUBMISSION_SYSTEMS))
+            raise ValueError(
+                f"Unknown submission type {submission_type!r}. "
+                f"Supported types are: {valid}."
+            )
+        config = HarnessStudy.SUBMISSION_SYSTEMS[submission_type]
+        ext = config["ext"]
+
+        # Input template is independent of the submission system.
+        training_input_tmpl = "./training_input.tmpl"
+        with open(training_input_tmpl) as f:
+            training_input_data = f.read()
+
+        new_training_input_data = training_input_data.replace(
+            "<CHECKPOINT>", checkpointpath
+        )
+
+        input_str = "study{0:03d}_restart_training_epoch{1:04d}.input"
+        new_training_input_filepath = input_str.format(studyIDX, last_epoch + 1)
+
+        with open(os.path.join("./", new_training_input_filepath), "w") as f:
+            f.write(new_training_input_data)
+
+        # Render the submission script for the selected system.
+        submission_tmpl = os.path.join("./", config["template"])
+        with open(submission_tmpl) as f:
+            submission_data = f.read()
+
+        submit_str = "study{0:03d}_restart_training_epoch{1:04d}." + ext
+        new_submission_filepath = submit_str.format(studyIDX, last_epoch + 1)
+
+        submission_data = submission_data.replace(
+            "<INPUTFILE>", new_training_input_filepath
+        )
+        submission_data = submission_data.replace("<epochIDX>", f"{last_epoch + 1:04d}")
+
+        with open(os.path.join("./", new_submission_filepath), "w") as f:
+            f.write(submission_data)
+
+        return new_submission_filepath
