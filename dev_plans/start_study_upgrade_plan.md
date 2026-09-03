@@ -2,6 +2,45 @@
 
 Status: **in development** on branch `start_study_upgrade`
 
+## Progress log
+
+Phases **A, B, C, and D are complete** and committed. **Phase E is next** (note E1's
+`tests/harnesses/test_base.py` was already created during Phase D — see below). Phase F is
+not started.
+
+- **Phase A — DONE.** `--dryrun` added to `cli.add_default_args`; commented-out `--studyIDX`
+  block deleted; unused imports removed from `cli/start_study.py`; docstrings + type
+  annotations added to all `HarnessStudy` methods; `ruff` clean.
+- **Phase B — DONE.** `submission_type` threaded from CLI -> `HarnessStudy` -> `submit_job`;
+  `SUBMISSION_SYSTEMS` dispatch table added (`slurm` -> `sbatch`/`training_slurm.tmpl`/`.slurm`,
+  `shell` -> `source`/`training_shell.tmpl`/`.sh`); `_get_slurm_template` generalized to
+  `_render_submission_template`; `generate_initial_inputs` emits `study###_START.<ext>`;
+  `--submissionType` choices narrowed to `{slurm, shell}`.
+- **Phase C — DONE (with a stronger action than originally planned).** Instead of just
+  deprecating the JSON-to-SLURM code (original C2), we **deleted it outright** per a decision
+  during implementation: removed `src/yoke/helpers/create_slurm_files.py`,
+  `tests/helpers/test_slurm_create.py`, and the `src/yoke/helpers/templates/` dir
+  (`chicoma.json`, `slurm.tmpl`). The `chicoma_lsc_loderunner-ch-subsampling` harness (the
+  only one shipping `slurm_config.json`) was **removed entirely** (C3). The now-defunct JSON
+  branch was also stripped out of the legacy `applications/harnesses/START_study.py` (which is
+  still slated for deletion in Phase F).
+- **Phase D — DONE.** `HarnessStudy.continuation_setup(...)` added as a `@staticmethod`
+  (slurm + shell only; unsupported types raise `ValueError` — note the old `restart.py` raised
+  `UnboundLocalError` for `batch`). The templating contract is documented in the `HarnessStudy`
+  class docstring (D2). All 11 train scripts updated to
+  `from yoke.harnesses.base import HarnessStudy` + `HarnessStudy.continuation_setup(...)` (D3).
+  `src/yoke/utils/restart.py` and `tests/utils/test_restart.py` deleted (D4). `tests/harnesses/`
+  package created with `test_base.py` containing the ported continuation tests **and** the
+  parametrized (`slurm`/`shell`) round-trip test (D5). Full suite: **414 passed** with `-Werror`.
+
+**Left off at:** ready to start **Phase E**. `tests/harnesses/test_base.py` already exists and
+covers `continuation_setup` + a `run_study`/continuation round-trip; Phase E still needs a CLI
+test module (`tests/cli/test_start_study.py`), dedicated `render_template` and
+`load_hyperparameters` unit tests, an explicit dryrun `run_study` assertion of the printed
+submit command, and a coverage check.
+
+---
+
 This document lays out a plan for two intertwined goals:
 
 1. Turn `start_study` into a proper, installed **command-line tool** (`yoke-start-study`).
@@ -200,71 +239,77 @@ harnesses during migration (Phase F).
 
 Ordered, each item small enough to review independently.
 
-### Phase A — make the branch correct and runnable
-- [ ] A1. Add `--dryrun` (store_true) to `cli.add_default_args`. Permanently delete the
+### Phase A — make the branch correct and runnable — DONE
+- [x] A1. Add `--dryrun` (store_true) to `cli.add_default_args`. Permanently delete the
       commented-out CLI-level `--studyIDX` block (Decision Q2): `studyIDX` comes from the
       CSV's first column (`index_col=0`) and drives both the `study_###` directory names and
       the `<studyIDX>` template substitution passed to the train script. The old
       single-target CLI flag is redundant now that `yoke-start-study` iterates all rows.
-- [ ] A2. Remove unused imports from `src/yoke/cli/start_study.py`.
-- [ ] A3. Add docstrings + type annotations to all `HarnessStudy` methods (satisfy `D`/`ANN`).
-- [ ] A4. Run `ruff check` / `ruff format` and fix.
+- [x] A2. Remove unused imports from `src/yoke/cli/start_study.py`.
+- [x] A3. Add docstrings + type annotations to all `HarnessStudy` methods (satisfy `D`/`ANN`).
+- [x] A4. Run `ruff check` / `ruff format` and fix.
 
-### Phase B — submission-system support (SLURM + shell)
-- [ ] B1. Thread `submission_type` from `args` -> `HarnessStudy` -> `submit_job`.
-- [ ] B2. Introduce a dispatch table for {template filename, submit command} for
-      `slurm` and `shell` only.
-- [ ] B3. Generalize `generate_initial_inputs` / `_get_slurm_template` to the selected
-      submission template (slurm or shell).
-- [ ] B4. Narrow `--submissionType` choices to `{slurm, shell}` in `cli.add_default_args`.
-- [ ] B5. (See Phase D — flux/batch removal from the continuation logic happens as part of
+### Phase B — submission-system support (SLURM + shell) — DONE
+- [x] B1. Thread `submission_type` from `args` -> `HarnessStudy` -> `submit_job`.
+- [x] B2. Introduce a dispatch table for {template filename, submit command} for
+      `slurm` and `shell` only. (Implemented as `HarnessStudy.SUBMISSION_SYSTEMS`.)
+- [x] B3. Generalize `generate_initial_inputs` / `_get_slurm_template` to the selected
+      submission template (slurm or shell). (`_get_slurm_template` renamed to
+      `_render_submission_template`.)
+- [x] B4. Narrow `--submissionType` choices to `{slurm, shell}` in `cli.add_default_args`.
+- [x] B5. (See Phase D — flux/batch removal from the continuation logic happened as part of
       moving that logic into `HarnessStudy`.)
 
-### Phase C — decouple from deprecated JSON-to-SLURM
-- [ ] C1. Remove `create_slurm_files` usage from `base.py` and `start_study.py`; harnesses
+### Phase C — decouple from deprecated JSON-to-SLURM — DONE (removed, not just deprecated)
+- [x] C1. Remove `create_slurm_files` usage from `base.py` and `start_study.py`; harnesses
       always supply a complete submission script template.
-- [ ] C2. Mark `yoke.helpers.create_slurm_files` and any `slurm_config.json` handling as
-      **deprecated** (module docstring + `DeprecationWarning`), scheduled for removal in the
-      follow-up task. Do not delete yet (its test `tests/helpers/test_slurm_create.py` still
-      exists); coordinate removal with that cleanup task.
-- [ ] C3. Remove `slurm_config.json` from the one harness that still ships it
-      (`chicoma_lsc_loderunner-ch-subsampling`) as part of that harness's migration.
+- [x] C2. **Superseded:** rather than marking `create_slurm_files` deprecated, we **deleted**
+      it and its test entirely (`src/yoke/helpers/create_slurm_files.py`,
+      `tests/helpers/test_slurm_create.py`) along with the `src/yoke/helpers/templates/` dir
+      (`chicoma.json`, `slurm.tmpl`) that only it used.
+- [x] C3. Remove `slurm_config.json` from the one harness that still shipped it — the whole
+      `chicoma_lsc_loderunner-ch-subsampling` harness was removed.
 
-### Phase D — move continuation logic into `HarnessStudy` (Q4)
-- [ ] D1. Add a continuation entry point to `HarnessStudy` (a `@staticmethod`/`@classmethod`,
-      or a cheap in-script constructor) that reproduces the current
+### Phase D — move continuation logic into `HarnessStudy` (Q4) — DONE
+- [x] D1. Add a continuation entry point to `HarnessStudy` (implemented as the
+      `@staticmethod continuation_setup`) that reproduces the old
       `yoke.utils.restart.continuation_setup` behavior: read the local `training_input.tmpl` +
       submission template, substitute `<CHECKPOINT>`, `<INPUTFILE>`, `<epochIDX>`, write the
       `study###_restart_training_epoch####.{input,slurm|sh}` files, and return the new submit
-      script path. Support only `slurm` and `shell` (Q1).
-- [ ] D2. Document and lock the templating contract in one place (now entirely inside
-      `HarnessStudy`): the keys `<studyIDX>`, `<epochIDX>`, `<INPUTFILE>`, `<CONTINUATION>`,
-      `<CHECKPOINT>` and how `generate_tmpl_inputs` and the continuation method share them.
-- [ ] D3. Update every train script that imports `continuation_setup` to call the new
-      `HarnessStudy` location. Known callers include
-      `applications/harnesses/ch_DDP_loderunner/train_LodeRunner_ddp.py` (and the other DDP /
-      loderunner / policy / surrogate train scripts) — grep for
-      `from yoke.utils.restart import continuation_setup` across `applications/`.
-- [ ] D4. Remove `yoke.utils.restart` (and its flux/batch branches) once no train script
-      imports it; update/replace `tests/*` that reference it.
-- [ ] D5. Add a round-trip test: `generate_tmpl_inputs` then the continuation method in a temp
+      script path. Supports only `slurm` and `shell` (Q1); unsupported types raise
+      `ValueError` (the old code raised `UnboundLocalError`).
+- [x] D2. Document and lock the templating contract in one place (now entirely inside
+      `HarnessStudy`'s class docstring): the keys `<studyIDX>`, `<epochIDX>`, `<INPUTFILE>`,
+      `<CONTINUATION>`, `<CHECKPOINT>` and how `generate_tmpl_inputs` and the continuation
+      method share them.
+- [x] D3. Update every train script that imported `continuation_setup` to call the new
+      `HarnessStudy` location. All 11 callers updated (all DDP / loderunner / policy /
+      surrogate / diffusion / lightning train scripts).
+- [x] D4. Remove `yoke.utils.restart` (and its flux/batch branches) — done; no train script
+      imports it. `tests/utils/test_restart.py` removed (replaced by `tests/harnesses/`).
+- [x] D5. Add a round-trip test: `generate_tmpl_inputs` then the continuation method in a temp
       dir; assert the restart `.input`/`.slurm` (and `.sh`) are well-formed (correct
-      `epochIDX`, `INPUTFILE`, `CHECKPOINT`).
+      `epochIDX`, `INPUTFILE`, `CHECKPOINT`). Implemented in `tests/harnesses/test_base.py`,
+      parametrized over `slurm`/`shell`.
 
-### Phase E — tests
-- [ ] E1. Create `tests/harnesses/test_base.py` and `tests/cli/test_start_study.py`.
+### Phase E — tests — NEXT
+- [~] E1. Create `tests/harnesses/test_base.py` and `tests/cli/test_start_study.py`.
+      (`tests/harnesses/test_base.py` already created in Phase D; `tests/cli/test_start_study.py`
+      still to do.)
 - [ ] E2. Unit-test `render_template` conditional blocks (optional block present/absent).
 - [ ] E3. Unit-test `load_hyperparameters` (CSV -> list[dict], comment handling, index).
 - [ ] E4. Test `run_study` end-to-end in a temp dir with `dryrun=True` (assert files created,
-      submit command printed, nothing executed).
+      submit command printed, nothing executed). (Round-trip test partially exercises this;
+      still add an explicit assertion on the printed submit command.)
 - [ ] E5. Ensure `--cov` stays healthy for the new modules.
 
 ### Phase F — migrate harnesses + docs
 - [ ] F1. Migrate the maintained harnesses to single-template form (drop `training_START.*`):
       `ch_DDP_loderunner`, `ch_lightning_loderunner`, `ch_lsc_policy`,
-      `chicoma_lsc_loderunner-ch-subsampling`, `mini-run-test`, `mnist_surrogate`,
+      `mini-run-test`, `mnist_surrogate`,
       `moving_mnist`, `se_DDP_loderunner*`, `ch_lsc_inverse`, `ch_lsc_reward`,
       `ch_DDP_diffLDR`, `lsc_action`.
+      (`chicoma_lsc_loderunner-ch-subsampling` was removed in Phase C rather than migrated.)
 - [ ] F2. Update each harness `README.md` to show the `yoke-start-study` invocation.
 - [ ] F3. Add a top-level "Authoring a harness" guide (see Section 6) under `docs/` and link
       from the main `README.md`.
