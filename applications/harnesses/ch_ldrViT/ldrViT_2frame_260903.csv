@@ -24,5 +24,5 @@ studyIDX,KNODES,NGPUS,VIT_EMBED_DIM,VIT_NUM_LAYERS,VIT_NUM_HEADS,MAX_TIME_OFFSET
 # Here we study the effect of an LR schedule on the baseline model architecture
 #
 # UMich Baseline
-1,1,4,2034,6,12,1,2,1,1000,500,2.0e-3,0.5,0.5,1000,500,train_ldrViT_2frame.py,y26_artimis_ddc_g
+1,1,4,2304,6,12,1,2,1,1000,500,2.0e-3,0.5,0.5,1000,500,train_ldrViT_2frame.py,y26_artimis_ddc_g
 
