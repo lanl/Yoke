@@ -22,9 +22,11 @@ class HarnessStudy:
         hyperparameter CSV:
 
         - ``<studyIDX>`` — the study index; zero-padded to three digits.
-        - ``<epochIDX>`` — the epoch index; zero-padded to four digits in the
-          continuation submission script, left as a placeholder in the
-          continuation templates written by :meth:`generate_tmpl_inputs`.
+        - ``<epochIDX>`` — the epoch index; always zero-padded to four digits. Set
+          to ``0001`` for the first-launch submission by
+          :meth:`generate_initial_inputs`, left as a placeholder in the
+          continuation templates written by :meth:`generate_tmpl_inputs`, and set
+          to the next epoch (``last_epoch + 1``) by :meth:`continuation_setup`.
         - ``<INPUTFILE>`` — the input file the submission script should read; set
           to the first-launch input by :meth:`generate_initial_inputs` and to the
           per-epoch restart input by :meth:`continuation_setup`.
@@ -178,7 +180,8 @@ class HarnessStudy:
             Path: Path to the generated first-launch submission script.
         """
         sid = study["studyIDX"]
-        study["epochIDX"] = f"{sid:03d}"
+        # First-launch epoch is 1, zero-padded to four digits.
+        study["epochIDX"] = f"{1:04d}"
         study["INPUTFILE"] = f"study{sid:03d}_START.input"
 
         # Ensure that the continuation and checkpoint arguments do not appear in the

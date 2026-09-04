@@ -42,10 +42,36 @@ Phases **A, B, C, D, and E are complete**. **Phase F is next** and not started.
   (`yoke.cli.start_study`, `yoke.harnesses.base`). `ruff check` + `ruff format --check` clean.
   Full suite: **421 passed** with `-Werror` (E5).
 
-**Left off at:** ready to start **Phase F** (migrate maintained harnesses to single-template
-form, update harness READMEs to the `yoke-start-study` invocation, add the "Authoring a
-Harness" guide under `docs/`, and delete the legacy `applications/harnesses/START_study.py`
-once all harnesses are migrated and CI is green).
+- **Phase F1 — DONE.** Migrated all 13 maintained harnesses to single-template form. Merged
+  each `training_START.input` into its `training_input.tmpl`, wrapping the continuation-only
+  args in a `# <<optional:CONTINUATION>>` ... `# <<end>>` block; the submission `*.tmpl`
+  (already carrying `<epochIDX>`/`<INPUTFILE>` placeholders) became the single authoritative
+  submission template. Deleted all `training_START.{input,slurm,sh}`, `run_study.bat`, and the
+  per-harness `START_study.py` copies/symlinks. Notable per-harness fixes:
+    - **`base.py` padding fix:** `generate_initial_inputs` now sets the first-launch
+      `<epochIDX>` to `0001` (4-digit) instead of the studyIDX value; padding rule locked as
+      **studyIDX = 3-digit, epochIDX = 4-digit** everywhere.
+    - **`ch_DDP_diffLDR`:** removed the vestigial `CHECKPOINT` column (all `none`) from
+      `study_template.csv` so `<CHECKPOINT>` survives into the continuation template for
+      `continuation_setup` to fill (the column was pre-consuming the reserved placeholder).
+    - **`se_DDP_loderunner_finetune_cylex`:** finetune-only args (`--pretrained_model`,
+      `--freeze_backbone_epochs`, `--warmup_lr`) now live unconditionally in the single input
+      template; the train script already gates them on the first cycle, so no first-launch-only
+      block syntax was needed.
+    - **`mnist_surrogate`:** added a proper `training_slurm.tmpl` (from the stray
+      `training_START.slurm`) so it supports both slurm and shell; normalized `<checkpoint>` ->
+      `<CHECKPOINT>`. **`moving_mnist`:** shell-only, normalized `<checkpoint>` ->
+      `<CHECKPOINT>`. **`mini-run-test`:** reordered the continuation block to the end and
+      updated `local-yoke-runner.sh` to call `yoke-start-study`.
+  All 14 harness/submission-type combinations verified via a dryrun round-trip (correct
+  `0001`/`study###_START.input` in first-launch files; `<epochIDX>`/`<INPUTFILE>`/`<CHECKPOINT>`
+  preserved in continuation templates). Full suite still **421 passed** with `-Werror`; `ruff`
+  clean.
+
+**Left off at:** F1 done. Remaining Phase F: **F2** (update each harness `README.md` to show the
+`yoke-start-study` invocation), **F3** (add an "Authoring a Harness" guide under `docs/` and
+link from the main `README.md`), and **F4** (delete the legacy
+`applications/harnesses/START_study.py` once CI is green).
 
 ---
 
@@ -313,7 +339,7 @@ Ordered, each item small enough to review independently.
       `yoke.harnesses.base` are at 100% coverage; full suite is 421 passed with `-Werror`.
 
 ### Phase F — migrate harnesses + docs
-- [ ] F1. Migrate the maintained harnesses to single-template form (drop `training_START.*`):
+- [x] F1. Migrate the maintained harnesses to single-template form (drop `training_START.*`):
       `ch_DDP_loderunner`, `ch_lightning_loderunner`, `ch_lsc_policy`,
       `mini-run-test`, `mnist_surrogate`,
       `moving_mnist`, `se_DDP_loderunner*`, `ch_lsc_inverse`, `ch_lsc_reward`,
