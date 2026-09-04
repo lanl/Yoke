@@ -4,9 +4,7 @@ Status: **in development** on branch `start_study_upgrade`
 
 ## Progress log
 
-Phases **A, B, C, and D are complete** and committed. **Phase E is next** (note E1's
-`tests/harnesses/test_base.py` was already created during Phase D — see below). Phase F is
-not started.
+Phases **A, B, C, D, and E are complete**. **Phase F is next** and not started.
 
 - **Phase A — DONE.** `--dryrun` added to `cli.add_default_args`; commented-out `--studyIDX`
   block deleted; unused imports removed from `cli/start_study.py`; docstrings + type
@@ -33,11 +31,21 @@ not started.
   package created with `test_base.py` containing the ported continuation tests **and** the
   parametrized (`slurm`/`shell`) round-trip test (D5). Full suite: **414 passed** with `-Werror`.
 
-**Left off at:** ready to start **Phase E**. `tests/harnesses/test_base.py` already exists and
-covers `continuation_setup` + a `run_study`/continuation round-trip; Phase E still needs a CLI
-test module (`tests/cli/test_start_study.py`), dedicated `render_template` and
-`load_hyperparameters` unit tests, an explicit dryrun `run_study` assertion of the printed
-submit command, and a coverage check.
+- **Phase E — DONE.** Added `tests/cli/` package with `test_start_study.py` exercising `main()`
+  end-to-end under `--dryrun` for both `slurm` and `shell`, asserting study dirs / first-launch
+  + continuation files / copied `cp_files.txt` entries are created and that the exact submit
+  command (`sbatch ...` / `source ...`) is printed and never executed (E1, E4). Added
+  `render_template` conditional-block unit tests (optional block present/absent) (E2) and a
+  `load_hyperparameters` unit test (row->dict, `studyIDX` int index, comment/header handling)
+  (E3). Also added constructor invalid-submission-type and non-dryrun `submit_job`
+  (`os.system` monkeypatched) tests to close coverage gaps. **New modules at 100% coverage**
+  (`yoke.cli.start_study`, `yoke.harnesses.base`). `ruff check` + `ruff format --check` clean.
+  Full suite: **421 passed** with `-Werror` (E5).
+
+**Left off at:** ready to start **Phase F** (migrate maintained harnesses to single-template
+form, update harness READMEs to the `yoke-start-study` invocation, add the "Authoring a
+Harness" guide under `docs/`, and delete the legacy `applications/harnesses/START_study.py`
+once all harnesses are migrated and CI is green).
 
 ---
 
@@ -292,16 +300,17 @@ Ordered, each item small enough to review independently.
       `epochIDX`, `INPUTFILE`, `CHECKPOINT`). Implemented in `tests/harnesses/test_base.py`,
       parametrized over `slurm`/`shell`.
 
-### Phase E — tests — NEXT
-- [~] E1. Create `tests/harnesses/test_base.py` and `tests/cli/test_start_study.py`.
-      (`tests/harnesses/test_base.py` already created in Phase D; `tests/cli/test_start_study.py`
-      still to do.)
-- [ ] E2. Unit-test `render_template` conditional blocks (optional block present/absent).
-- [ ] E3. Unit-test `load_hyperparameters` (CSV -> list[dict], comment handling, index).
-- [ ] E4. Test `run_study` end-to-end in a temp dir with `dryrun=True` (assert files created,
-      submit command printed, nothing executed). (Round-trip test partially exercises this;
-      still add an explicit assertion on the printed submit command.)
-- [ ] E5. Ensure `--cov` stays healthy for the new modules.
+### Phase E — tests — DONE
+- [x] E1. Create `tests/harnesses/test_base.py` and `tests/cli/test_start_study.py`.
+      (`tests/harnesses/test_base.py` created in Phase D; `tests/cli/test_start_study.py`
+      added in Phase E.)
+- [x] E2. Unit-test `render_template` conditional blocks (optional block present/absent).
+- [x] E3. Unit-test `load_hyperparameters` (CSV -> list[dict], comment handling, index).
+- [x] E4. Test `run_study` end-to-end in a temp dir with `dryrun=True` (assert files created,
+      submit command printed, nothing executed). Done via the CLI `main()` dryrun tests, which
+      assert the exact `sbatch`/`source` command is printed.
+- [x] E5. Ensure `--cov` stays healthy for the new modules. `yoke.cli.start_study` and
+      `yoke.harnesses.base` are at 100% coverage; full suite is 421 passed with `-Werror`.
 
 ### Phase F — migrate harnesses + docs
 - [ ] F1. Migrate the maintained harnesses to single-template form (drop `training_START.*`):

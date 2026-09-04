@@ -100,6 +100,137 @@ def test_invalid_submission_type_raises(
         HarnessStudy.continuation_setup("x", 0, 0, "batch")
 
 
+def test_constructor_rejects_invalid_submission_type(tmp_path: Path) -> None:
+    """The HarnessStudy constructor rejects unsupported submission systems."""
+    with pytest.raises(ValueError):
+        HarnessStudy(
+            rundir=str(tmp_path / "runs"),
+            template_dir=str(tmp_path),
+            cp_file=str(tmp_path / "cp.txt"),
+            submission_type="flux",
+        )
+
+
+def test_submit_job_executes_when_not_dryrun(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """submit_job invokes os.system with the configured submit command."""
+    (tmp_path / "training_input.tmpl").write_text("x\n")
+    (tmp_path / "training_slurm.tmpl").write_text("y\n")
+    harness = HarnessStudy(
+        rundir=str(tmp_path / "runs"),
+        template_dir=str(tmp_path),
+        cp_file=str(tmp_path / "cp.txt"),
+        submission_type="slurm",
+        dryrun=False,
+    )
+
+    calls: list[str] = []
+    monkeypatch.setattr("os.system", lambda cmd: calls.append(cmd) or 0)
+
+    study_dir = tmp_path / "runs" / "study_001"
+    study_dir.mkdir(parents=True)
+    harness.submit_job(study_dir, study_dir / "study001_START.slurm")
+
+    assert len(calls) == 1
+    assert "sbatch study001_START.slurm" in calls[0]
+
+
+def test_render_template_includes_optional_block_when_key_present(
+    tmp_path: Path,
+) -> None:
+    """render_template keeps an optional block when its key is in the subs."""
+    tmpl = tmp_path / "training_input.tmpl"
+    tmpl.write_text(
+        "--studyIDX=<studyIDX>\n"
+        "# <<optional:CONTINUATION>>\n"
+        "--continuation\n"
+        "--checkpoint=<CHECKPOINT>\n"
+        "# <<end>>\n"
+        "--done\n"
+    )
+    harness = HarnessStudy(
+        rundir=str(tmp_path / "runs"),
+        template_dir=str(tmp_path),
+        cp_file=str(tmp_path / "cp.txt"),
+        submission_type="slurm",
+    )
+
+    rendered = harness.render_template(
+        tmpl, {"studyIDX": 3, "CONTINUATION": True, "CHECKPOINT": "ckpt.pt"}
+    )
+
+    assert "--studyIDX=003" in rendered
+    assert "--continuation" in rendered
+    assert "--checkpoint=ckpt.pt" in rendered
+    assert "--done" in rendered
+    # Marker lines are stripped from output.
+    assert "<<optional:" not in rendered
+    assert "<<end>>" not in rendered
+
+
+def test_render_template_omits_optional_block_when_key_absent(
+    tmp_path: Path,
+) -> None:
+    """render_template drops an optional block when its key is missing."""
+    tmpl = tmp_path / "training_input.tmpl"
+    tmpl.write_text(
+        "--studyIDX=<studyIDX>\n"
+        "# <<optional:CONTINUATION>>\n"
+        "--continuation\n"
+        "--checkpoint=<CHECKPOINT>\n"
+        "# <<end>>\n"
+        "--done\n"
+    )
+    harness = HarnessStudy(
+        rundir=str(tmp_path / "runs"),
+        template_dir=str(tmp_path),
+        cp_file=str(tmp_path / "cp.txt"),
+        submission_type="slurm",
+    )
+
+    rendered = harness.render_template(tmpl, {"studyIDX": 3})
+
+    assert "--studyIDX=003" in rendered
+    assert "--continuation" not in rendered
+    # The <CHECKPOINT> token never appears because the whole block is skipped.
+    assert "<CHECKPOINT>" not in rendered
+    assert "--checkpoint" not in rendered
+    assert "--done" in rendered
+
+
+def test_load_hyperparameters_parses_rows_index_and_comments(
+    tmp_path: Path,
+) -> None:
+    """load_hyperparameters returns one dict per row, keyed by studyIDX."""
+    csv = tmp_path / "hyperparameters.csv"
+    csv.write_text(
+        "# a comment line describing the study\n"
+        "studyIDX,init_learnrate,batch_size\n"
+        "1,0.001,8\n"
+        "# inline comment / ignored row description\n"
+        "2,0.002,16\n"
+    )
+    harness = HarnessStudy(
+        rundir=str(tmp_path / "runs"),
+        template_dir=str(tmp_path),
+        cp_file=str(tmp_path / "cp.txt"),
+        submission_type="slurm",
+    )
+
+    studies = harness.load_hyperparameters(str(csv))
+
+    assert len(studies) == 2
+    assert studies[0]["studyIDX"] == 1
+    assert isinstance(studies[0]["studyIDX"], int)
+    assert studies[0]["init_learnrate"] == pytest.approx(0.001)
+    assert studies[0]["batch_size"] == 8
+    assert studies[1]["studyIDX"] == 2
+    assert studies[1]["init_learnrate"] == pytest.approx(0.002)
+    assert studies[1]["batch_size"] == 16
+
+
 def _write_single_template_harness(harness_dir: Path, submission_type: str) -> None:
     """Write a minimal single-template harness for round-trip testing.
 
