@@ -11,7 +11,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from yoke.models.policyCNNmodules import gaussian_policyCNN
 from yoke.datasets.lsc_dataset import LSC_hfield_policy_DataSet
 from yoke.utils.training.epoch.lsc_policy import train_lsc_policy_epoch
-from yoke.utils.restart import continuation_setup
+from yoke.harnesses.base import HarnessStudy
 from yoke.utils.dataload import make_distributed_dataloader
 from yoke.utils.checkpointing import load_model_and_optimizer
 from yoke.utils.checkpointing import save_model_and_optimizer
@@ -381,7 +381,7 @@ def main(
         #############################################
         FINISHED_TRAINING = epochIDX + 1 > total_epochs
         if not FINISHED_TRAINING:
-            new_slurm_file = continuation_setup(
+            new_slurm_file = HarnessStudy.continuation_setup(
                 new_chkpt_path, studyIDX, last_epoch=epochIDX
             )
             os.system(f"sbatch {new_slurm_file}")

@@ -42,6 +42,33 @@ NOTE: Data for training is not housed within YOKE. The data locations are
 specified through command-line arguments passed to the programs in
 `harnesses`, `evaluation`, and `viewers`.
 
+Harnesses
+---------
+
+A *harness* is a self-contained, reproducible configuration for training or
+evaluating a model on a specific dataset. Each harness under
+`applications/harnesses/<name>/` supplies a training script, a single
+`training_input.tmpl`, a complete submission template (`training_slurm.tmpl` or
+`training_shell.tmpl`), a `cp_files.txt` list, and a hyperparameter CSV.
+
+Studies are launched with the installed `yoke-start-study` command, run from
+inside a harness directory:
+
+```bash
+>> cd applications/harnesses/ch_DDP_loderunner
+>> yoke-start-study --csv ddp_paper_study.csv --submissionType slurm --dryrun
+```
+
+`--dryrun` renders the study directories and prints the submit commands without
+submitting any jobs; use `--submissionType shell` for local/dev runs. Each row of
+the CSV (indexed by its first column, `studyIDX`) produces one `study_###`
+directory.
+
+For a step-by-step guide to writing a new harness — including the template
+conventions, reserved substitution keys, and the epoch-continuation lifecycle —
+see the "Authoring a Yoke Harness" and "The `yoke-start-study` CLI" pages in the
+`docs/` (`docs/source/harnesses.rst` and `docs/source/start_study.rst`).
+
 Installation
 ------------
 

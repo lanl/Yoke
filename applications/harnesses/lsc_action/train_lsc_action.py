@@ -22,7 +22,7 @@ from yoke.models.surrogateCNNmodules import tCNNsurrogate
 from yoke.datasets.lsc_dataset import LSC_cntr2hfield_DataSet
 from yoke.utils.training.epoch import train_array_csv_epoch
 from yoke.utils.dataload import make_dataloader
-from yoke.utils.restart import continuation_setup
+from yoke.harnesses.base import HarnessStudy
 from yoke.utils.checkpointing import save_model_and_optimizer_hdf5
 from yoke.utils.checkpointing import load_model_and_optimizer_hdf5
 from yoke.helpers import cli
@@ -300,7 +300,7 @@ if __name__ == "__main__":
     #############################################
     FINISHED_TRAINING = epochIDX + 1 > total_epochs
     if not FINISHED_TRAINING:
-        new_slurm_file = continuation_setup(
+        new_slurm_file = HarnessStudy.continuation_setup(
             new_h5_path, studyIDX, last_epoch=epochIDX
         )
         os.system(f"sbatch {new_slurm_file}")

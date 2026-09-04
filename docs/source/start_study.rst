@@ -1,53 +1,73 @@
-Using START_study.py
-=====================
+The ``yoke-start-study`` CLI
+============================
 
-.. warning::
+``yoke-start-study`` is the installed command-line tool used to launch a training
+or evaluation **study** from a harness directory. It replaces the old,
+copied-per-harness ``START_study.py`` script: the launcher logic now lives in the
+installable package (:mod:`yoke.cli.start_study` and
+:class:`yoke.harnesses.base.HarnessStudy`) and is invoked as a real command.
 
-   🚧 **This section is under active construction!**  
-   Expect rough edges, placeholder content, and ongoing changes.
-
-``START_study.py`` is the common entry point script used across all harnesses in
-Yoke to launch a full training or evaluation "study". It provides a consistent
-interface for kicking off jobs using dataset-specific configurations, SLURM job
-templates, and predefined model setups.
-
-How It Works
+How it works
 ------------
 
-Each harness directory contains a copy of ``START_study.py``. Despite being
-duplicated across folders, the script operates similarly in each case:
+Run from inside a harness directory, ``yoke-start-study``:
 
-1. Loads harness-specific config files (e.g. ``hyperparameters.csv``, `.tmpl` templates)
-2. Prepares SLURM job scripts and input files
-3. Submits the job using `sbatch` or a similar SLURM-compatible mechanism
-4. Optionally logs outputs, paths, or study parameters
+1. Parses arguments (:func:`yoke.helpers.cli.add_default_args`).
+2. Constructs a :class:`yoke.harnesses.base.HarnessStudy` from the harness's
+   configuration files (``training_input.tmpl``, the submission template, and
+   ``cp_files.txt``).
+3. Loads the hyperparameter CSV — one row per study.
+4. For each row, creates ``runs/study_###/`` (``###`` = ``studyIDX``), renders the
+   first-launch and continuation templates, copies the ``cp_files.txt`` entries,
+   and submits the first job (``sbatch`` for SLURM, ``source`` for shell).
 
-This makes it easy to clone a harness, adjust just the configuration, and reuse the
-same study launcher without rewriting training logic.
+Because the CSV drives everything, re-using a harness means editing configuration
+files, not rewriting a launcher.
 
-Typical Usage
--------------
+Usage
+-----
 
 .. code-block:: bash
 
-    cd applications/harnesses/chicoma_lsc_loderunner_scheduled
-    python ../START_study.py
+    cd applications/harnesses/ch_DDP_loderunner
+    yoke-start-study --csv ddp_paper_study.csv --submissionType slurm
 
-This will:
+Arguments
+---------
 
-- Prepare training input files using Jinja2 templates
-- Configure job submission parameters
-- Launch one or more training runs via SLURM
+- ``--csv`` — hyperparameter CSV (default ``./hyperparameters.csv``). Its first
+  column is ``studyIDX``; one row maps to one ``study_###`` directory.
+- ``--rundir`` — directory to create the ``study_###`` directories in
+  (default ``./runs``). This is typically a softlink to scratch space.
+- ``--cpFile`` — text file listing files to copy into each study directory
+  (default ``./cp_files.txt``).
+- ``--submissionType`` — ``slurm`` (submit with ``sbatch``) or ``shell`` (submit
+  with ``source``, for local/dev runs). Defaults to ``slurm``.
+- ``--dryrun`` — prepare study directories and render all files, but print the
+  submit command instead of executing it. Nothing is submitted.
 
-Customization
--------------
+Dry runs
+--------
 
-Harness-specific logic (e.g., model choice, dataset location) is controlled by:
+Use ``--dryrun`` to inspect exactly what a study would do without touching the
+scheduler:
 
-- Values in ``hyperparameters.csv``
-- Template files (e.g. ``training_input.tmpl``, ``training_slurm.tmpl``)
-- CLI arguments passed to ``START_study.py`` (if supported)
+.. code-block:: bash
 
-You can modify or extend this script to support new clusters, workflows, or
-non-SLURM systems.
+    yoke-start-study --csv ddp_paper_study.csv --submissionType slurm --dryrun
 
+This renders each ``study_###`` directory and prints the ``sbatch``/``source``
+command that *would* be run.
+
+Selecting which studies to run
+------------------------------
+
+``yoke-start-study`` iterates **every** row of the CSV. To run a single study,
+reduce the CSV to that one row (comment out the others with a leading ``#``), or
+keep separate CSV files per study set.
+
+Authoring a harness
+-------------------
+
+For how the templates, reserved keys, and continuation lifecycle work, see
+:doc:`harnesses`.

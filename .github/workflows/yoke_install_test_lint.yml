@@ -117,10 +117,3 @@ jobs:
         ruff format src/yoke/losses --check --diff
       continue-on-error: false
 
-    - name: Lint applications/harnesses/START_study.py
-      run: |
-        ruff check applications/harnesses/START_study.py
-        ruff check applications/harnesses/START_study.py --preview
-        ruff format applications/harnesses/START_study.py --check --diff
-      continue-on-error: false
-

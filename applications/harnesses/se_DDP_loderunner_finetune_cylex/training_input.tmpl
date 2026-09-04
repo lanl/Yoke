@@ -51,6 +51,14 @@ cx241203_prefixes_test_5pct_noBe_noVoid_for_finetune.txt
 <NVAL_BATCH>
 --TRAIN_PER_VAL
 5
+--pretrained_model
+/net/sescratch1/exempt/artimis/soumide/projects/yoke_runs/pretrain_pli_finetune_cylex_pretrainflag_freeze/pli_study001_modelState_epoch0100.pth
+--freeze_backbone_epochs
+2
+--warmup_lr
+2e-05
+# <<optional:CONTINUATION>>
 --continuation
 --checkpoint
 <CHECKPOINT>
+# <<end>>
