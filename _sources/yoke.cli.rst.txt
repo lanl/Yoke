@@ -1,0 +1,21 @@
+yoke.cli package
+================
+
+Submodules
+----------
+
+yoke.cli.start\_study module
+----------------------------
+
+.. automodule:: yoke.cli.start_study
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+Module contents
+---------------
+
+.. automodule:: yoke.cli
+   :members:
+   :show-inheritance:
+   :undoc-members:
