@@ -80,8 +80,18 @@ Phases **A, B, C, D, and E are complete**. **Phase F is next** and not started.
   say so). `se_` = Selene, `ch_` = Chicoma. All remaining CSVs render cleanly (dryrun, no
   unrendered non-reserved tokens); full suite **421 passed** with `-Werror`.
 
-**Left off at:** F2 done. Remaining Phase F: **F3** (add an "Authoring a Harness" guide under
-`docs/` and link from the main `README.md`), and **F4** (delete the legacy
+- **Phase F3 — DONE.** Rewrote the two stale docs pages to describe the new workflow:
+  `docs/source/harnesses.rst` is now the **"Authoring a Yoke Harness"** guide (directory
+  layout, step-by-step recipe, the `<KEY>` / `# <<optional:KEY>>` template convention, the
+  reserved keys `studyIDX`/`epochIDX`/`INPUTFILE`/`CONTINUATION`/`CHECKPOINT`, and the
+  continuation lifecycle via `HarnessStudy.continuation_setup`), and
+  `docs/source/start_study.rst` now documents the **`yoke-start-study` CLI** (arguments,
+  dryrun, one-row-per-study behavior) instead of the legacy `START_study.py`. Added a
+  **Harnesses** section to the top-level `README.md` introducing `yoke-start-study` and linking
+  to both docs pages. Sphinx builds the pages cleanly (only the pre-existing `modules` autodoc
+  warning remains, unrelated to this change).
+
+**Left off at:** F3 done. Remaining Phase F: **F4** (delete the legacy
 `applications/harnesses/START_study.py` once CI is green).
 
 ---
@@ -361,8 +371,9 @@ Ordered, each item small enough to review independently.
       removed deprecated CSVs (columns no longer matching the template), deleted the redundant
       `lsc_action/training_slurm_debug.tmpl`, and removed the `mini-run-test` harness entirely
       (superseded by the `mnist_surrogate`/`moving_mnist` quick-check harnesses).
-- [ ] F3. Add a top-level "Authoring a harness" guide (see Section 6) under `docs/` and link
-      from the main `README.md`.
+- [x] F3. Add a top-level "Authoring a harness" guide (see Section 6) under `docs/` and link
+      from the main `README.md`. (Rewrote `harnesses.rst` as the authoring guide and
+      `start_study.rst` as the CLI reference; added a Harnesses section to `README.md`.)
 - [ ] F4. Delete `applications/harnesses/START_study.py` once all harnesses are migrated and
       CI is green.
 
