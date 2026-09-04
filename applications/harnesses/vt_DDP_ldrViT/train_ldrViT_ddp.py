@@ -7,7 +7,7 @@ import torch.nn as nn
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-from yoke.models.vit.swin.bomberman import LodeRunner
+from yoke.models.vit.swin.bomberman import LodeRunnerViT
 from yoke.datasets.lsc_dataset import LSC_rho2rho_temporal_DataSet
 from yoke.utils.training.epoch.loderunner import train_DDP_loderunner_epoch
 from yoke.harnesses.base import HarnessStudy
@@ -22,11 +22,10 @@ from yoke.helpers import cli
 # Inputs
 #############################################
 descr_str = (
-    "Uses DDP to train LodeRunner architecture on single-timstep input and output "
-    "of the lsc240420 per-material density fields."
+    "Uses DDP to train LodeRunner-ViT architecture on lsc240420."
 )
 parser = argparse.ArgumentParser(
-    prog="DDP LodeRunner Training", description=descr_str, fromfile_prefix_chars="@"
+    prog="DDP LodeRunner-ViT Training", description=descr_str, fromfile_prefix_chars="@"
 )
 parser = cli.add_default_args(parser=parser)
 parser = cli.add_filepath_args(parser=parser)
@@ -35,14 +34,6 @@ parser = cli.add_model_args(parser=parser)
 parser = cli.add_training_args(parser=parser)
 parser = cli.add_cosine_lr_scheduler_args(parser=parser)
 
-# DPOT‐style noise parameter
-parser.add_argument(
-    "--noise_scale",
-    type=float,
-    default=0.0,
-    help="Relative magnitude for Gaussian noise injection (e.g. 5e-5).",
-)
-
 parser.add_argument(
     "--max_timeIDX_offset",
     type=int,
@@ -50,6 +41,28 @@ parser.add_argument(
     help="Maximum time offset for input/output image pairs.",
 )
 
+# ViT backbone parameters
+parser.add_argument(
+    "--vit_embed_dim",
+    type=int,
+    default=512,
+    help="Embedding dimension for the ViT backbone.",
+)
+
+parser.add_argument(
+    "--vit_num_layers",
+    type=int,
+    default=12,
+    help="Number of ViT layers in backbone.",
+)
+
+parser.add_argument(
+    "--vit_num_heads",
+    type=int,
+    default=8,
+    help="Number of ViT attention heads in backbone.",
+)
+        
 # Change some default filepaths.
 parser.set_defaults(
     train_filelist="lsc240420_prefixes_train_80pct.txt",
@@ -112,9 +125,13 @@ def main(args, rank, world_size, local_rank, device):
     validation_filelist = args.FILELIST_DIR + args.validation_filelist
 
     # Model Parameters
-    embed_dim = args.embed_dim
-    block_structure = tuple(args.block_structure)
+    vit_embed_dim = args.vit_embed_dim
+    vit_num_layers = args.vit_num_layers
+    vit_num_heads = args.vit_num_heads
 
+    # Learning rate
+    anchor_lr = args.anchor_lr
+    
     # Training parameters
     max_timeIDX_offset = args.max_timeIDX_offset
 
@@ -140,7 +157,7 @@ def main(args, rank, world_size, local_rank, device):
     #############################################
     # Dictionary of available models.
     available_models = {
-        "LodeRunner": LodeRunner
+        "LodeRunnerViT": LodeRunnerViT
     }
 
     # Not all channels are available for every PLI simulation. The burn-fraction of the
@@ -238,18 +255,19 @@ def main(args, rank, world_size, local_rank, device):
         'Wvelocity',
     ]
     
-    # Model arguments for LodeRunner.
+    # Model arguments for LodeRunner-ViT.
     model_args = {
         "default_vars": channel_list,
         "image_size": (1120, 400),
         "patch_size": (5, 5),
-        "embed_dim": embed_dim,
-        "emb_factor": 2,
+        "embed_dim": vit_embed_dim,
         "num_heads": 8,
-        "block_structure": block_structure,
-        "window_sizes": [(2, 2), (2, 2), (2, 2), (2, 2)],
-        "patch_merge_scales": [(2, 2), (2, 2), (2, 2)],
-        "noise_scale": 0.0,
+        "num_attention_heads": vit_num_heads,
+        "attention_head_dim": int(vit_embed_dim/vit_num_heads),
+        "num_layers": vit_num_layers,
+        "mlp_ratio": 4.0,
+        "concat_mlp": True,
+        "verbose": False,
     }
 
     #############################################
@@ -262,7 +280,7 @@ def main(args, rank, world_size, local_rank, device):
             checkpoint,
             optimizer_class=torch.optim.AdamW,
             optimizer_kwargs={
-                "lr": 1e-4,
+                "lr": anchor_lr,
                 "betas": (0.9, 0.999),
                 "eps": 1e-08,
                 "weight_decay": 0.01,
@@ -275,14 +293,14 @@ def main(args, rank, world_size, local_rank, device):
         # Initialize model and optimizer state.
         # If not continuing, set starting_epoch to 0.
         starting_epoch = 0
-        model = LodeRunner(**model_args)
+        model = LodeRunnerViT(**model_args)
         # Move model to GPU before instantiating optimizer and DDP.
         model.to(device)
 
         # Instantiate optimizer and move state to GPU.
         optimizer = torch.optim.AdamW(
             model.parameters(),
-            lr=1e-4,
+            lr=anchor_lr,
             betas=(0.9, 0.999),
             eps=1e-08,
             weight_decay=0.01
@@ -316,7 +334,7 @@ def main(args, rank, world_size, local_rank, device):
     LRsched = ConstantWithWarmupScheduler(
         optimizer,
         warmup_steps=0,
-        lr_constant=1e-4,
+        lr_constant=anchor_lr,
         last_epoch=last_epoch,
     )
 
@@ -397,7 +415,6 @@ def main(args, rank, world_size, local_rank, device):
             device=device,
             rank=rank,
             world_size=world_size,
-            dataset="pli",
         )
 
         if TIME_EPOCH:

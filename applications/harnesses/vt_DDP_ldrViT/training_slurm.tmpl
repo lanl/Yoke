@@ -10,20 +10,21 @@
 # The following are one set of SBATCH options for the Venado GPU
 # partition. There are optional other constraints.
 
-#SBATCH --job-name=ch500e_s<studyIDX>_e<epochIDX>
-#SBATCH --account=y26_artimis-fmod_g
-#PRODUCTION  #SBATCH --partition=gpu
-#PRODUCTION  #SBATCH --time=16:00:00
+#SBATCH --job-name=ldrViT_s<studyIDX>_e<epochIDX>
+#SBATCH --account=vt-normal_g
+#PRODUCTION  
 #SBATCH --partition=gpu
-#SBATCH --time=8:00:00
-#DEBUG  #SBATCH --time=1:00:00
+#SBATCH --time=10:00:00
+#SBATCH --qos=standard
+#DEBUG
+#DEBUG  #SBATCH --partition=gpu_debug
+#DEBUG  #SBATCH --time=2:00:00
 #DEBUG  #SBATCH --qos=debug
 #DEBUG  #SBATCH --reservation=gpu_debug
-#DEBUG  #SBATCH --partition=gpu_debug
 #SBATCH --nodes=<KNODES>
 #SBATCH --ntasks-per-node=<NGPUS>
 #SBATCH --gpus-per-node=<NGPUS>
-#SBATCH --cpus-per-task=16
+#SBATCH --cpus-per-task=72
 #SBATCH --output=study<studyIDX>_epoch<epochIDX>.out
 #SBATCH --error=study<studyIDX>_epoch<epochIDX>.err
 #SBATCH -vvv
@@ -47,7 +48,7 @@ export NCCL_SOCKET_IFNAME=hsn0  # Check possible interfaces with `ip link show`
 # export NCCL_DEBUG_SUBSYS=INIT
 
 # Load correct python environment
-source $HOME/yoke_260202/bin/activate
+source $HOME/yoke_cu126_venv_260626/bin/activate
 
 # Set number of threads per GPU
 export OMP_NUM_THREADS=10

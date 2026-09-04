@@ -1,0 +1,14 @@
+studyIDX,KNODES,NGPUS,EMBED_DIM,B0,B1,B2,B3,MAX_TIME_OFFSET,NUM_WORKERS,BATCH_SIZE,ANCHOR_LR,NTRN_BATCH,NVAL_BATCH,train_script
+# This is a set of training runs for the LodeRunner-20channel paper
+# FTherm_PLI_tiny_DT1
+1,1,4,96,1,1,3,1,1,2,10,1e-4,1000,500,train_LodeRunner_ddp.py
+# FTherm_PLI_small_DT1
+2,1,4,96,1,1,9,1,1,2,10,1e-4,1000,500,train_LodeRunner_ddp.py
+# FTherm_PLI_big_DT1
+3,1,4,128,1,1,9,1,1,2,10,1e-4,1000,500,train_LodeRunner_ddp.py
+# FTherm_PLI_large_DT1
+4,1,4,192,1,1,9,1,1,2,10,1e-4,1000,500,train_LodeRunner_ddp.py
+# FTherm_PLI_huge_DT1 - OOM on venadito
+5,1,4,352,1,1,9,1,1,2,10,1e-4,1000,500,train_LodeRunner_ddp.py
+# FTherm_PLI_giant_DT1 - OOM on venadito
+6,1,4,512,1,1,11,2,1,2,10,1e-4,1000,500,train_LodeRunner_ddp.py

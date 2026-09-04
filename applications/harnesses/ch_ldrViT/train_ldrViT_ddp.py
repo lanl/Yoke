@@ -7,14 +7,15 @@ import torch.nn as nn
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-from yoke.models.vit.swin.bomberman import LodeRunner
+from yoke.models.vit.swin.bomberman import LodeRunnerViT
 from yoke.datasets.lsc_dataset import LSC_rho2rho_temporal_DataSet
 from yoke.utils.training.epoch.loderunner import train_DDP_loderunner_epoch
 from yoke.harnesses.base import HarnessStudy
 from yoke.utils.dataload import make_distributed_dataloader
 from yoke.utils.checkpointing import load_model_and_optimizer
 from yoke.utils.checkpointing import save_model_and_optimizer
-from yoke.lr_schedulers import ConstantWithWarmupScheduler
+from yoke.utils.ema import build_ema_model, save_ema_checkpoint
+from yoke.lr_schedulers import CosineWithWarmupScheduler
 from yoke.helpers import cli
 
 
@@ -22,11 +23,10 @@ from yoke.helpers import cli
 # Inputs
 #############################################
 descr_str = (
-    "Uses DDP to train LodeRunner architecture on single-timstep input and output "
-    "of the lsc240420 per-material density fields."
+    "Uses DDP to train LodeRunner-ViT architecture on lsc240420."
 )
 parser = argparse.ArgumentParser(
-    prog="DDP LodeRunner Training", description=descr_str, fromfile_prefix_chars="@"
+    prog="DDP LodeRunner-ViT Training", description=descr_str, fromfile_prefix_chars="@"
 )
 parser = cli.add_default_args(parser=parser)
 parser = cli.add_filepath_args(parser=parser)
@@ -35,19 +35,77 @@ parser = cli.add_model_args(parser=parser)
 parser = cli.add_training_args(parser=parser)
 parser = cli.add_cosine_lr_scheduler_args(parser=parser)
 
-# DPOT‐style noise parameter
-parser.add_argument(
-    "--noise_scale",
-    type=float,
-    default=0.0,
-    help="Relative magnitude for Gaussian noise injection (e.g. 5e-5).",
-)
-
 parser.add_argument(
     "--max_timeIDX_offset",
     type=int,
     default=1,
     help="Maximum time offset for input/output image pairs.",
+)
+
+# ViT backbone parameters
+parser.add_argument(
+    "--vit_embed_dim",
+    type=int,
+    default=512,
+    help="Embedding dimension for the ViT backbone.",
+)
+
+parser.add_argument(
+    "--vit_num_layers",
+    type=int,
+    default=12,
+    help="Number of ViT layers in backbone.",
+)
+
+parser.add_argument(
+    "--vit_num_heads",
+    type=int,
+    default=8,
+    help="Number of ViT attention heads in backbone.",
+)
+
+# EMA + gradient-clipping parameters (ArtIMich recipe).
+parser.add_argument(
+    "--use_ema",
+    action="store_true",
+    help="Maintain a Diffusers-style warmup EMA shadow of the model and save "
+    "the EMA weights as a companion production checkpoint.",
+)
+
+parser.add_argument(
+    "--ema_update_after_step",
+    type=int,
+    default=1000,
+    help="Global optimizer-step after which the EMA begins updating.",
+)
+
+parser.add_argument(
+    "--ema_max_decay",
+    type=float,
+    default=0.9999,
+    help="Maximum (asymptotic) EMA decay.",
+)
+
+parser.add_argument(
+    "--ema_inv_gamma",
+    type=float,
+    default=1.0,
+    help="Inverse-gamma factor controlling the EMA warmup rate.",
+)
+
+parser.add_argument(
+    "--ema_power",
+    type=float,
+    default=2.0 / 3.0,
+    help="Warmup power for the EMA decay schedule.",
+)
+
+parser.add_argument(
+    "--grad_clip",
+    type=float,
+    default=1.0,
+    help="Global gradient-norm clip value applied before each optimizer step. "
+    "Set <= 0 to disable clipping.",
 )
 
 # Change some default filepaths.
@@ -112,11 +170,27 @@ def main(args, rank, world_size, local_rank, device):
     validation_filelist = args.FILELIST_DIR + args.validation_filelist
 
     # Model Parameters
-    embed_dim = args.embed_dim
-    block_structure = tuple(args.block_structure)
+    vit_embed_dim = args.vit_embed_dim
+    vit_num_layers = args.vit_num_layers
+    vit_num_heads = args.vit_num_heads
+
+    # Learning rate
+    anchor_lr = args.anchor_lr
+    num_cycles = args.num_cycles
+    min_fraction = args.min_fraction
+    terminal_steps = args.terminal_steps
+    warmup_steps = args.warmup_steps
 
     # Training parameters
     max_timeIDX_offset = args.max_timeIDX_offset
+
+    # EMA + gradient-clip parameters.
+    use_ema = args.use_ema
+    ema_update_after_step = args.ema_update_after_step
+    ema_max_decay = args.ema_max_decay
+    ema_inv_gamma = args.ema_inv_gamma
+    ema_power = args.ema_power
+    grad_clip = args.grad_clip if args.grad_clip and args.grad_clip > 0 else None
 
     # Number of workers controls how batches of data are prefetched and,
     # possibly, pre-loaded onto GPUs. If the number of workers is large they
@@ -140,7 +214,7 @@ def main(args, rank, world_size, local_rank, device):
     #############################################
     # Dictionary of available models.
     available_models = {
-        "LodeRunner": LodeRunner
+        "LodeRunnerViT": LodeRunnerViT
     }
 
     # Not all channels are available for every PLI simulation. The burn-fraction of the
@@ -238,18 +312,19 @@ def main(args, rank, world_size, local_rank, device):
         'Wvelocity',
     ]
     
-    # Model arguments for LodeRunner.
+    # Model arguments for LodeRunner-ViT.
     model_args = {
         "default_vars": channel_list,
         "image_size": (1120, 400),
-        "patch_size": (5, 5),
-        "embed_dim": embed_dim,
-        "emb_factor": 2,
+        "patch_size": (10, 5),
+        "embed_dim": vit_embed_dim,
         "num_heads": 8,
-        "block_structure": block_structure,
-        "window_sizes": [(2, 2), (2, 2), (2, 2), (2, 2)],
-        "patch_merge_scales": [(2, 2), (2, 2), (2, 2)],
-        "noise_scale": 0.0,
+        "num_attention_heads": vit_num_heads,
+        "attention_head_dim": int(vit_embed_dim/vit_num_heads),
+        "num_layers": vit_num_layers,
+        "mlp_ratio": 1.0,  # UMich uses MLP-ratio=1.0
+        "concat_mlp": True,
+        "verbose": False,
     }
 
     #############################################
@@ -262,7 +337,7 @@ def main(args, rank, world_size, local_rank, device):
             checkpoint,
             optimizer_class=torch.optim.AdamW,
             optimizer_kwargs={
-                "lr": 1e-4,
+                "lr": anchor_lr,
                 "betas": (0.9, 0.999),
                 "eps": 1e-08,
                 "weight_decay": 0.01,
@@ -275,14 +350,14 @@ def main(args, rank, world_size, local_rank, device):
         # Initialize model and optimizer state.
         # If not continuing, set starting_epoch to 0.
         starting_epoch = 0
-        model = LodeRunner(**model_args)
+        model = LodeRunnerViT(**model_args)
         # Move model to GPU before instantiating optimizer and DDP.
         model.to(device)
 
         # Instantiate optimizer and move state to GPU.
         optimizer = torch.optim.AdamW(
             model.parameters(),
-            lr=1e-4,
+            lr=anchor_lr,
             betas=(0.9, 0.999),
             eps=1e-08,
             weight_decay=0.01
@@ -305,6 +380,82 @@ def main(args, rank, world_size, local_rank, device):
     model = DDP(model, device_ids=[local_rank], output_device=local_rank)
 
     #############################################
+    # EMA Setup (optional; Diffusers-style warmup EMA)
+    #############################################
+    # A companion checkpoint file (alongside the main .pth) persists the EMA
+    # shadow weights and the global optimizer-step counter across continuation
+    # restarts so the warmup schedule remains continuous.
+    ema_model = None
+    global_step = 0
+    if use_ema:
+        # Build EMA from the underlying (unwrapped) module.
+        ema_model = build_ema_model(
+            model.module,
+            max_decay=ema_max_decay,
+            inv_gamma=ema_inv_gamma,
+            power=ema_power,
+            device=device,
+        )
+
+        # Restore EMA weights + global step on continuation, if present.
+        #
+        # The EMA companion checkpoint is written with the same class-aware
+        # `save_model_and_optimizer` used for the main model. We reconstruct a
+        # LodeRunnerViT from it, copy those weights into the EMA shadow's inner
+        # module, and read the persisted `global_step` so the warmup schedule
+        # stays continuous. A dummy optimizer is created by the loader and
+        # discarded (the EMA shadow has no optimizer of its own).
+        if CONTINUATION and checkpoint:
+            ema_state_path = checkpoint.replace(".pth", "_ema.pth")
+            if os.path.exists(ema_state_path):
+                ema_loaded_model, _, ema_epoch, ema_ckpt = load_model_and_optimizer(
+                    ema_state_path,
+                    optimizer_class=torch.optim.AdamW,
+                    optimizer_kwargs={
+                        "lr": anchor_lr,
+                        "betas": (0.9, 0.999),
+                        "eps": 1e-08,
+                        "weight_decay": 0.01,
+                    },
+                    available_models=available_models,
+                    device=device,
+                    return_checkpoint=True,
+                )
+                # Copy reconstructed EMA weights into the shadow's inner module.
+                ema_model.module.load_state_dict(ema_loaded_model.state_dict())
+                global_step = int(ema_ckpt.get("global_step", 0))
+
+                # Consistency check: the EMA companion must come from the same
+                # restart point as the main checkpoint. `starting_epoch` was set
+                # from the main checkpoint above.
+                if ema_epoch != starting_epoch:
+                    raise ValueError(
+                        f"EMA checkpoint epoch ({ema_epoch}) does not match the "
+                        f"main checkpoint epoch ({starting_epoch}). The main and "
+                        f"EMA checkpoints appear to be out of sync; refusing to "
+                        f"continue with a corrupt EMA warmup schedule."
+                    )
+
+                # A warmed-up EMA should have advanced past the warmup delay by
+                # the recorded epoch. Warn (do not fail) on an implausible pair.
+                if global_step == 0 and starting_epoch > 0:
+                    print(
+                        "WARNING: EMA global_step is 0 while resuming at epoch "
+                        f"{starting_epoch}; the EMA warmup schedule will restart "
+                        "from scratch."
+                    )
+
+                print(
+                    f"EMA state restored from {ema_state_path} "
+                    f"(epoch={ema_epoch}, global_step={global_step})."
+                )
+            else:
+                print(
+                    f"No EMA companion checkpoint at {ema_state_path}; "
+                    "starting EMA fresh."
+                )
+
+    #############################################
     # Learning Rate Scheduler
     #############################################
     print("Starting epoch: ", starting_epoch)
@@ -313,10 +464,23 @@ def main(args, rank, world_size, local_rank, device):
     else:
         last_epoch = train_batches * (starting_epoch - 1)
 
-    LRsched = ConstantWithWarmupScheduler(
+    # Scale the anchor LR by global batchsize
+    #
+    # # For multi-node
+    #lr_scale = np.sqrt(float(Ngpus) * float(Knodes) * float(batch_size))
+    #original_batchsize = 40.0  # 1 node, 4 gpus, 10 samples/gpu
+    #ddp_anchor_lr = anchor_lr * lr_scale / original_batchsize
+    #
+    # For single node
+    ddp_anchor_lr = anchor_lr
+
+    LRsched = CosineWithWarmupScheduler(
         optimizer,
-        warmup_steps=0,
-        lr_constant=1e-4,
+        anchor_lr=ddp_anchor_lr,
+        terminal_steps=terminal_steps,
+        warmup_steps=warmup_steps,
+        num_cycles=num_cycles,
+        min_fraction=min_fraction,
         last_epoch=last_epoch,
     )
 
@@ -380,7 +544,7 @@ def main(args, rank, world_size, local_rank, device):
             startTime = time.time()
 
         # Train and Validate
-        train_DDP_loderunner_epoch(
+        global_step = train_DDP_loderunner_epoch(
             training_data=train_dataloader,
             validation_data=val_dataloader,
             num_train_batches=train_batches,
@@ -397,7 +561,10 @@ def main(args, rank, world_size, local_rank, device):
             device=device,
             rank=rank,
             world_size=world_size,
-            dataset="pli",
+            ema_model=ema_model,
+            global_step=global_step,
+            ema_update_after_step=ema_update_after_step,
+            grad_clip=grad_clip,
         )
 
         if TIME_EPOCH:
@@ -423,9 +590,43 @@ def main(args, rank, world_size, local_rank, device):
         optimizer,
         epochIDX,
         new_chkpt_path,
-        model_class=LodeRunner,
+        model_class=LodeRunnerViT,
         model_args=model_args,
     )
+
+    #############################################
+    # Save EMA companion checkpoint
+    #############################################
+    # Persist the EMA shadow using the same class-aware checkpoint format as the
+    # main model. This stores the model class + init args (so it reconstructs
+    # robustly) and the `global_step` (so the warmup schedule stays continuous
+    # across restarts). We save the EMA shadow's inner LodeRunnerViT
+    # (`ema_model.module`); its state_dict keys match a fresh LodeRunnerViT.
+    #
+    # `save_model_and_optimizer` is model+optimizer coupled, so we reuse the
+    # main optimizer purely to satisfy the signature -- it is ignored when the
+    # EMA is restored. Rank-0-only writing and DDP synchronization are handled
+    # inside the function.
+    if ema_model is not None:
+        ema_state_path = new_chkpt_path.replace(".pth", "_ema.pth")
+        save_model_and_optimizer(
+            ema_model.module,
+            optimizer,
+            epochIDX,
+            ema_state_path,
+            model_class=LodeRunnerViT,
+            model_args=model_args,
+            extra_state={"global_step": global_step},
+        )
+
+        # Production EMA weights (loads cleanly into a fresh LodeRunnerViT).
+        if rank == 0:
+            ema_prod_path = new_chkpt_path.replace(".pth", "_ema_weights.pth")
+            save_ema_checkpoint(ema_model, ema_prod_path)
+            print(f"[Rank {rank}] Saved EMA checkpoints -> {ema_state_path}")
+
+    if dist.is_initialized():
+        dist.barrier()
 
     if rank == 0:
         #############################################

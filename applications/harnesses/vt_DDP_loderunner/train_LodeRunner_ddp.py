@@ -115,6 +115,9 @@ def main(args, rank, world_size, local_rank, device):
     embed_dim = args.embed_dim
     block_structure = tuple(args.block_structure)
 
+    # Learning rate
+    anchor_lr = args.anchor_lr
+    
     # Training parameters
     max_timeIDX_offset = args.max_timeIDX_offset
 
@@ -262,7 +265,7 @@ def main(args, rank, world_size, local_rank, device):
             checkpoint,
             optimizer_class=torch.optim.AdamW,
             optimizer_kwargs={
-                "lr": 1e-4,
+                "lr": anchor_lr,
                 "betas": (0.9, 0.999),
                 "eps": 1e-08,
                 "weight_decay": 0.01,
@@ -282,7 +285,7 @@ def main(args, rank, world_size, local_rank, device):
         # Instantiate optimizer and move state to GPU.
         optimizer = torch.optim.AdamW(
             model.parameters(),
-            lr=1e-4,
+            lr=anchor_lr,
             betas=(0.9, 0.999),
             eps=1e-08,
             weight_decay=0.01
@@ -316,7 +319,7 @@ def main(args, rank, world_size, local_rank, device):
     LRsched = ConstantWithWarmupScheduler(
         optimizer,
         warmup_steps=0,
-        lr_constant=1e-4,
+        lr_constant=anchor_lr,
         last_epoch=last_epoch,
     )
 
@@ -397,7 +400,6 @@ def main(args, rank, world_size, local_rank, device):
             device=device,
             rank=rank,
             world_size=world_size,
-            dataset="pli",
         )
 
         if TIME_EPOCH:

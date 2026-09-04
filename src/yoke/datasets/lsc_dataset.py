@@ -879,6 +879,170 @@ class LSC_rho2rho_temporal_DataSet(Dataset):
         return start_img, end_img, Dt
 
 
+class LSC_rho2rho_temporal_2frame_DataSet(Dataset):
+    """Two-input-frame / one-output-frame temporal LSC dataset.
+
+    Companion to :class:`LSC_rho2rho_temporal_DataSet` for the 2-in/1-out
+    :class:`~yoke.models.vit.swin.bomberman.LodeRunnerViT` path. For a randomly
+    chosen anchor index ``t`` it returns the two consecutive input frames
+    ``[x_{t-1}, x_t]`` and the target frame ``x_{t+1}``, together with the two
+    lead-time values ``(dt_in, dt_out)`` where:
+
+    - ``dt_in`` is the physical timestep from ``x_{t-1}`` to ``x_t``,
+    - ``dt_out`` is the physical timestep from ``x_t`` to ``x_{t+1}``.
+
+    These match the lead-time convention consumed by ``LodeRunnerViT`` when
+    ``num_input_frames == 2``.
+
+    Each of the two input-frame gaps and the output gap is chosen randomly in
+    ``[1, max_timeIDX_offset]`` (in file indices), preserving arbitrary cadence
+    within a timeseries.
+
+    Args:
+        LSC_NPZ_DIR (str): Location of LSC NPZ files.
+        file_prefix_list (str): Text file listing unique simulation prefixes.
+        max_timeIDX_offset (int): Maximum per-gap file-index offset. Each of the
+            two gaps (``t-1 -> t`` and ``t -> t+1``) is sampled independently in
+            ``[1, max_timeIDX_offset]``.
+        max_file_checks (int): Maximum number of index-sampling attempts before
+            reporting a missing-file error.
+        half_image (bool): If True, return half-images (no reflection).
+        hydro_fields (np.array): Array of hydro field names to include.
+
+    """
+
+    def __init__(
+        self,
+        LSC_NPZ_DIR: str,
+        file_prefix_list: str,
+        max_timeIDX_offset: int,
+        max_file_checks: int,
+        half_image: bool = True,
+        hydro_fields: np.array = np.array(
+            [
+                "density_case",
+                "density_cushion",
+                "density_maincharge",
+                "density_outside_air",
+                "density_striker",
+                "density_throw",
+                "Uvelocity",
+                "Wvelocity",
+            ]
+        ),
+    ) -> None:
+        """Initialization of the 2-frame temporal dataset."""
+        self.LSC_NPZ_DIR = LSC_NPZ_DIR
+        self.max_timeIDX_offset = max_timeIDX_offset
+        self.max_file_checks = max_file_checks
+        self.half_image = half_image
+
+        with open(file_prefix_list) as f:
+            self.file_prefix_list = [line.rstrip() for line in f]
+
+        random.shuffle(self.file_prefix_list)
+        self.Nsamples = len(self.file_prefix_list)
+        self.hydro_fields = hydro_fields
+        self.rng = np.random.default_rng()
+
+    def __len__(self) -> int:
+        """Return effectively infinite number of samples in dataset."""
+        return int(1e6)
+
+    def _load_frame(self, file_name: str) -> torch.Tensor:
+        """Load and assemble a single multi-channel frame tensor."""
+        npz = np.load(self.LSC_NPZ_DIR + file_name)
+        img_list = []
+        try:
+            for hfield in self.hydro_fields:
+                tmp_img = LSCread_npz_NaN(npz, hfield)
+                tmp_img = volfrac_density(tmp_img, npz, hfield)
+                if not self.half_image:
+                    tmp_img = np.concatenate((np.fliplr(tmp_img), tmp_img), axis=1)
+                img_list.append(tmp_img)
+        finally:
+            npz.close()
+
+        return torch.tensor(np.stack(img_list, axis=0)).to(torch.float32)
+
+    def __getitem__(
+        self, index: int
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Return ``(input_frames, target_frame, lead_times)`` for one sample.
+
+        Returns:
+            input_frames (torch.Tensor): Shape ``(2, C, H, W)``, order
+                ``[x_{t-1}, x_t]``.
+            target_frame (torch.Tensor): Shape ``(C, H, W)``, ``x_{t+1}``.
+            lead_times (torch.Tensor): Shape ``(2,) = (dt_in, dt_out)``.
+
+        """
+        index = index % self.Nsamples
+
+        prefix_attempt = 0
+        prefix_loop_break = False
+        prev_file = curr_file = next_file = None
+        gap_in = gap_out = 0
+        while prefix_attempt < 5:
+            file_prefix = self.file_prefix_list[index]
+
+            attempt = 0
+            while attempt < self.max_file_checks:
+                # Two independent gaps, each in [1, max_timeIDX_offset].
+                gap_in = self.rng.integers(1, self.max_timeIDX_offset, endpoint=True)
+                gap_out = self.rng.integers(1, self.max_timeIDX_offset, endpoint=True)
+
+                # Anchor prev index so all three indices land in [0, 99].
+                prevIDX = self.rng.integers(0, 99 - gap_in - gap_out, endpoint=True)
+                currIDX = prevIDX + gap_in
+                nextIDX = currIDX + gap_out
+
+                prev_file = file_prefix + f"_pvi_idx{prevIDX:05d}.npz"
+                curr_file = file_prefix + f"_pvi_idx{currIDX:05d}.npz"
+                next_file = file_prefix + f"_pvi_idx{nextIDX:05d}.npz"
+
+                if (
+                    Path(self.LSC_NPZ_DIR + prev_file).is_file()
+                    and Path(self.LSC_NPZ_DIR + curr_file).is_file()
+                    and Path(self.LSC_NPZ_DIR + next_file).is_file()
+                ):
+                    prefix_loop_break = True
+                    break
+
+                attempt += 1
+
+            if attempt == self.max_file_checks:
+                fnf_msg = (
+                    "In LSC_rho2rho_temporal_2frame_DataSet, "
+                    f"max_file_checks reached for prefix: {file_prefix}"
+                )
+                print(fnf_msg, file=sys.stderr)
+
+            if prefix_loop_break:
+                break
+
+            print(
+                f"Prefix attempt {prefix_attempt + 1} failed. Trying next prefix.",
+                file=sys.stderr,
+            )
+            prefix_attempt += 1
+            index = (index + 1) % self.Nsamples
+
+        prev_img = self._load_frame(prev_file)
+        curr_img = self._load_frame(curr_file)
+        next_img = self._load_frame(next_file)
+
+        # Stack the two input frames along a new time axis: (2, C, H, W).
+        input_frames = torch.stack([prev_img, curr_img], dim=0)
+
+        # Lead-times (dt_in, dt_out) in the same physical units (0.25/index).
+        lead_times = torch.tensor(
+            [0.25 * gap_in, 0.25 * gap_out], dtype=torch.float32
+        )
+
+        return input_frames, next_img, lead_times
+
+
 class LSC_rho2rho_sequential_DataSet(Dataset):
     """Returns a sequence of consecutive frames from the LSC simulation.
 

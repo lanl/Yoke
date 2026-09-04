@@ -337,4 +337,105 @@ def test_eval_loderunner_epoch_writes_csv_and_stops_after_limit(
     assert p.exists()
     # Only 1 batch recorded because num_test_batches=1.
     assert len(p.read_text().splitlines()) == 1
-    assert fake_eval.calls == 1
+
+
+class _CountingEMA:
+    """Minimal stand-in for an AveragedModel tracking update_parameters calls."""
+
+    def __init__(self) -> None:
+        """Initialize the update counter."""
+        self.updates = 0
+
+    def update_parameters(self, model: object) -> None:
+        """Count EMA update calls."""
+        self.updates += 1
+
+
+def test_train_DDP_loderunner_epoch_returns_global_step(
+    tmp_path: Path,
+    simple_loaders: tuple[DataLoader, DataLoader],
+    dummy_model_optimizer: tuple[object, torch.optim.Optimizer],
+    loss_fn: object,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """The DDP epoch advances and returns the global optimizer-step counter."""
+    train_loader, val_loader = simple_loaders
+    model, optimizer = dummy_model_optimizer
+
+    monkeypatch.setattr(epoch_mod, "train_DDP_loderunner_datastep", DummyEpochStep())
+    monkeypatch.setattr(epoch_mod, "eval_DDP_loderunner_datastep", DummyEpochStep())
+
+    tf = str(tmp_path / "train_<epochIDX>.csv")
+    vf = str(tmp_path / "val_<epochIDX>.csv")
+
+    new_step = epoch_mod.train_DDP_loderunner_epoch(
+        training_data=train_loader,
+        validation_data=val_loader,
+        num_train_batches=2,
+        num_val_batches=1,
+        model=model,
+        channel_map=[0],
+        optimizer=optimizer,
+        loss_fn=loss_fn,
+        LRsched=optim.lr_scheduler.StepLR(optimizer, step_size=1),
+        epochIDX=1,
+        train_per_val=1,
+        train_rcrd_filename=tf,
+        val_rcrd_filename=vf,
+        device=torch.device("cpu"),
+        rank=0,
+        world_size=1,
+        dataset="pli",
+        global_step=10,
+    )
+
+    # Two training batches -> global step advances by 2.
+    assert new_step == 12
+
+
+def test_train_DDP_loderunner_epoch_ema_update_gating(
+    tmp_path: Path,
+    simple_loaders: tuple[DataLoader, DataLoader],
+    dummy_model_optimizer: tuple[object, torch.optim.Optimizer],
+    loss_fn: object,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """EMA is only updated once the global step exceeds ema_update_after_step."""
+    train_loader, val_loader = simple_loaders
+    model, optimizer = dummy_model_optimizer
+
+    monkeypatch.setattr(epoch_mod, "train_DDP_loderunner_datastep", DummyEpochStep())
+    monkeypatch.setattr(epoch_mod, "eval_DDP_loderunner_datastep", DummyEpochStep())
+
+    tf = str(tmp_path / "train_<epochIDX>.csv")
+    vf = str(tmp_path / "val_<epochIDX>.csv")
+
+    ema = _CountingEMA()
+
+    # Start one step below the threshold; with two batches, only the second
+    # (global_step 6 > 5) triggers an EMA update.
+    new_step = epoch_mod.train_DDP_loderunner_epoch(
+        training_data=train_loader,
+        validation_data=val_loader,
+        num_train_batches=2,
+        num_val_batches=1,
+        model=model,
+        channel_map=[0],
+        optimizer=optimizer,
+        loss_fn=loss_fn,
+        LRsched=optim.lr_scheduler.StepLR(optimizer, step_size=1),
+        epochIDX=1,
+        train_per_val=1,
+        train_rcrd_filename=tf,
+        val_rcrd_filename=vf,
+        device=torch.device("cpu"),
+        rank=0,
+        world_size=1,
+        dataset="pli",
+        ema_model=ema,
+        global_step=4,
+        ema_update_after_step=5,
+    )
+
+    assert new_step == 6
+    assert ema.updates == 1
