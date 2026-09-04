@@ -11,14 +11,19 @@ from tempfile import TemporaryDirectory
 import h5py
 from collections.abc import Generator
 from yoke.utils.parameters import count_torch_params
+from yoke.utils.parameters import freeze_torch_params
 from yoke.utils.checkpointing import save_model_and_optimizer_hdf5
 from yoke.utils.checkpointing import load_model_and_optimizer_hdf5
+from yoke.utils.checkpointing import save_model_and_optimizer
+from yoke.utils.checkpointing import load_model_and_optimizer
 from yoke.utils.dataload import make_dataloader
+from yoke.utils.dataload import make_distributed_dataloader
 from torch.optim import SGD
 from torch.optim.lr_scheduler import StepLR
 import yoke.utils.training.epoch.lsc_reward as lscr_epoch
 from yoke.utils.training.epoch.lsc_reward import train_lsc_reward_epoch
 from yoke.utils.training.epoch.lsc_reward import eval_lsc_reward_datastep
+from yoke.utils.training.datastep.lsc_reward import train_lsc_reward_datastep
 
 
 class SimpleModel(nn.Module):
@@ -46,6 +51,25 @@ class SimpleModel2(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Define forward method for module."""
         return self.fc(x)
+
+
+class ScalarBufferModel(nn.Module):
+    """A model with a scalar parameter and a scalar + vector buffer.
+
+    Exercises the scalar-parameter/buffer branches of the HDF5 checkpointing code.
+    """
+
+    def __init__(self) -> None:
+        """Set up a linear layer, a scalar parameter, and registered buffers."""
+        super().__init__()
+        self.fc = nn.Linear(4, 3)
+        self.scale = nn.Parameter(torch.tensor(2.0))  # scalar (0-dim) parameter
+        self.register_buffer("scalar_buf", torch.tensor(1.5))  # scalar buffer
+        self.register_buffer("vector_buf", torch.arange(3, dtype=torch.float32))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Scale the linear output and add the vector buffer."""
+        return self.fc(x) * self.scale + self.vector_buf
 
 
 @pytest.fixture
@@ -542,3 +566,205 @@ def test_eval_lsc_reward_datastep_rank_nonzero() -> None:
     assert all_losses is None
     assert reward_out.shape == (5, 1)
     assert pred_out.shape == (5, 1)
+
+
+def test_train_lsc_reward_datastep_rank0() -> None:
+    """rank=0 train step returns reward, pred, and concatenated losses; steps optim."""
+    device = torch.device("cpu")
+    model = DummyRewardModel()
+    optimizer = SGD(model.parameters(), lr=0.01)
+    loss_fn = torch.nn.MSELoss(reduction="none")
+    data = make_lsc_data(batch_size=3)
+    rank = 0
+    world_size = 2
+
+    reward_out, pred_out, all_losses = train_lsc_reward_datastep(
+        data, model, optimizer, loss_fn, device, rank, world_size
+    )
+
+    # reward reshaped to (batch, 1)
+    expected_reward = data[3].unsqueeze(1).to(device)
+    assert torch.equal(reward_out, expected_reward)
+    assert pred_out.shape == (3, 1)
+
+    # all_losses is two per-sample copies concatenated (world_size=2)
+    assert all_losses is not None
+    assert all_losses.shape == (2 * 3, 1)
+
+
+def test_train_lsc_reward_datastep_rank_nonzero() -> None:
+    """rank!=0 train step returns None for all_losses with valid reward/pred shapes."""
+    device = torch.device("cpu")
+    model = DummyRewardModel()
+    optimizer = SGD(model.parameters(), lr=0.01)
+    loss_fn = torch.nn.MSELoss(reduction="none")
+    data = make_lsc_data(batch_size=4)
+    rank = 1
+    world_size = 2
+
+    reward_out, pred_out, all_losses = train_lsc_reward_datastep(
+        data, model, optimizer, loss_fn, device, rank, world_size
+    )
+
+    assert all_losses is None
+    assert reward_out.shape == (4, 1)
+    assert pred_out.shape == (4, 1)
+
+
+def test_freeze_torch_params() -> None:
+    """freeze_torch_params sets requires_grad=False on all parameters."""
+    model = SimpleModel2()
+    # Sanity: parameters start trainable.
+    assert all(p.requires_grad for p in model.parameters())
+
+    freeze_torch_params(model)
+
+    assert all(not p.requires_grad for p in model.parameters())
+    assert count_torch_params(model) == 0
+
+
+def test_hdf5_roundtrip_scalar_params_and_buffers() -> None:
+    """HDF5 save handles scalar params/buffers; vector data round-trips.
+
+    Note: 0-dim (scalar) parameters and buffers are written to HDF5 attributes by
+    ``save_model_and_optimizer_hdf5`` but are not reloaded by
+    ``load_model_and_optimizer_hdf5`` (which only iterates dataset members), so we
+    only assert round-trip equality for non-scalar (dataset) tensors here. The
+    scalar path is still exercised on the save side.
+    """
+    model = ScalarBufferModel()
+    optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
+
+    # Take an optimization step so the optimizer accumulates tensor state
+    # (momentum buffers), exercising the optimizer-state save/load branches.
+    x = torch.rand(2, 4)
+    loss = model(x).sum()
+    loss.backward()
+    optimizer.step()
+
+    epoch = 3
+    with TemporaryDirectory() as tmpdir:
+        filepath = os.path.join(tmpdir, "scalar_checkpoint.h5")
+        save_model_and_optimizer_hdf5(model, optimizer, epoch, filepath)
+
+        # Scalar param/buffer are stored as HDF5 attributes (save-side branch).
+        with h5py.File(filepath, "r") as h5f:
+            assert "model/parameters/scale" in h5f.attrs
+            assert "model/buffers/scalar_buf" in h5f.attrs
+
+        loaded_model = ScalarBufferModel()
+        loaded_optimizer = optim.SGD(loaded_model.parameters(), lr=0.01, momentum=0.9)
+        loaded_epoch = load_model_and_optimizer_hdf5(
+            loaded_model, loaded_optimizer, filepath
+        )
+
+        assert loaded_epoch == epoch
+        # Non-scalar (dataset) buffer restored.
+        assert torch.equal(loaded_model.vector_buf, model.vector_buf)
+        # Linear weight/bias (non-scalar params) restored.
+        assert torch.equal(loaded_model.fc.weight.detach(), model.fc.weight.detach())
+        assert torch.equal(loaded_model.fc.bias.detach(), model.fc.bias.detach())
+
+
+def test_hdf5_save_unwraps_dataparallel() -> None:
+    """save_model_and_optimizer_hdf5 unwraps a DataParallel model."""
+    model = SimpleModel2()
+    wrapped = nn.DataParallel(model)
+    optimizer = optim.SGD(model.parameters(), lr=0.01)
+
+    epoch = 1
+    with TemporaryDirectory() as tmpdir:
+        filepath = os.path.join(tmpdir, "dp_checkpoint.h5")
+        # Should not raise despite the DataParallel wrapper.
+        save_model_and_optimizer_hdf5(wrapped, optimizer, epoch, filepath)
+
+        with h5py.File(filepath, "r") as h5f:
+            assert h5f.attrs["epoch"] == epoch
+            # Parameter names are stored without the "module." DataParallel prefix.
+            assert any("fc.weight" in name for name in h5f["model/parameters"])
+
+
+def test_save_and_load_model_and_optimizer_roundtrip() -> None:
+    """save_model_and_optimizer / load_model_and_optimizer round-trip on CPU."""
+    model = SimpleModel2()
+    optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
+
+    # Step the optimizer to populate tensor state (momentum buffers).
+    x = torch.rand(2, 10)
+    model(x).sum().backward()
+    optimizer.step()
+
+    epoch = 9
+    with TemporaryDirectory() as tmpdir:
+        filepath = os.path.join(tmpdir, "checkpoint.pt")
+        save_model_and_optimizer(
+            model=model,
+            optimizer=optimizer,
+            epoch=epoch,
+            filepath=filepath,
+            model_class=SimpleModel2,
+            model_args={},
+        )
+        assert os.path.exists(filepath)
+
+        available_models = {"SimpleModel2": SimpleModel2}
+        loaded_model, loaded_optimizer, loaded_epoch = load_model_and_optimizer(
+            filepath=filepath,
+            optimizer_class=optim.SGD,
+            optimizer_kwargs={"lr": 0.01, "momentum": 0.9},
+            available_models=available_models,
+            device="cpu",
+        )
+
+        assert loaded_epoch == epoch
+        for orig, load in zip(model.parameters(), loaded_model.parameters()):
+            assert torch.equal(orig.detach().cpu(), load.detach().cpu())
+        # Optimizer momentum state restored.
+        assert loaded_optimizer.state_dict()["state"].keys() == (
+            optimizer.state_dict()["state"].keys()
+        )
+
+
+def test_load_model_and_optimizer_unknown_class_raises() -> None:
+    """load_model_and_optimizer raises ValueError for an unregistered model class."""
+    model = SimpleModel2()
+    optimizer = optim.SGD(model.parameters(), lr=0.01)
+
+    with TemporaryDirectory() as tmpdir:
+        filepath = os.path.join(tmpdir, "checkpoint.pt")
+        save_model_and_optimizer(
+            model=model,
+            optimizer=optimizer,
+            epoch=0,
+            filepath=filepath,
+            model_class=SimpleModel2,
+            model_args={},
+        )
+
+        with pytest.raises(ValueError, match="Unknown model class"):
+            load_model_and_optimizer(
+                filepath=filepath,
+                optimizer_class=optim.SGD,
+                optimizer_kwargs={"lr": 0.01},
+                available_models={},  # SimpleModel2 not registered
+                device="cpu",
+            )
+
+
+def test_make_distributed_dataloader(dummy_dataset: DummyDataset) -> None:
+    """make_distributed_dataloader builds a DataLoader with a DistributedSampler."""
+    from torch.utils.data.distributed import DistributedSampler
+
+    loader = make_distributed_dataloader(
+        dataset=dummy_dataset,
+        batch_size=4,
+        shuffle=True,
+        num_workers=1,
+        rank=0,
+        world_size=2,
+    )
+    assert isinstance(loader, DataLoader)
+    assert isinstance(loader.sampler, DistributedSampler)
+    assert loader.batch_size == 4
+    # drop_last is enabled for uniform batch sizes.
+    assert loader.drop_last is True

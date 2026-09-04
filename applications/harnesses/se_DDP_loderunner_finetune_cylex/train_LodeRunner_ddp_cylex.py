@@ -11,7 +11,7 @@ from yoke.models.vit.swin.bomberman import LodeRunner
 from yoke.datasets.load_npz_dataset import TemporalDataSet
 
 from yoke.utils.training.epoch.loderunner import train_DDP_loderunner_epoch
-from yoke.utils.restart import continuation_setup
+from yoke.harnesses.base import HarnessStudy
 from yoke.utils.dataload import make_distributed_dataloader
 from yoke.utils.checkpointing import load_model_and_optimizer
 from yoke.utils.checkpointing import save_model_and_optimizer
@@ -473,7 +473,7 @@ def main(args, rank, world_size, local_rank, device):
         #############################################
         FINISHED_TRAINING = epochIDX + 1 > total_epochs
         if not FINISHED_TRAINING:
-            new_slurm_file = continuation_setup(
+            new_slurm_file = HarnessStudy.continuation_setup(
                 new_chkpt_path, studyIDX, last_epoch=epochIDX
             )
             os.system(f"sbatch {new_slurm_file}")

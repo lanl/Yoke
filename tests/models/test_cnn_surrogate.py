@@ -4,7 +4,7 @@ import pytest
 import torch
 from torch import nn
 
-from yoke.models.surrogateCNNmodules import tCNNsurrogate
+from yoke.models.surrogateCNNmodules import jekelCNNsurrogate, tCNNsurrogate
 
 
 @pytest.fixture
@@ -87,3 +87,66 @@ def test_model_gradients(default_model: tCNNsurrogate) -> None:
     loss.backward()
     assert input_tensor.grad is not None
     assert not torch.isnan(input_tensor.grad).any()
+
+
+@pytest.fixture
+def small_jekel_model() -> jekelCNNsurrogate:
+    """Return a small jekelCNNsurrogate to keep the forward pass fast."""
+    return jekelCNNsurrogate(
+        input_size=16,
+        linear_features=(4, 4),
+        kernel=(3, 3),
+        nfeature_list=[32, 16, 8],
+        output_image_size=(32, 24),
+    )
+
+
+def test_jekel_initialization(small_jekel_model: jekelCNNsurrogate) -> None:
+    """The jekel surrogate builds the expected submodules."""
+    model = small_jekel_model
+    assert isinstance(model, jekelCNNsurrogate)
+    assert isinstance(model.dense_expand, nn.Linear)
+    assert isinstance(model.inNorm, nn.BatchNorm2d)
+    assert isinstance(model.TConvList, nn.ModuleList)
+    assert isinstance(model.BnormList, nn.ModuleList)
+    assert isinstance(model.ActList, nn.ModuleList)
+    assert isinstance(model.final_tconv, nn.ConvTranspose2d)
+    # One fewer transpose-conv block than features (last is the final_tconv).
+    assert len(model.TConvList) == len(model.nfeature_list) - 1
+    assert model.nConvT == len(model.nfeature_list)
+
+
+def test_jekel_forward_output_shape(small_jekel_model: jekelCNNsurrogate) -> None:
+    """Forward interpolates to the requested output image size."""
+    batch_size = 3
+    x = torch.rand(batch_size, small_jekel_model.input_size)
+    output = small_jekel_model(x)
+    # Single output channel; spatial dims match output_image_size after interpolate.
+    assert output.shape == (batch_size, 1, *small_jekel_model.output_image_size)
+    assert not torch.isnan(output).any()
+    assert not torch.isinf(output).any()
+
+
+def test_jekel_forward_custom_activation() -> None:
+    """The jekel surrogate accepts a custom activation layer class."""
+    model = jekelCNNsurrogate(
+        input_size=8,
+        linear_features=(2, 2),
+        kernel=(3, 3),
+        nfeature_list=[16, 8],
+        output_image_size=(16, 16),
+        act_layer=nn.ReLU,
+    )
+    assert isinstance(model.inActivation, nn.ReLU)
+    x = torch.rand(2, model.input_size)
+    output = model(x)
+    assert output.shape == (2, 1, 16, 16)
+
+
+def test_jekel_model_gradients(small_jekel_model: jekelCNNsurrogate) -> None:
+    """Gradients flow through the jekelCNNsurrogate on backprop."""
+    x = torch.rand(2, small_jekel_model.input_size, requires_grad=True)
+    output = small_jekel_model(x)
+    output.sum().backward()
+    assert x.grad is not None
+    assert not torch.isnan(x.grad).any()
