@@ -1,11 +1,38 @@
-LSC Action Training
-==================================
-The LSC Action Training Pipeline is designed to train a Transpose-CNN (TCNN) surrogate model that maps layered shaped charge (LSC) simulation geometry parameters to density images.
-This will be used as the action network in the Reinforcement Learning Network for LSC.
-----------
+LSC Action Network Training
+===========================
 
-Learning Rate Scheduling: Integrates a cosine learning rate scheduler with warmup (via CosineWithWarmupScheduler) for dynamic learning rate adaptation.
+Trains a Transpose-CNN (TCNN) surrogate — the **action network** for the layered
+shaped charge (LSC) reinforcement-learning design pipeline. The surrogate maps LSC
+simulation geometry parameters to density images and is used as the action network
+in the RL loop for LSC design.
 
-train_lsc_action.py: Main training script that initiates and manages the training process (model initialization, dataset preparation, training loop, LR scheduling, checkpointing, and Slurm integration)
+Files
+-----
 
+- `train_lsc_action.py` — main training script: model initialization, dataset
+  preparation, training loop, LR scheduling, checkpointing, and SLURM integration.
+- `training_input.tmpl` — single input template (with the
+  `# <<optional:CONTINUATION>>` block for continuation runs).
+- `training_slurm.tmpl` — complete SLURM submission script.
+- `cp_files.txt` — files copied into each `study_###` run directory.
+- `hyperparameters.csv` — a single active study (row `1`).
 
+Study
+-----
+
+`hyperparameters.csv` configures the TCNN feature widths (`LINEAR_F`, `F0`–`F4`),
+the base learning rate (`LEARN_RATE`), batch sizing, and per-epoch batch counts.
+Training integrates a cosine learning-rate scheduler with warmup
+(`CosineWithWarmupScheduler`) for dynamic LR adaptation.
+
+Launch
+------
+
+From within this directory, with the Yoke environment active:
+
+```bash
+yoke-start-study --csv hyperparameters.csv --submissionType slurm
+```
+
+Add `--dryrun` to render the study directories and print the `sbatch` commands
+without submitting any jobs.

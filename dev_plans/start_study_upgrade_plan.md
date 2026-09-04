@@ -61,16 +61,27 @@ Phases **A, B, C, D, and E are complete**. **Phase F is next** and not started.
     - **`mnist_surrogate`:** added a proper `training_slurm.tmpl` (from the stray
       `training_START.slurm`) so it supports both slurm and shell; normalized `<checkpoint>` ->
       `<CHECKPOINT>`. **`moving_mnist`:** shell-only, normalized `<checkpoint>` ->
-      `<CHECKPOINT>`. **`mini-run-test`:** reordered the continuation block to the end and
-      updated `local-yoke-runner.sh` to call `yoke-start-study`.
-  All 14 harness/submission-type combinations verified via a dryrun round-trip (correct
+      `<CHECKPOINT>`.
+  All harness/submission-type combinations verified via a dryrun round-trip (correct
   `0001`/`study###_START.input` in first-launch files; `<epochIDX>`/`<INPUTFILE>`/`<CHECKPOINT>`
   preserved in continuation templates). Full suite still **421 passed** with `-Werror`; `ruff`
   clean.
 
-**Left off at:** F1 done. Remaining Phase F: **F2** (update each harness `README.md` to show the
-`yoke-start-study` invocation), **F3** (add an "Authoring a Harness" guide under `docs/` and
-link from the main `README.md`), and **F4** (delete the legacy
+- **Phase F2 — DONE.** Authored/updated a `README.md` for every harness (12 total), each with a
+  purpose blurb, a file list, a study description, and the `yoke-start-study` invocation
+  (`--submissionType slurm` or `shell`, with a `--dryrun` note). Removed **deprecated CSVs**
+  whose columns no longer satisfy the current `training_input.tmpl` (missing `MAX_TIME_OFFSET`):
+  six from `ch_DDP_loderunner` (`ddp_benchmark`, `ddp_chkpt_test`, `ddp_lrstudy1`,
+  `ddp_lrstudy2`, `ddp_noise`, `ddp_production`) and one from `se_DDP_loderunner`
+  (`ddp_production`); each harness keeps its working `ddp_paper_study.csv`. Deleted the
+  redundant `lsc_action/training_slurm_debug.tmpl` (single authoritative `training_slurm.tmpl`
+  only). **Removed the entire `mini-run-test` harness** — the `mnist_surrogate` and
+  `moving_mnist` harnesses now serve as the quick end-to-end functionality checks (their READMEs
+  say so). `se_` = Selene, `ch_` = Chicoma. All remaining CSVs render cleanly (dryrun, no
+  unrendered non-reserved tokens); full suite **421 passed** with `-Werror`.
+
+**Left off at:** F2 done. Remaining Phase F: **F3** (add an "Authoring a Harness" guide under
+`docs/` and link from the main `README.md`), and **F4** (delete the legacy
 `applications/harnesses/START_study.py` once CI is green).
 
 ---
@@ -341,11 +352,15 @@ Ordered, each item small enough to review independently.
 ### Phase F — migrate harnesses + docs
 - [x] F1. Migrate the maintained harnesses to single-template form (drop `training_START.*`):
       `ch_DDP_loderunner`, `ch_lightning_loderunner`, `ch_lsc_policy`,
-      `mini-run-test`, `mnist_surrogate`,
+      `mnist_surrogate`,
       `moving_mnist`, `se_DDP_loderunner*`, `ch_lsc_inverse`, `ch_lsc_reward`,
       `ch_DDP_diffLDR`, `lsc_action`.
-      (`chicoma_lsc_loderunner-ch-subsampling` was removed in Phase C rather than migrated.)
-- [ ] F2. Update each harness `README.md` to show the `yoke-start-study` invocation.
+      (`chicoma_lsc_loderunner-ch-subsampling` was removed in Phase C rather than migrated.
+      `mini-run-test` was migrated in F1 but then removed in F2 — see below.)
+- [x] F2. Update each harness `README.md` to show the `yoke-start-study` invocation. Also
+      removed deprecated CSVs (columns no longer matching the template), deleted the redundant
+      `lsc_action/training_slurm_debug.tmpl`, and removed the `mini-run-test` harness entirely
+      (superseded by the `mnist_surrogate`/`moving_mnist` quick-check harnesses).
 - [ ] F3. Add a top-level "Authoring a harness" guide (see Section 6) under `docs/` and link
       from the main `README.md`.
 - [ ] F4. Delete `applications/harnesses/START_study.py` once all harnesses are migrated and
