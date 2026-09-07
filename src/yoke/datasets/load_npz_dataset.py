@@ -38,6 +38,8 @@ except Exception:  # pragma: no cover
 
 LOGGER = logging.getLogger(__name__)
 
+MAX_FLYER_LAYERS = 6
+
 
 def _current_rank() -> int:
     """Return current distributed rank, or 0 when unavailable."""
@@ -307,61 +309,110 @@ class LabeledData:
         self.active_npz_field_names: list[str] = []
         self.active_hydro_field_names: list[str] = []
 
+        self.configure_study()
+
+    def configure_study(self) -> None:
+        """Dispatch study-specific hydro field configuration."""
         if self.study == "cx":
-            self.all_hydro_field_names = [
-                "Rcoord",
-                "Zcoord",
-                "Uvelocity",
-                "Wvelocity",
-                "density_Air",
-                "energy_Air",
-                "pressure_Air",
-                "density_Al",
-                "energy_Al",
-                "pressure_Al",
-                "density_Be",
-                "energy_Be",
-                "pressure_Be",
-                "density_booster",
-                "energy_booster",
-                "pressure_booster",
-                "density_Cu",
-                "energy_Cu",
-                "pressure_Cu",
-                "density_U.DU",
-                "energy_U.DU",
-                "pressure_U.DU",
-                "density_maincharge",
-                "energy_maincharge",
-                "pressure_maincharge",
-                "density_N",
-                "energy_N",
-                "pressure_N",
-                "density_Sn",
-                "energy_Sn",
-                "pressure_Sn",
-                "density_Steel.alloySS304L",
-                "energy_Steel.alloySS304L",
-                "pressure_Steel.alloySS304L",
-                "density_Polymer.Sylgard",
-                "energy_Polymer.Sylgard",
-                "pressure_Polymer.Sylgard",
-                "density_Ta",
-                "energy_Ta",
-                "pressure_Ta",
-                "density_Void",
-                "energy_Void",
-                "pressure_Void",
-                "density_Water",
-                "energy_Water",
-                "pressure_Water",
-            ]
-            self.channel_map = list(range(len(self.all_hydro_field_names)))
-            self.cylex_data_loader()
+            self.configure_cylex()
+        elif self.study == "flyer":
+            self.configure_flyerplate()
         else:
             raise ValueError(
                 "Hydro field information unavailable for specified dataset/study."
             )
+
+    def configure_cylex(self) -> None:
+        """Configure hydro field definitions for the cylex dataset."""
+        self.all_hydro_field_names = [
+            "Rcoord",
+            "Zcoord",
+            "Uvelocity",
+            "Wvelocity",
+            "density_Air",
+            "energy_Air",
+            "pressure_Air",
+            "density_Al",
+            "energy_Al",
+            "pressure_Al",
+            "density_Be",
+            "energy_Be",
+            "pressure_Be",
+            "density_booster",
+            "energy_booster",
+            "pressure_booster",
+            "density_Cu",
+            "energy_Cu",
+            "pressure_Cu",
+            "density_U.DU",
+            "energy_U.DU",
+            "pressure_U.DU",
+            "density_maincharge",
+            "energy_maincharge",
+            "pressure_maincharge",
+            "density_N",
+            "energy_N",
+            "pressure_N",
+            "density_Sn",
+            "energy_Sn",
+            "pressure_Sn",
+            "density_Steel.alloySS304L",
+            "energy_Steel.alloySS304L",
+            "pressure_Steel.alloySS304L",
+            "density_Polymer.Sylgard",
+            "energy_Polymer.Sylgard",
+            "pressure_Polymer.Sylgard",
+            "density_Ta",
+            "energy_Ta",
+            "pressure_Ta",
+            "density_Void",
+            "energy_Void",
+            "pressure_Void",
+            "density_Water",
+            "energy_Water",
+            "pressure_Water",
+        ]
+        self.channel_map = list(range(len(self.all_hydro_field_names)))
+        self.cylex_data_loader()
+
+    def configure_flyerplate(self) -> None:
+        """Configure hydro field definitions for the flyerplate dataset."""
+        self.all_hydro_field_names = [
+            "sim_time",
+            "av_density",
+            "av_pressure",
+            "av_temperature",
+            "density_Air",
+            "energy_Air",
+            "pressure_Air",
+            "sound_speed_Air",
+            "vofm_Air",
+            "Uvelocity",
+            "Wvelocity",
+            "Rcoord",
+            "Zcoord",
+        ]
+        self.all_hydro_field_names.extend(
+            self.flyerplate_layer_fields(
+                [
+                    "density",
+                    "energy",
+                    "plst_strain",
+                    "pressure",
+                    "shear_modulus",
+                    "sound_speed",
+                    "strain_rate",
+                    "Sxxm",
+                    "Sxzm",
+                    "Syym",
+                    "Szzm",
+                    "vofm",
+                    "yield",
+                ]
+            )
+        )
+        self.channel_map = list(range(len(self.all_hydro_field_names)))
+        self.flyerplate_data_loader()
 
     def get_active_hydro_indices(self) -> list[int]:
         """Return indices of active hydro fields within the full list."""
@@ -447,6 +498,70 @@ class LabeledData:
 
         self.channel_map = self.get_active_hydro_indices()
 
+    def flyerplate_data_loader(self) -> None:
+        """Configure active fields and channel map for the flyerplate dataset."""
+        self.channel_map = []
+        self.active_npz_field_names = []
+        self.active_hydro_field_names = []
+
+        if self.kinematic_variables == "velocity":
+            self.active_hydro_field_names = ["Uvelocity", "Wvelocity"]
+            self.active_npz_field_names = list(self.active_hydro_field_names)
+        elif self.kinematic_variables == "position":
+            self.active_hydro_field_names = ["Rcoord", "Zcoord"]
+            self.active_npz_field_names = list(self.active_hydro_field_names)
+        elif self.kinematic_variables == "both":
+            self.active_hydro_field_names = [
+                "Rcoord",
+                "Zcoord",
+                "Uvelocity",
+                "Wvelocity",
+            ]
+            self.active_npz_field_names = list(self.active_hydro_field_names)
+        else:
+            raise ValueError(
+                "Incorrectly specified kinematic_variables. Choose from 'velocity', "
+                "'position', or 'both'."
+            )
+
+        density_fields = ["density_Air"] + self.flyerplate_layer_fields(["density"])
+        energy_fields = ["energy_Air"] + self.flyerplate_layer_fields(["energy"])
+        pressure_fields = ["pressure_Air"] + self.flyerplate_layer_fields(["pressure"])
+
+        self.active_npz_field_names.extend(density_fields)
+        self.active_hydro_field_names.extend(density_fields)
+
+        if self.thermodynamic_variables not in (
+            "density",
+            "density and pressure",
+            "density and energy",
+            "all",
+        ):
+            raise ValueError(
+                "Incorrectly specified thermodynamic_variables. Choose from 'density', "
+                "'density and pressure', 'density and energy', or 'all'."
+            )
+
+        if self.thermodynamic_variables in ("density and pressure", "all"):
+            self.active_npz_field_names.extend(pressure_fields)
+            self.active_hydro_field_names.extend(pressure_fields)
+
+        if self.thermodynamic_variables in ("density and energy", "all"):
+            self.active_npz_field_names.extend(energy_fields)
+            self.active_hydro_field_names.extend(energy_fields)
+
+        self.channel_map = self.get_active_hydro_indices()
+
+    @staticmethod
+    def flyerplate_layer_fields(prefixes: list[str]) -> list[str]:
+        """Return Flyerplate layer fields for all supported layer indices."""
+        fields: list[str] = []
+        for layer_idx in range(MAX_FLYER_LAYERS):
+            layer_name = f"layer{layer_idx:03d}"
+            for prefix in prefixes:
+                fields.append(f"{prefix}_{layer_name}")
+        return fields
+
     @staticmethod
     def extract_letters(s: str) -> str | None:
         """Match letters at the beginning until the first digit."""
@@ -473,6 +588,18 @@ class LabeledData:
     def get_active_npz_field_names(self) -> list[str]:
         """Return only the active field names in an NPZ file."""
         return list(self.active_npz_field_names)
+
+
+def resolve_npz_path(npz_dir: str | Path, prefix: str, filename: str) -> Path:
+    """Resolve an NPZ path for either nested or flat dataset layouts."""
+    npz_dir = Path(npz_dir)
+
+    nested = npz_dir / prefix / filename
+    if nested.is_file():
+        return nested
+
+    flat = npz_dir / filename
+    return flat
 
 
 def process_channel_data(
@@ -615,8 +742,8 @@ class TemporalDataSet(Dataset[_TemporalSample]):
                 start_file = f"{file_prefix}_pvi_idx{start_idx:05d}.npz"
                 end_file = f"{file_prefix}_pvi_idx{end_idx:05d}.npz"
 
-                start_file_path = Path(self.npz_dir) / start_file
-                end_file_path = Path(self.npz_dir) / end_file
+                start_file_path = resolve_npz_path(self.npz_dir, file_prefix, start_file)
+                end_file_path = resolve_npz_path(self.npz_dir, file_prefix, end_file)
 
                 if not (start_file_path.is_file() and end_file_path.is_file()):
                     attempt += 1
@@ -774,7 +901,7 @@ class TemporalDataSet(Dataset[_TemporalSample]):
 
         for start_idx in candidates[:5]:
             start_file = f"{prefix}_pvi_idx{start_idx:05d}.npz"
-            start_fp = Path(self.npz_dir) / start_file
+            start_fp = resolve_npz_path(self.npz_dir, prefix, start_file)
             if not start_fp.is_file():
                 continue
 
@@ -801,6 +928,7 @@ class TemporalDataSet(Dataset[_TemporalSample]):
         prefixes = list(getattr(self, "file_prefix_list", []))
         if not prefixes:
             files = glob.glob(str(Path(self.npz_dir) / "*_pvi_idx*.npz"))
+            files += glob.glob(str(Path(self.npz_dir) / "*" / "*_pvi_idx*.npz"))
             rx = re.compile(r"_pvi_idx\d+\.npz$")
             prefixes = sorted({rx.sub("", os.path.basename(f)) for f in files})
             self.file_prefix_list = prefixes
@@ -911,7 +1039,10 @@ class SequentialDataSet(Dataset[_SequentialSample]):
             #
             all_files = []
             for prefix in self.file_prefix_list:
-                for fpath in glob.glob(os.path.join(npz_dir, f"{prefix}*.npz")):
+                flat_files = glob.glob(os.path.join(npz_dir, f"{prefix}*.npz"))
+                nested_files = glob.glob(os.path.join(npz_dir, prefix, f"{prefix}*.npz"))
+
+                for fpath in sorted(set(flat_files + nested_files)):
                     all_files.append((prefix, fpath))
 
             #
@@ -952,9 +1083,9 @@ class SequentialDataSet(Dataset[_SequentialSample]):
                     valid_inds_curr = [start_idx]
 
                     for t in range(1, seq_len):
-                        next_file = os.path.join(
-                            self.npz_dir,
-                            (f"{file[0]}_pvi_idx{start_idx + t * dt:05d}.npz"),
+                        next_name = f"{file[0]}_pvi_idx{start_idx + t * dt:05d}.npz"
+                        next_file = str(
+                            resolve_npz_path(self.npz_dir, file[0], next_name)
                         )
 
                         if os.path.exists(next_file):
@@ -1068,12 +1199,15 @@ class SequentialDataSet(Dataset[_SequentialSample]):
         timeIDX_offset = valid_inds[1] - valid_inds[0]
 
         valid_seq = [
-            os.path.join(
-                self.npz_dir,
-                self.filename_format.format(
-                    prefix=valid_prefix,
-                    time_index=t_ind,
-                ),
+            str(
+                resolve_npz_path(
+                    self.npz_dir,
+                    valid_prefix,
+                    self.filename_format.format(
+                        prefix=valid_prefix,
+                        time_index=t_ind,
+                    ),
+                )
             )
             for t_ind in valid_inds
         ]

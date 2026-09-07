@@ -278,6 +278,117 @@ def test_train_DDP_loderunner_epoch(
     assert fake_ddp_eval.calls == 0
 
 
+def test_train_DDP_loderunner_epoch_cylex_uses_batch_channel_map(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    dummy_model_optimizer: tuple[object, torch.optim.Optimizer],
+    loss_fn: object,
+) -> None:
+    """DDP epoch supports cylex-style datasteps without explicit channel_map."""
+    sample = (
+        torch.zeros((1, 1, 1, 1), dtype=torch.float32),
+        torch.tensor([0], dtype=torch.int64),
+        torch.zeros((1, 1, 1, 1), dtype=torch.float32),
+        torch.tensor([0], dtype=torch.int64),
+        torch.zeros((1, 1), dtype=torch.float32),
+    )
+    data = [sample, sample]
+    train_loader = DataLoader(data, batch_size=1)
+    val_loader = DataLoader(data, batch_size=1)
+
+    model, optimizer = dummy_model_optimizer
+
+    fake_ddp_train = DummyEpochStep()
+    fake_ddp_eval = DummyEpochStep()
+    monkeypatch.setattr(epoch_mod, "train_DDP_loderunner_datastep_cylex", fake_ddp_train)
+    monkeypatch.setattr(epoch_mod, "eval_DDP_loderunner_datastep_cylex", fake_ddp_eval)
+
+    tf = str(tmp_path / "train_<epochIDX>.csv")
+    vf = str(tmp_path / "val_<epochIDX>.csv")
+
+    epoch_mod.train_DDP_loderunner_epoch(
+        training_data=train_loader,
+        validation_data=val_loader,
+        num_train_batches=1,
+        num_val_batches=1,
+        model=model,
+        optimizer=optimizer,
+        loss_fn=loss_fn,
+        LRsched=optim.lr_scheduler.StepLR(optimizer, step_size=1),
+        epochIDX=6,
+        train_per_val=1,
+        train_rcrd_filename=tf,
+        val_rcrd_filename=vf,
+        device=torch.device("cpu"),
+        rank=0,
+        world_size=2,
+        dataset="cylex",
+    )
+
+    assert (tmp_path / "train_0006.csv").exists()
+    assert (tmp_path / "val_0006.csv").exists()
+    assert fake_ddp_train.calls == 1
+    assert fake_ddp_eval.calls == 1
+
+
+def test_train_DDP_loderunner_epoch_pli_requires_channel_map(
+    tmp_path: Path,
+    simple_loaders: tuple[DataLoader, DataLoader],
+    dummy_model_optimizer: tuple[object, torch.optim.Optimizer],
+    loss_fn: object,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Verify PLI training raises a ValueError when channel_map is omitted."""
+    train_loader, val_loader = simple_loaders
+    model, optimizer = dummy_model_optimizer
+
+    def fake_ddp_train(
+        data: object,
+        model: object,
+        optimizer: object,
+        loss_fn: object,
+        device: torch.device,
+        rank: int,
+        world_size: int,
+        channel_map: list[int],
+    ) -> tuple[None, None, torch.Tensor]:
+        return None, None, torch.tensor([0.5], dtype=torch.float32)
+
+    def fake_ddp_eval(
+        data: object,
+        model: object,
+        loss_fn: object,
+        device: torch.device,
+        rank: int,
+        world_size: int,
+        channel_map: list[int],
+    ) -> tuple[None, None, torch.Tensor]:
+        return None, None, torch.tensor([0.5], dtype=torch.float32)
+
+    monkeypatch.setattr(epoch_mod, "train_DDP_loderunner_datastep", fake_ddp_train)
+    monkeypatch.setattr(epoch_mod, "eval_DDP_loderunner_datastep", fake_ddp_eval)
+
+    with pytest.raises(ValueError, match="requires explicit channel_map"):
+        epoch_mod.train_DDP_loderunner_epoch(
+            training_data=train_loader,
+            validation_data=val_loader,
+            num_train_batches=1,
+            num_val_batches=1,
+            model=model,
+            optimizer=optimizer,
+            loss_fn=loss_fn,
+            LRsched=optim.lr_scheduler.StepLR(optimizer, step_size=1),
+            epochIDX=7,
+            train_per_val=1,
+            train_rcrd_filename=str(tmp_path / "train_<epochIDX>.csv"),
+            val_rcrd_filename=str(tmp_path / "val_<epochIDX>.csv"),
+            device=torch.device("cpu"),
+            rank=0,
+            world_size=2,
+            dataset="pli",
+        )
+
+
 def test_eval_loderunner_epoch_unsupported_dataset_raises(
     simple_loaders: tuple[DataLoader, DataLoader],
 ) -> None:
