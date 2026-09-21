@@ -1,0 +1,739 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../../genindex.html"><link rel="search" title="Search" href="../../../../search.html">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>yoke.models.vit.plain_vit - Get Yoked!</title>
+      <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=acfd86a5" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../../../index.html"><div class="brand">Get Yoked!</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../../index.html">
+  
+  <span class="sidebar-brand-text">Get Yoked!</span>
+  
+</a><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Concepts</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../harnesses.html">Authoring a Yoke Harness</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../start_study.html">The <code class="docutils literal notranslate"><span class="pre">yoke-start-study</span></code> CLI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../evaluate_study.html">Post-training evaluation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../harness_trainer.html">Authoring a harness with <code class="docutils literal notranslate"><span class="pre">HarnessTrainer</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../plot_loss.html">The <code class="docutils literal notranslate"><span class="pre">yoke-plot-loss</span></code> CLI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../loderunner_animate.html">Lode Runner Animation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../prediction_modes.html">Prediction Modes Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference:</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../../modules.html">yoke</a><input aria-label="Toggle navigation of yoke" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../../yoke.html">yoke package</a><input aria-label="Toggle navigation of yoke package" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../../yoke.cli.html">yoke.cli package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../yoke.datasets.html">yoke.datasets package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../yoke.harnesses.html">yoke.harnesses package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../yoke.helpers.html">yoke.helpers package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../yoke.losses.html">yoke.losses package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../yoke.metrics.html">yoke.metrics package</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../../yoke.models.html">yoke.models package</a><input aria-label="Toggle navigation of yoke.models package" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4 has-children"><a class="reference internal" href="../../../../yoke.models.vit.html">yoke.models.vit package</a><input aria-label="Toggle navigation of yoke.models.vit package" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l5"><a class="reference internal" href="../../../../yoke.models.vit.swin.html">yoke.models.vit.swin package</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../yoke.plots.html">yoke.plots package</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../../yoke.utils.html">yoke.utils package</a><input aria-label="Toggle navigation of yoke.utils package" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4 has-children"><a class="reference internal" href="../../../../yoke.utils.training.html">yoke.utils.training package</a><input aria-label="Toggle navigation of yoke.utils.training package" class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l5"><a class="reference internal" href="../../../../yoke.utils.training.datastep.html">yoke.utils.training.datastep package</a></li>
+<li class="toctree-l5"><a class="reference internal" href="../../../../yoke.utils.training.epoch.html">yoke.utils.training.epoch package</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+</div>
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <h1>Source code for yoke.models.vit.plain_vit</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Plain Vision-Transformer backbone with 2-D RoPE attention.</span>
+
+<span class="sd">This module reimplements the *regular-grid, plain ViT* path of the UMich</span>
+<span class="sd">WAMRViT ``QuadTreeTransformer`` in a self-contained, ``diffusers``-free form</span>
+<span class="sd">suitable for use as a swappable backbone within Yoke&#39;s LodeRunner.</span>
+
+<span class="sd">The backbone consumes and produces a token tensor of shape ``(B, N, D)``,</span>
+<span class="sd">matching the interface of :class:`~yoke.models.vit.swin.unet.SwinUnetBackbone`.</span>
+<span class="sd">It is *isotropic*: the token count ``N`` and embedding dimension ``D`` are held</span>
+<span class="sd">constant through all transformer blocks (no patch merging/expansion).</span>
+
+<span class="sd">Structural features carried over from the reference architecture:</span>
+
+<span class="sd">- continuous 2-D rotary positional encoding from normalized patch centers,</span>
+<span class="sd">- per-head RMSNorm on queries and keys prior to RoPE application,</span>
+<span class="sd">- global scaled-dot-product attention over all spatial tokens,</span>
+<span class="sd">- parallel attention + SwiGLU-MLP branches from a single pre-LayerNorm,</span>
+<span class="sd">- concatenate-then-project (default) or sum fusion of the two branches,</span>
+<span class="sd">- one residual update per block,</span>
+<span class="sd">- a final non-affine LayerNorm.</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">import</span> <span class="nn">torch.nn.functional</span> <span class="k">as</span> <span class="nn">F</span>
+<span class="kn">from</span> <span class="nn">torch</span> <span class="kn">import</span> <span class="n">nn</span>
+
+<span class="kn">from</span> <span class="nn">yoke.models.vit.rope</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">SwiGLU</span><span class="p">,</span>
+    <span class="n">RotaryPositionalEmbeddingFromCenters</span><span class="p">,</span>
+    <span class="n">apply_rotary_emb</span><span class="p">,</span>
+    <span class="n">make_regular_centers</span><span class="p">,</span>
+<span class="p">)</span>
+
+
+<div class="viewcode-block" id="RopeAttention">
+<a class="viewcode-back" href="../../../../yoke.models.vit.html#yoke.models.vit.plain_vit.RopeAttention">[docs]</a>
+<span class="k">class</span> <span class="nc">RopeAttention</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Global self-attention with per-head QK RMSNorm and 2-D RoPE.</span>
+
+<span class="sd">    Projects the ``D``-dimensional token stream to queries, keys, and values</span>
+<span class="sd">    (each ``heads * dim_head``), applies per-head RMSNorm to queries and keys,</span>
+<span class="sd">    rotates queries and keys with the supplied ``(cos, sin)`` rotary embedding,</span>
+<span class="sd">    and performs global scaled-dot-product attention across all tokens. The</span>
+<span class="sd">    merged heads are projected back to ``D``.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        query_dim (int): Token embedding dimension ``D``.</span>
+<span class="sd">        heads (int): Number of attention heads.</span>
+<span class="sd">        dim_head (int): Feature dimension per head. ``heads * dim_head`` is the</span>
+<span class="sd">            inner attention dimension (equal to ``D`` in the isotropic ViT).</span>
+<span class="sd">        dropout (float): Dropout probability on the output projection.</span>
+<span class="sd">        bias (bool): Whether Q/K/V projections use a bias.</span>
+<span class="sd">        out_bias (bool): Whether the output projection uses a bias.</span>
+<span class="sd">        eps (float): Epsilon for the QK RMSNorm layers.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">query_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">heads</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">8</span><span class="p">,</span>
+        <span class="n">dim_head</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">64</span><span class="p">,</span>
+        <span class="n">dropout</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span>
+        <span class="n">bias</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">out_bias</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">eps</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-6</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Initialization for RopeAttention.&quot;&quot;&quot;</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">heads</span> <span class="o">=</span> <span class="n">heads</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dim_head</span> <span class="o">=</span> <span class="n">dim_head</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">inner_dim</span> <span class="o">=</span> <span class="n">heads</span> <span class="o">*</span> <span class="n">dim_head</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">query_dim</span> <span class="o">=</span> <span class="n">query_dim</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dropout</span> <span class="o">=</span> <span class="n">dropout</span>
+
+        <span class="c1"># Q/K/V projections</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">to_q</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">query_dim</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">inner_dim</span><span class="p">,</span> <span class="n">bias</span><span class="o">=</span><span class="n">bias</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">to_k</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">query_dim</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">inner_dim</span><span class="p">,</span> <span class="n">bias</span><span class="o">=</span><span class="n">bias</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">to_v</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">query_dim</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">inner_dim</span><span class="p">,</span> <span class="n">bias</span><span class="o">=</span><span class="n">bias</span><span class="p">)</span>
+
+        <span class="c1"># Per-head RMSNorm on Q and K (normalizes the head_dim axis).</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">norm_q</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">RMSNorm</span><span class="p">(</span><span class="n">dim_head</span><span class="p">,</span> <span class="n">eps</span><span class="o">=</span><span class="n">eps</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">norm_k</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">RMSNorm</span><span class="p">(</span><span class="n">dim_head</span><span class="p">,</span> <span class="n">eps</span><span class="o">=</span><span class="n">eps</span><span class="p">)</span>
+
+        <span class="c1"># Output projection back to query_dim.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">to_out</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">ModuleList</span><span class="p">(</span>
+            <span class="p">[</span>
+                <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">inner_dim</span><span class="p">,</span> <span class="n">query_dim</span><span class="p">,</span> <span class="n">bias</span><span class="o">=</span><span class="n">out_bias</span><span class="p">),</span>
+                <span class="n">nn</span><span class="o">.</span><span class="n">Dropout</span><span class="p">(</span><span class="n">dropout</span><span class="p">),</span>
+            <span class="p">]</span>
+        <span class="p">)</span>
+
+<div class="viewcode-block" id="RopeAttention.forward">
+<a class="viewcode-back" href="../../../../yoke.models.vit.html#yoke.models.vit.plain_vit.RopeAttention.forward">[docs]</a>
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">hidden_states</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">image_rotary_emb</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Forward method for RopeAttention.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            hidden_states (torch.Tensor): Tokens of shape ``(B, N, D)``.</span>
+<span class="sd">            image_rotary_emb (tuple[torch.Tensor, torch.Tensor] | None):</span>
+<span class="sd">                ``(cos, sin)`` rotary tensors each of shape ``(N, dim_head)``.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            torch.Tensor: Attention output of shape ``(B, N, D)``.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Project and split into heads: (B, N, D) -&gt; (B, N, H, D_head)</span>
+        <span class="n">query</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">to_q</span><span class="p">(</span><span class="n">hidden_states</span><span class="p">)</span><span class="o">.</span><span class="n">unflatten</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">heads</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim_head</span><span class="p">))</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">to_k</span><span class="p">(</span><span class="n">hidden_states</span><span class="p">)</span><span class="o">.</span><span class="n">unflatten</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">heads</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim_head</span><span class="p">))</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">to_v</span><span class="p">(</span><span class="n">hidden_states</span><span class="p">)</span><span class="o">.</span><span class="n">unflatten</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">heads</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim_head</span><span class="p">))</span>
+
+        <span class="c1"># Per-head RMSNorm on Q and K.</span>
+        <span class="n">query</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">norm_q</span><span class="p">(</span><span class="n">query</span><span class="p">)</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">norm_k</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+
+        <span class="c1"># Apply rotary embedding to Q and K (sequence axis is dim 1).</span>
+        <span class="k">if</span> <span class="n">image_rotary_emb</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">query</span> <span class="o">=</span> <span class="n">apply_rotary_emb</span><span class="p">(</span><span class="n">query</span><span class="p">,</span> <span class="n">image_rotary_emb</span><span class="p">,</span> <span class="n">sequence_dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+            <span class="n">key</span> <span class="o">=</span> <span class="n">apply_rotary_emb</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">image_rotary_emb</span><span class="p">,</span> <span class="n">sequence_dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+        <span class="c1"># SDPA expects (B, H, N, D_head).</span>
+        <span class="n">query</span> <span class="o">=</span> <span class="n">query</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="n">key</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+
+        <span class="n">hidden_states</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">scaled_dot_product_attention</span><span class="p">(</span>
+            <span class="n">query</span><span class="p">,</span>
+            <span class="n">key</span><span class="p">,</span>
+            <span class="n">value</span><span class="p">,</span>
+            <span class="n">dropout_p</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dropout</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">training</span> <span class="k">else</span> <span class="mf">0.0</span><span class="p">,</span>
+        <span class="p">)</span>  <span class="c1"># (B, H, N, D_head)</span>
+
+        <span class="c1"># Merge heads back: (B, H, N, D_head) -&gt; (B, N, D)</span>
+        <span class="n">hidden_states</span> <span class="o">=</span> <span class="n">hidden_states</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">flatten</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+        <span class="n">hidden_states</span> <span class="o">=</span> <span class="n">hidden_states</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">query</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+
+        <span class="n">hidden_states</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">to_out</span><span class="p">[</span><span class="mi">0</span><span class="p">](</span><span class="n">hidden_states</span><span class="p">)</span>
+        <span class="n">hidden_states</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">to_out</span><span class="p">[</span><span class="mi">1</span><span class="p">](</span><span class="n">hidden_states</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">hidden_states</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="BasicTransformerBlock">
+<a class="viewcode-back" href="../../../../yoke.models.vit.html#yoke.models.vit.plain_vit.BasicTransformerBlock">[docs]</a>
+<span class="k">class</span> <span class="nc">BasicTransformerBlock</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Parallel-branch transformer block with SwiGLU MLP and RoPE attention.</span>
+
+<span class="sd">    Differs from a conventional pre-norm ViT block. From a single non-affine</span>
+<span class="sd">    pre-LayerNorm, an attention branch and a SwiGLU-MLP branch run in parallel:</span>
+
+<span class="sd">    .. math::</span>
+
+<span class="sd">        z = \text{LN}(x) \\</span>
+<span class="sd">        a = \text{RopeAttention}(z) \\</span>
+<span class="sd">        m = \text{SwiGLU}(\text{Linear}(z)) \\</span>
+<span class="sd">        x \leftarrow x + W_o [a \Vert m]</span>
+
+<span class="sd">    where :math:`\Vert` is feature concatenation when ``concat=True`` (default).</span>
+<span class="sd">    When ``concat=False`` the branches are each projected to ``D`` and summed.</span>
+<span class="sd">    There is a single residual update per block.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        num_attention_heads (int): Number of attention heads.</span>
+<span class="sd">        attention_head_dim (int): Feature dimension per head. The hidden size is</span>
+<span class="sd">            ``num_attention_heads * attention_head_dim``.</span>
+<span class="sd">        mlp_ratio (float): MLP hidden width as a multiple of the hidden size.</span>
+<span class="sd">        bias (bool): Whether attention projections use a bias.</span>
+<span class="sd">        eps (float): Epsilon for LayerNorm and QK RMSNorm.</span>
+<span class="sd">        concat (bool): If True, concatenate-then-project fusion; else sum fusion.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">num_attention_heads</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">attention_head_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">mlp_ratio</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">4.0</span><span class="p">,</span>
+        <span class="n">bias</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">eps</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-6</span><span class="p">,</span>
+        <span class="n">concat</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Initialization for BasicTransformerBlock.&quot;&quot;&quot;</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+
+        <span class="n">hidden_size</span> <span class="o">=</span> <span class="n">num_attention_heads</span> <span class="o">*</span> <span class="n">attention_head_dim</span>
+        <span class="n">mlp_dim</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">hidden_size</span> <span class="o">*</span> <span class="n">mlp_ratio</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">attn</span> <span class="o">=</span> <span class="n">RopeAttention</span><span class="p">(</span>
+            <span class="n">query_dim</span><span class="o">=</span><span class="n">hidden_size</span><span class="p">,</span>
+            <span class="n">heads</span><span class="o">=</span><span class="n">num_attention_heads</span><span class="p">,</span>
+            <span class="n">dim_head</span><span class="o">=</span><span class="n">attention_head_dim</span><span class="p">,</span>
+            <span class="n">bias</span><span class="o">=</span><span class="n">bias</span><span class="p">,</span>
+            <span class="n">out_bias</span><span class="o">=</span><span class="n">bias</span><span class="p">,</span>
+            <span class="n">eps</span><span class="o">=</span><span class="n">eps</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="c1"># Non-affine pre-LayerNorm shared by both branches.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">norm</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">LayerNorm</span><span class="p">(</span><span class="n">hidden_size</span><span class="p">,</span> <span class="n">eps</span><span class="o">=</span><span class="n">eps</span><span class="p">,</span> <span class="n">elementwise_affine</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+        <span class="c1"># SwiGLU MLP branch.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">proj_mlp</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">hidden_size</span><span class="p">,</span> <span class="n">mlp_dim</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">act_mlp</span> <span class="o">=</span> <span class="n">SwiGLU</span><span class="p">(</span><span class="n">dim_in</span><span class="o">=</span><span class="n">mlp_dim</span><span class="p">,</span> <span class="n">dim_out</span><span class="o">=</span><span class="n">mlp_dim</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">concat</span> <span class="o">=</span> <span class="n">concat</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">concat</span><span class="p">:</span>
+            <span class="c1"># Fuse concatenated (attn || mlp) features back to hidden_size.</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">proj_out</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">hidden_size</span> <span class="o">+</span> <span class="n">mlp_dim</span><span class="p">,</span> <span class="n">hidden_size</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># Project each branch to hidden_size and sum.</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">proj_mlp_down</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">mlp_dim</span><span class="p">,</span> <span class="n">hidden_size</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">proj_out</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">hidden_size</span><span class="p">,</span> <span class="n">hidden_size</span><span class="p">)</span>
+
+<div class="viewcode-block" id="BasicTransformerBlock.forward">
+<a class="viewcode-back" href="../../../../yoke.models.vit.html#yoke.models.vit.plain_vit.BasicTransformerBlock.forward">[docs]</a>
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">hidden_states</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">image_rotary_emb</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Forward method for BasicTransformerBlock.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            hidden_states (torch.Tensor): Tokens of shape ``(B, N, D)``.</span>
+<span class="sd">            image_rotary_emb (tuple[torch.Tensor, torch.Tensor] | None):</span>
+<span class="sd">                ``(cos, sin)`` rotary tensors each of shape ``(N, head_dim)``.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            torch.Tensor: Block output of shape ``(B, N, D)``.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">norm_hidden_states</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">hidden_states</span><span class="p">)</span>  <span class="c1"># (B, N, D)</span>
+
+        <span class="c1"># SwiGLU MLP branch.</span>
+        <span class="n">mlp_hidden_states</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">proj_mlp</span><span class="p">(</span><span class="n">norm_hidden_states</span><span class="p">)</span>  <span class="c1"># (B, N, mlp_dim)</span>
+        <span class="n">mlp_hidden_states</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">act_mlp</span><span class="p">(</span><span class="n">mlp_hidden_states</span><span class="p">)</span>  <span class="c1"># (B, N, mlp_dim)</span>
+
+        <span class="c1"># Attention branch (same normalized input).</span>
+        <span class="n">attn_output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">attn</span><span class="p">(</span>
+            <span class="n">norm_hidden_states</span><span class="p">,</span>
+            <span class="n">image_rotary_emb</span><span class="o">=</span><span class="n">image_rotary_emb</span><span class="p">,</span>
+        <span class="p">)</span>  <span class="c1"># (B, N, D)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">concat</span><span class="p">:</span>
+            <span class="n">fused</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">([</span><span class="n">attn_output</span><span class="p">,</span> <span class="n">mlp_hidden_states</span><span class="p">],</span> <span class="n">dim</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+            <span class="n">fused</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">proj_out</span><span class="p">(</span><span class="n">fused</span><span class="p">)</span>  <span class="c1"># (B, N, D)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">mlp_hidden_states</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">proj_mlp_down</span><span class="p">(</span><span class="n">mlp_hidden_states</span><span class="p">)</span>  <span class="c1"># (B, N, D)</span>
+            <span class="n">fused</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">proj_out</span><span class="p">(</span><span class="n">attn_output</span><span class="p">)</span> <span class="o">+</span> <span class="n">mlp_hidden_states</span>  <span class="c1"># (B, N, D)</span>
+
+        <span class="k">return</span> <span class="n">hidden_states</span> <span class="o">+</span> <span class="n">fused</span>  <span class="c1"># single residual update</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="PlainViTBackbone">
+<a class="viewcode-back" href="../../../../yoke.models.vit.html#yoke.models.vit.plain_vit.PlainViTBackbone">[docs]</a>
+<span class="k">class</span> <span class="nc">PlainViTBackbone</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Isotropic plain-ViT backbone operating on ``(B, N, D)`` tokens.</span>
+
+<span class="sd">    A drop-in alternative to :class:`SwinUnetBackbone`. It expects a token</span>
+<span class="sd">    tensor of shape ``(B, N, D)`` produced by an upstream patch embedding and</span>
+<span class="sd">    returns ``(B, N, D)`` with the same token count and embedding dimension.</span>
+
+<span class="sd">    The backbone owns a continuous 2-D RoPE built once from the regular-grid</span>
+<span class="sd">    patch centers determined by ``patch_grid_size``, a stack of ``num_layers``</span>
+<span class="sd">    :class:`BasicTransformerBlock` modules, and a final non-affine LayerNorm.</span>
+
+<span class="sd">    .. note::</span>
+<span class="sd">        The embedding dimension is fixed by ``num_attention_heads *</span>
+<span class="sd">        attention_head_dim``. When wiring this into LodeRunner, ensure the</span>
+<span class="sd">        upstream embedding dimension equals that product.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        patch_grid_size (tuple[int, int]): Patch-grid ``(H_p, W_p)`` of the</span>
+<span class="sd">            incoming tokens. ``N`` must equal ``H_p * W_p``.</span>
+<span class="sd">        num_attention_heads (int): Number of attention heads per block.</span>
+<span class="sd">        attention_head_dim (int): Feature dimension per head. The token</span>
+<span class="sd">            embedding dimension is ``num_attention_heads * attention_head_dim``.</span>
+<span class="sd">        num_layers (int): Number of transformer blocks.</span>
+<span class="sd">        mlp_ratio (float): MLP hidden width as a multiple of the hidden size.</span>
+<span class="sd">        rope_theta (float): Base period for the rotary frequency progression.</span>
+<span class="sd">        rope_scale (tuple[float, float]): Per-axis coordinate scaling for the</span>
+<span class="sd">            ``(x, y)`` patch centers.</span>
+<span class="sd">        concat_mlp (bool): Concatenate-then-project (True) or sum (False) fusion.</span>
+<span class="sd">        eps (float): Epsilon for LayerNorm and QK RMSNorm.</span>
+<span class="sd">        bias (bool): Whether attention projections use a bias.</span>
+<span class="sd">        verbose (bool): When True, prints derived dimensions at construction.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">patch_grid_size</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">112</span><span class="p">,</span> <span class="mi">80</span><span class="p">),</span>
+        <span class="n">num_attention_heads</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">8</span><span class="p">,</span>
+        <span class="n">attention_head_dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">16</span><span class="p">,</span>
+        <span class="n">num_layers</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">6</span><span class="p">,</span>
+        <span class="n">mlp_ratio</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">4.0</span><span class="p">,</span>
+        <span class="n">rope_theta</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">10000.0</span><span class="p">,</span>
+        <span class="n">rope_scale</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">),</span>
+        <span class="n">concat_mlp</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">eps</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-6</span><span class="p">,</span>
+        <span class="n">bias</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">verbose</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Initialization for PlainViTBackbone.&quot;&quot;&quot;</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">patch_grid_size</span> <span class="o">=</span> <span class="n">patch_grid_size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">num_attention_heads</span> <span class="o">=</span> <span class="n">num_attention_heads</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">attention_head_dim</span> <span class="o">=</span> <span class="n">attention_head_dim</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">num_layers</span> <span class="o">=</span> <span class="n">num_layers</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mlp_ratio</span> <span class="o">=</span> <span class="n">mlp_ratio</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">emb_size</span> <span class="o">=</span> <span class="n">num_attention_heads</span> <span class="o">*</span> <span class="n">attention_head_dim</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">num_patches</span> <span class="o">=</span> <span class="n">patch_grid_size</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">patch_grid_size</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+
+        <span class="c1"># The regular-grid path uses two rope axes (x, y), splitting head_dim.</span>
+        <span class="k">assert</span> <span class="n">attention_head_dim</span> <span class="o">%</span> <span class="mi">2</span> <span class="o">==</span> <span class="mi">0</span><span class="p">,</span> <span class="p">(</span>
+            <span class="s2">&quot;attention_head_dim must be even so the 2-D RoPE can split it &quot;</span>
+            <span class="s2">&quot;equally between the x and y axes.&quot;</span>
+        <span class="p">)</span>
+        <span class="n">rope_dim_list</span> <span class="o">=</span> <span class="p">[</span><span class="n">attention_head_dim</span> <span class="o">//</span> <span class="mi">2</span><span class="p">,</span> <span class="n">attention_head_dim</span> <span class="o">//</span> <span class="mi">2</span><span class="p">]</span>
+
+        <span class="c1"># Patch centers are fully determined by the patch grid; a 1x1 patch in</span>
+        <span class="c1"># this normalized center space maps token index -&gt; [x, y] in [0, 1].</span>
+        <span class="c1"># We treat the incoming tokens as a full-grid patch embedding with unit</span>
+        <span class="c1"># patch size in the normalized center coordinates.</span>
+        <span class="n">centers</span> <span class="o">=</span> <span class="n">make_regular_centers</span><span class="p">(</span>
+            <span class="n">image_size</span><span class="o">=</span><span class="n">patch_grid_size</span><span class="p">,</span>
+            <span class="n">patch_size</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+        <span class="p">)</span>  <span class="c1"># (N, 2)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">register_buffer</span><span class="p">(</span><span class="s2">&quot;centers&quot;</span><span class="p">,</span> <span class="n">centers</span><span class="p">,</span> <span class="n">persistent</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">rope</span> <span class="o">=</span> <span class="n">RotaryPositionalEmbeddingFromCenters</span><span class="p">(</span>
+            <span class="n">rope_dim_list</span><span class="o">=</span><span class="n">rope_dim_list</span><span class="p">,</span>
+            <span class="n">theta</span><span class="o">=</span><span class="n">rope_theta</span><span class="p">,</span>
+            <span class="n">scale</span><span class="o">=</span><span class="n">rope_scale</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">transformer_blocks</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">ModuleList</span><span class="p">(</span>
+            <span class="p">[</span>
+                <span class="n">BasicTransformerBlock</span><span class="p">(</span>
+                    <span class="n">num_attention_heads</span><span class="o">=</span><span class="n">num_attention_heads</span><span class="p">,</span>
+                    <span class="n">attention_head_dim</span><span class="o">=</span><span class="n">attention_head_dim</span><span class="p">,</span>
+                    <span class="n">mlp_ratio</span><span class="o">=</span><span class="n">mlp_ratio</span><span class="p">,</span>
+                    <span class="n">eps</span><span class="o">=</span><span class="n">eps</span><span class="p">,</span>
+                    <span class="n">bias</span><span class="o">=</span><span class="n">bias</span><span class="p">,</span>
+                    <span class="n">concat</span><span class="o">=</span><span class="n">concat_mlp</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_layers</span><span class="p">)</span>
+            <span class="p">]</span>
+        <span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">norm_out</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">LayerNorm</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">emb_size</span><span class="p">,</span> <span class="n">eps</span><span class="o">=</span><span class="n">eps</span><span class="p">,</span> <span class="n">elementwise_affine</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;PlainViTBackbone patch-grid size:&quot;</span><span class="p">,</span> <span class="n">patch_grid_size</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;PlainViTBackbone num_patches (N):&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_patches</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;PlainViTBackbone embedding dim (D):&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">emb_size</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;PlainViTBackbone rope_dim_list:&quot;</span><span class="p">,</span> <span class="n">rope_dim_list</span><span class="p">)</span>
+
+<div class="viewcode-block" id="PlainViTBackbone.forward">
+<a class="viewcode-back" href="../../../../yoke.models.vit.html#yoke.models.vit.plain_vit.PlainViTBackbone.forward">[docs]</a>
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Forward method for PlainViTBackbone.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            x (torch.Tensor): Token tensor of shape ``(B, N, D)`` with</span>
+<span class="sd">                ``N == H_p * W_p`` and ``D == num_attention_heads *</span>
+<span class="sd">                attention_head_dim``.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            torch.Tensor: Processed tokens of shape ``(B, N, D)``.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">N</span><span class="p">,</span> <span class="n">D</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span>
+        <span class="k">assert</span> <span class="n">N</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_patches</span><span class="p">,</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;Token count </span><span class="si">{</span><span class="n">N</span><span class="si">}</span><span class="s2"> does not match patch grid </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">patch_grid_size</span><span class="si">}</span><span class="s2"> &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;(expected </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">num_patches</span><span class="si">}</span><span class="s2">).&quot;</span>
+        <span class="p">)</span>
+        <span class="k">assert</span> <span class="n">D</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">emb_size</span><span class="p">,</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;Token embedding dim </span><span class="si">{</span><span class="n">D</span><span class="si">}</span><span class="s2"> does not match backbone embedding dim &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">emb_size</span><span class="si">}</span><span class="s2"> (= num_attention_heads * attention_head_dim).&quot;</span>
+        <span class="p">)</span>
+
+        <span class="c1"># Build rotary (cos, sin) once per forward in float32 for stability.</span>
+        <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">autocast</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">enabled</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+            <span class="n">rotary_emb</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">rope</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">centers</span><span class="p">)</span>  <span class="c1"># (cos, sin), each (N, head_dim)</span>
+
+        <span class="k">for</span> <span class="n">block</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">transformer_blocks</span><span class="p">:</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="n">block</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">image_rotary_emb</span><span class="o">=</span><span class="n">rotary_emb</span><span class="p">)</span>
+
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">norm_out</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">x</span></div>
+</div>
+
+
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="kn">from</span> <span class="nn">yoke.utils.parameters</span> <span class="kn">import</span> <span class="n">count_torch_params</span>
+
+    <span class="n">device</span> <span class="o">=</span> <span class="s2">&quot;cuda&quot;</span> <span class="k">if</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">is_available</span><span class="p">()</span> <span class="k">else</span> <span class="s2">&quot;cpu&quot;</span>
+
+    <span class="n">patch_grid_size</span> <span class="o">=</span> <span class="p">(</span><span class="mi">112</span><span class="p">,</span> <span class="mi">80</span><span class="p">)</span>  <span class="c1"># matches (1120, 800) image with (10, 10) patch</span>
+    <span class="n">num_heads</span> <span class="o">=</span> <span class="mi">8</span>
+    <span class="n">head_dim</span> <span class="o">=</span> <span class="mi">16</span>
+    <span class="n">emb_size</span> <span class="o">=</span> <span class="n">num_heads</span> <span class="o">*</span> <span class="n">head_dim</span>  <span class="c1"># 128</span>
+
+    <span class="n">x</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">rand</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">patch_grid_size</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">patch_grid_size</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">emb_size</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
+
+    <span class="n">backbone</span> <span class="o">=</span> <span class="n">PlainViTBackbone</span><span class="p">(</span>
+        <span class="n">patch_grid_size</span><span class="o">=</span><span class="n">patch_grid_size</span><span class="p">,</span>
+        <span class="n">num_attention_heads</span><span class="o">=</span><span class="n">num_heads</span><span class="p">,</span>
+        <span class="n">attention_head_dim</span><span class="o">=</span><span class="n">head_dim</span><span class="p">,</span>
+        <span class="n">num_layers</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span>
+        <span class="n">mlp_ratio</span><span class="o">=</span><span class="mf">4.0</span><span class="p">,</span>
+        <span class="n">concat_mlp</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+
+    <span class="n">out</span> <span class="o">=</span> <span class="n">backbone</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;PlainViTBackbone input shape:&quot;</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;PlainViTBackbone output shape:&quot;</span><span class="p">,</span> <span class="n">out</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;PlainViTBackbone output has NaNs:&quot;</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="o">.</span><span class="n">any</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">())</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;PlainViTBackbone parameters:&quot;</span><span class="p">,</span> <span class="n">count_torch_params</span><span class="p">(</span><span class="n">backbone</span><span class="p">,</span> <span class="n">trainable</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+
+    <span class="c1"># Sum-fusion variant</span>
+    <span class="n">backbone_sum</span> <span class="o">=</span> <span class="n">PlainViTBackbone</span><span class="p">(</span>
+        <span class="n">patch_grid_size</span><span class="o">=</span><span class="n">patch_grid_size</span><span class="p">,</span>
+        <span class="n">num_attention_heads</span><span class="o">=</span><span class="n">num_heads</span><span class="p">,</span>
+        <span class="n">attention_head_dim</span><span class="o">=</span><span class="n">head_dim</span><span class="p">,</span>
+        <span class="n">num_layers</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span>
+        <span class="n">concat_mlp</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Sum-fusion output shape:&quot;</span><span class="p">,</span> <span class="n">backbone_sum</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+</pre></div>
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2025, Los Alamos National Labs. Produced by: Kyle Hickmann, Skylar Callis, Gal Egozi, Soumi De, Bryan Kaiser, Sourabh Pandit, Sharmistha Chakrabarti, Derek Armstrong, Andrew Henrick, David Schodt
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer no-toc">
+      
+      
+      
+    </aside>
+  </div>
+</div><script src="../../../../_static/documentation_options.js?v=8a448e45"></script>
+    <script src="../../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../../_static/scripts/furo.js?v=46bd48cc"></script>
+    </body>
+</html>

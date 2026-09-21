@@ -1,0 +1,19 @@
+yoke.utils.training package
+===========================
+
+Subpackages
+-----------
+
+.. toctree::
+   :maxdepth: 4
+
+   yoke.utils.training.datastep
+   yoke.utils.training.epoch
+
+Module contents
+---------------
+
+.. automodule:: yoke.utils.training
+   :members:
+   :show-inheritance:
+   :undoc-members:
