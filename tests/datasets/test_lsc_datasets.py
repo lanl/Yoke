@@ -13,6 +13,7 @@ import torch
 from unittest.mock import patch, mock_open, MagicMock
 from yoke.datasets.lsc_dataset import LSC_rho2rho_temporal_DataSet
 from yoke.datasets.lsc_dataset import LSC_rho2rho_temporal_2frame_DataSet
+from yoke.datasets.lsc_dataset import LSC_rho2rho_temporal_2frame_normalized_DataSet
 from yoke.datasets.lsc_dataset import LSC_cntr2hfield_DataSet
 from yoke.datasets.lsc_dataset import LSC_hfield_reward_DataSet
 from yoke.datasets.lsc_dataset import LSC_hfield_policy_DataSet
@@ -29,6 +30,7 @@ from yoke.datasets.lsc_dataset import (
     volfrac_density,
     LSCDataModule,
 )
+from yoke.datasets.lsc_normalization import save_channel_norm
 
 
 # Mock np.load to simulate loading .npz files
@@ -195,6 +197,125 @@ def test_r2r_temporal_2frame_getitem(
     assert lead_times.shape == (2,)
     # Both gaps are sampled in [1, max_timeIDX_offset] -> positive dt values.
     assert torch.all(lead_times > 0)
+
+
+# For LSC_rho2rho_temporal_2frame_normalized_DataSet
+_NORMALIZED_2FRAME_HYDRO_FIELDS = [
+    "density_case",
+    "density_cushion",
+    "density_maincharge",
+    "density_outside_air",
+    "density_striker",
+    "density_throw",
+    "Uvelocity",
+    "Wvelocity",
+]
+
+
+@pytest.fixture
+def channel_norm_file(tmp_path: Path) -> str:
+    """Write a channel-normalization NPZ covering the default 8-ch fields."""
+    stats = {}
+    for field in _NORMALIZED_2FRAME_HYDRO_FIELDS:
+        family = "density" if field.startswith("density_") else "velocity"
+        stats[field] = {"family": family, "scale": 2.0}
+    fileout = str(tmp_path / "norm.npz")
+    save_channel_norm(fileout, stats)
+    return fileout
+
+
+@pytest.fixture
+def mock_prefix_list_file(tmp_path: Path) -> str:
+    """Write a real prefix-list file (mock_open would clash with np.load's open())."""
+    fileout = tmp_path / "mock_file_prefix_list.txt"
+    fileout.write_text("mock_prefix_1\nmock_prefix_2\nmock_prefix_3\n")
+    return str(fileout)
+
+
+@pytest.fixture
+def r2r_temporal_2frame_normalized_dataset(
+    channel_norm_file: str,
+    mock_prefix_list_file: str,
+) -> LSC_rho2rho_temporal_2frame_normalized_DataSet:
+    """Setup an instance of the normalized 2-in/1-out temporal dataset."""
+    LSC_NPZ_DIR = "/mock/path/"
+    max_timeIDX_offset = 3
+    max_file_checks = 5
+
+    with patch("random.shuffle") as mock_shuffle:
+        ds = LSC_rho2rho_temporal_2frame_normalized_DataSet(
+            LSC_NPZ_DIR,
+            mock_prefix_list_file,
+            max_timeIDX_offset,
+            max_file_checks,
+            channel_norm_file=channel_norm_file,
+        )
+        mock_shuffle.assert_called_once()
+
+    return ds
+
+
+def test_r2r_temporal_2frame_normalized_init(
+    r2r_temporal_2frame_normalized_dataset: (
+        LSC_rho2rho_temporal_2frame_normalized_DataSet
+    ),
+    channel_norm_file: str,
+) -> None:
+    """Test the normalized 2-frame dataset initializes correctly."""
+    ds = r2r_temporal_2frame_normalized_dataset
+    assert ds.LSC_NPZ_DIR == "/mock/path/"
+    assert ds.max_timeIDX_offset == 3
+    assert ds.max_file_checks == 5
+    assert ds.Nsamples == 3
+    assert ds.channel_norm_file == channel_norm_file
+    assert set(ds.norm_stats.keys()) == set(_NORMALIZED_2FRAME_HYDRO_FIELDS)
+
+
+def test_r2r_temporal_2frame_normalized_missing_channel_raises(
+    channel_norm_file: str,
+    mock_prefix_list_file: str,
+) -> None:
+    """A hydro_field without a matching norm record raises ValueError."""
+    with patch("random.shuffle"):
+        with pytest.raises(ValueError, match="missing normalization records"):
+            LSC_rho2rho_temporal_2frame_normalized_DataSet(
+                "/mock/path/",
+                mock_prefix_list_file,
+                max_timeIDX_offset=3,
+                max_file_checks=5,
+                channel_norm_file=channel_norm_file,
+                hydro_fields=np.array(["density_case", "pressure_case"]),
+            )
+
+
+@patch("yoke.datasets.lsc_dataset.LSCread_npz_NaN", side_effect=mock_LSCread_npz_NaN)
+@patch(
+    "numpy.load", side_effect=lambda _: MockNpzFile({"dummy_field": np.ones((10, 10))})
+)
+@patch("pathlib.Path.is_file", return_value=True)
+def test_r2r_temporal_2frame_normalized_getitem(
+    mock_is_file: MagicMock,
+    mock_npz_load: MagicMock,
+    mock_LSCread_npz_NaN: MagicMock,
+    r2r_temporal_2frame_normalized_dataset: (
+        LSC_rho2rho_temporal_2frame_normalized_DataSet
+    ),
+) -> None:
+    """Test the normalized 2-frame dataset applies the saved scale factor."""
+    ds = r2r_temporal_2frame_normalized_dataset
+    input_frames, target, lead_times = ds[0]
+
+    assert isinstance(input_frames, torch.Tensor)
+    assert isinstance(target, torch.Tensor)
+    assert isinstance(lead_times, torch.Tensor)
+    assert input_frames.shape == (2, 8, 10, 10)
+    assert target.shape == (8, 10, 10)
+    assert lead_times.shape == (2,)
+
+    # Mocked raw field is all-ones; every channel's saved scale is 2.0, so
+    # the normalized value should be exactly 0.5 everywhere.
+    assert torch.allclose(target, torch.full_like(target, 0.5))
+    assert torch.allclose(input_frames, torch.full_like(input_frames, 0.5))
 
 
 def test_r2r_temporal_file_prefix_list_loading(
