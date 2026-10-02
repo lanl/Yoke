@@ -194,7 +194,7 @@ def _safe_name(field: str) -> str:
 
 
 def _render_panel(
-    truth: np.ndarray,
+    truth: np.ndarray | None,
     prediction: np.ndarray,
     sim_time: float,
     r_coord: np.ndarray,
@@ -202,16 +202,17 @@ def _render_panel(
     field_label: str,
     output_path: Path,
 ) -> None:
-    """Render one truth, prediction, and absolute-discrepancy panel."""
-    discrepancy = np.abs(truth - prediction)
-    value_min = float(min(truth.min(), prediction.min()))
-    value_max = float(max(truth.max(), prediction.max()))
+    """Render a comparison panel, leaving unavailable truth panels blank."""
+    if truth is None:
+        discrepancy = None
+        value_min = float(prediction.min())
+        value_max = float(prediction.max())
+    else:
+        discrepancy = np.abs(truth - prediction)
+        value_min = float(min(truth.min(), prediction.min()))
+        value_max = float(max(truth.max(), prediction.max()))
     if value_min == value_max:
         value_max = value_min + 1.0
-
-    discrepancy_max = float(discrepancy.max())
-    if discrepancy_max == 0.0:
-        discrepancy_max = 1.0
 
     extent = [
         float(r_coord.min()),
@@ -222,21 +223,11 @@ def _render_panel(
     figure, axes = plt.subplots(1, 3, figsize=(16, 6), constrained_layout=True)
     figure.suptitle(f"{field_label}: T={sim_time:.2f} us", fontsize=18)
 
-    truth_image = axes[0].imshow(
-        truth,
-        aspect="equal",
-        extent=extent,
-        origin="lower",
-        cmap="viridis",
-        vmin=value_min,
-        vmax=value_max,
-    )
     axes[0].set_title("Truth", fontsize=16)
     axes[0].set_xlabel("R-axis (cm)")
     axes[0].set_ylabel("Z-axis (cm)")
-    figure.colorbar(truth_image, ax=axes[:2], location="bottom", shrink=0.75)
 
-    axes[1].imshow(
+    prediction_image = axes[1].imshow(
         prediction,
         aspect="equal",
         extent=extent,
@@ -249,19 +240,49 @@ def _render_panel(
     axes[1].set_xlabel("R-axis (cm)")
     axes[1].tick_params(axis="y", left=False, labelleft=False)
 
-    discrepancy_image = axes[2].imshow(
-        discrepancy,
-        aspect="equal",
-        extent=extent,
-        origin="lower",
-        cmap="magma",
-        vmin=0.0,
-        vmax=discrepancy_max,
-    )
     axes[2].set_title("Absolute discrepancy", fontsize=16)
     axes[2].set_xlabel("R-axis (cm)")
     axes[2].tick_params(axis="y", left=False, labelleft=False)
-    figure.colorbar(discrepancy_image, ax=axes[2], location="bottom", shrink=0.75)
+
+    if truth is None:
+        for axes_index in (0, 2):
+            axes[axes_index].set_facecolor("white")
+            axes[axes_index].set_xlim(extent[0], extent[1])
+            axes[axes_index].set_ylim(extent[2], extent[3])
+            axes[axes_index].text(
+                0.5,
+                0.5,
+                "Ground truth unavailable",
+                ha="center",
+                va="center",
+                transform=axes[axes_index].transAxes,
+            )
+        figure.colorbar(prediction_image, ax=axes[1], location="bottom", shrink=0.75)
+    else:
+        truth_image = axes[0].imshow(
+            truth,
+            aspect="equal",
+            extent=extent,
+            origin="lower",
+            cmap="viridis",
+            vmin=value_min,
+            vmax=value_max,
+        )
+        figure.colorbar(truth_image, ax=axes[:2], location="bottom", shrink=0.75)
+
+        discrepancy_max = float(discrepancy.max())
+        if discrepancy_max == 0.0:
+            discrepancy_max = 1.0
+        discrepancy_image = axes[2].imshow(
+            discrepancy,
+            aspect="equal",
+            extent=extent,
+            origin="lower",
+            cmap="magma",
+            vmin=0.0,
+            vmax=discrepancy_max,
+        )
+        figure.colorbar(discrepancy_image, ax=axes[2], location="bottom", shrink=0.75)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(output_path, dpi=150)
@@ -329,7 +350,7 @@ def run(args: argparse.Namespace) -> None:
     frames_root = args.output_filename.parent / f"{args.output_filename.stem}_frames"
     history = []
     for time_index in range(args.num_input_frames):
-        seed, _, _, _ = _load_frame(
+        seed, _, r_coord, z_coord = _load_frame(
             _npz_path(args.LSC_NPZ_DIR, args.simulation_prefix, time_index), fields
         )
         history.append(seed.to(device))
@@ -344,10 +365,6 @@ def run(args: argparse.Namespace) -> None:
     with torch.inference_mode():
         for rollout_index in range(args.prediction_length):
             time_index = args.num_input_frames + rollout_index
-            truth, sim_time, r_coord, z_coord = _load_frame(
-                _npz_path(args.LSC_NPZ_DIR, args.simulation_prefix, time_index),
-                fields,
-            )
             prediction = _predict_next(
                 model,
                 history,
@@ -356,7 +373,18 @@ def run(args: argparse.Namespace) -> None:
                 device,
             )
 
-            truth_cpu = truth.cpu()
+            truth_path = _npz_path(args.LSC_NPZ_DIR, args.simulation_prefix, time_index)
+            if truth_path.is_file():
+                truth, sim_time, r_coord, z_coord = _load_frame(truth_path, fields)
+                truth_cpu = truth.cpu()
+            else:
+                truth_cpu = None
+                sim_time = time_index * TIMESTEP_DELTA
+                print(
+                    f"Ground truth unavailable for time index {time_index:05d}; "
+                    "rendering blank truth and discrepancy panels."
+                )
+
             prediction_cpu = prediction.cpu()
             for channel_index, channel_name in enumerate(fields):
                 output_path = (
@@ -365,7 +393,7 @@ def run(args: argparse.Namespace) -> None:
                     / f"frame_{time_index:05d}.png"
                 )
                 _render_panel(
-                    truth_cpu[channel_index].numpy(),
+                    (None if truth_cpu is None else truth_cpu[channel_index].numpy()),
                     prediction_cpu[channel_index].numpy(),
                     sim_time,
                     r_coord,
@@ -376,7 +404,7 @@ def run(args: argparse.Namespace) -> None:
 
             movie_path = frames_root / "movie" / f"frame_{time_index:05d}.png"
             _render_panel(
-                _select_field(truth_cpu, movie_indices),
+                (None if truth_cpu is None else _select_field(truth_cpu, movie_indices)),
                 _select_field(prediction_cpu, movie_indices),
                 sim_time,
                 r_coord,
