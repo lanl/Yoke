@@ -26,5 +26,5 @@ studyIDX,KNODES,NGPUS,VIT_EMBED_DIM,VIT_NUM_LAYERS,VIT_NUM_HEADS,MAX_TIME_OFFSET
 # UMich Baseline
 # NOTE: One epoch takes ~1hr on Chicoma.
 #1,1,4,2304,6,12,1,2,1,1000,500,2.0e-3,0.5,0.5,1000,500,train_ldrViT_2frame.py,y26_artimis_ddc_g
-2,1,4,2304,6,12,1,2,1,1000,500,1.0e-4,0.5,0.5,1000,500,train_ldrViT_2frame_8ch_lp.py,y26_artimis_ddc_g
-
+#2,1,4,2304,6,12,1,2,1,1000,500,1.0e-4,0.5,0.5,1000,500,train_ldrViT_2frame_8ch_lp.py,y26_artimis_ddc_g
+3,1,4,2304,6,12,1,2,1,1000,500,1.0e-4,0.5,0.5,1000,500,train_ldrViT_2frame_8ch_lp_norm.py,y26_artimis_ddc_g

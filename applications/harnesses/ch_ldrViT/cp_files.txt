@@ -1,3 +1,4 @@
 train_ldrViT_ddp.py
 train_ldrViT_2frame.py
 train_ldrViT_2frame_8ch_lp.py
+train_ldrViT_2frame_8ch_lp_norm.py
