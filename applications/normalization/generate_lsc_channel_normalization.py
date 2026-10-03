@@ -29,6 +29,8 @@ from within a dataset transform:
 """
 
 import argparse
+import csv
+from pathlib import Path
 
 import numpy as np
 
@@ -36,8 +38,10 @@ from yoke.helpers import cli
 from yoke.datasets.lsc_dataset import LSCread_npz_NaN, volfrac_density
 from yoke.datasets.lsc_normalization import (
     DEFAULT_CHANNEL_LIST,
+    classify_channel,
     compute_channel_stats,
     save_channel_norm,
+    signed_log1p,
 )
 
 
@@ -71,7 +75,7 @@ def collect_channel_samples(
     LSC_NPZ_DIR: str,
     channel_list: list[str],
     sampled_indices: list[tuple[str, int]],
-) -> dict[str, list[np.ndarray]]:
+) -> dict[str, list[tuple[str, int, np.ndarray]]]:
     """Load sampled frames and collect raw per-channel voxel arrays.
 
     Missing files are skipped silently (the LSC simulation index range is not
@@ -85,11 +89,14 @@ def collect_channel_samples(
             from :func:`sample_file_indices`.
 
     Returns:
-        dict[str, list[np.ndarray]]: Mapping from channel name to a list of
-        raw (not normalized) 2-D voxel arrays, one per successfully loaded
-        sample.
+        dict[str, list[tuple[str, int, np.ndarray]]]: Mapping from channel name
+        to ``(prefix, time_idx, field)`` records, one per successfully loaded
+        sample. Fields are raw (not normalized) 2-D voxel arrays after any
+        volume-fraction weighting.
     """
-    samples: dict[str, list[np.ndarray]] = {ch: [] for ch in channel_list}
+    samples: dict[str, list[tuple[str, int, np.ndarray]]] = {
+        ch: [] for ch in channel_list
+    }
 
     for prefix, time_idx in sampled_indices:
         filename = f"{prefix}_pvi_idx{time_idx:05d}.npz"
@@ -103,7 +110,7 @@ def collect_channel_samples(
             for channel in channel_list:
                 field = LSCread_npz_NaN(npz, channel)
                 field = volfrac_density(field, npz, channel)
-                samples[channel].append(field)
+                samples[channel].append((prefix, time_idx, field))
         finally:
             npz.close()
 
@@ -115,6 +122,48 @@ def collect_channel_samples(
             )
 
     return samples
+
+
+def write_l2_csvs(
+    fileout: str,
+    samples: dict[str, list[tuple[str, int, np.ndarray]]],
+) -> None:
+    """Write per-sample channel L2 norms beside the normalization NPZ.
+
+    Every channel gets a CSV containing norms of the fields used for
+    normalization. Log-range pressure and energy channels get an additional
+    CSV containing norms after the signed-log1p transform.
+
+    Args:
+        fileout (str): Normalization NPZ output path used to derive CSV names.
+        samples (dict[str, list[tuple[str, int, np.ndarray]]]): Sample records
+            returned by :func:`collect_channel_samples`.
+    """
+    output_path = Path(fileout)
+    stem = output_path.stem
+
+    for channel, channel_samples in samples.items():
+        raw_path = output_path.with_name(f"{stem}_{channel}_l2.csv")
+        _write_l2_csv(raw_path, channel_samples, transform=False)
+
+        if classify_channel(channel) == "log_range":
+            log_path = output_path.with_name(f"{stem}_{channel}_signed_log1p_l2.csv")
+            _write_l2_csv(log_path, channel_samples, transform=True)
+
+
+def _write_l2_csv(
+    filepath: Path,
+    samples: list[tuple[str, int, np.ndarray]],
+    *,
+    transform: bool,
+) -> None:
+    """Write one raw or signed-log1p L2-norm CSV."""
+    with filepath.open("w", newline="") as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(("prefix", "time_idx", "l2_norm"))
+        for prefix, time_idx, field in samples:
+            values = signed_log1p(field) if transform else field
+            writer.writerow((prefix, time_idx, float(np.linalg.norm(values.ravel()))))
 
 
 ###################################################################
@@ -195,6 +244,11 @@ def build_parser() -> argparse.ArgumentParser:
         default="./lsc240420_channel_norm.npz",
         help="Output NPZ filepath for the computed normalization statistics.",
     )
+    parser.add_argument(
+        "--L2",
+        action="store_true",
+        help="Write per-sample channel L2 norms to CSV files beside fileout.",
+    )
 
     return parser
 
@@ -230,7 +284,7 @@ def main(args: argparse.Namespace) -> dict[str, dict[str, float | str]]:
 
     stats: dict[str, dict[str, float | str]] = {}
     for channel in args.channel_list:
-        pooled = np.concatenate([s.ravel() for s in samples[channel]])
+        pooled = np.concatenate([field.ravel() for _, _, field in samples[channel]])
         record = compute_channel_stats(
             channel,
             pooled,
@@ -246,6 +300,10 @@ def main(args: argparse.Namespace) -> dict[str, dict[str, float | str]]:
 
     save_channel_norm(args.fileout, stats)
     print(f"Saved channel normalization statistics to {args.fileout}")
+
+    if args.L2:
+        write_l2_csvs(args.fileout, samples)
+        print(f"Saved per-sample L2 norms beside {args.fileout}")
 
     return stats
 
