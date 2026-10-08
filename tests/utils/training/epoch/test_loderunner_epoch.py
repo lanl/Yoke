@@ -278,6 +278,55 @@ def test_train_DDP_loderunner_epoch(
     assert fake_ddp_eval.calls == 0
 
 
+def test_train_DDP_loderunner_epoch_pli_2frame_lp_dispatch(
+    tmp_path: Path,
+    simple_loaders: tuple[DataLoader, DataLoader],
+    dummy_model_optimizer: tuple[object, torch.optim.Optimizer],
+    loss_fn: object,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """DDP epoch dispatches to the Lp 2-frame datasteps for 'pli_2frame_lp'."""
+    train_loader, val_loader = simple_loaders
+    model, optimizer = dummy_model_optimizer
+
+    fake_ddp_train = DummyEpochStep()
+    fake_ddp_eval = DummyEpochStep()
+    monkeypatch.setattr(
+        epoch_mod, "train_DDP_loderunner_2frame_lp_datastep", fake_ddp_train
+    )
+    monkeypatch.setattr(
+        epoch_mod, "eval_DDP_loderunner_2frame_lp_datastep", fake_ddp_eval
+    )
+
+    tf = str(tmp_path / "train_<epochIDX>.csv")
+    vf = str(tmp_path / "val_<epochIDX>.csv")
+
+    epoch_mod.train_DDP_loderunner_epoch(
+        training_data=train_loader,
+        validation_data=val_loader,
+        num_train_batches=1,
+        num_val_batches=1,
+        model=model,
+        channel_map=[0],
+        optimizer=optimizer,
+        loss_fn=loss_fn,
+        LRsched=optim.lr_scheduler.StepLR(optimizer, step_size=1),
+        epochIDX=6,
+        train_per_val=1,
+        train_rcrd_filename=tf,
+        val_rcrd_filename=vf,
+        device=torch.device("cpu"),
+        rank=0,
+        world_size=1,
+        dataset="pli_2frame_lp",
+    )
+
+    assert (tmp_path / "train_0006.csv").exists()
+    assert (tmp_path / "val_0006.csv").exists()
+    assert fake_ddp_train.calls == 1
+    assert fake_ddp_eval.calls == 1
+
+
 def test_eval_loderunner_epoch_unsupported_dataset_raises(
     simple_loaders: tuple[DataLoader, DataLoader],
 ) -> None:

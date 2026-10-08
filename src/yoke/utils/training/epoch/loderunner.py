@@ -17,6 +17,8 @@ from yoke.utils.training.datastep.loderunner import (
     eval_DDP_loderunner_datastep_cylex,
     train_DDP_loderunner_2frame_datastep,
     eval_DDP_loderunner_2frame_datastep,
+    train_DDP_loderunner_2frame_lp_datastep,
+    eval_DDP_loderunner_2frame_lp_datastep,
 )
 
 # These datastep functions are resolved dynamically at runtime via
@@ -35,6 +37,8 @@ __all__ = [
     "eval_DDP_loderunner_datastep_cylex",
     "train_DDP_loderunner_2frame_datastep",
     "eval_DDP_loderunner_2frame_datastep",
+    "train_DDP_loderunner_2frame_lp_datastep",
+    "eval_DDP_loderunner_2frame_lp_datastep",
     "train_simple_loderunner_epoch",
     "train_scheduled_loderunner_epoch",
     "train_LRsched_loderunner_epoch",
@@ -51,6 +55,11 @@ DATASTEP_FN = {
     "pli_2frame": {
         "train_ddp": "train_DDP_loderunner_2frame_datastep",
         "eval_ddp": "eval_DDP_loderunner_2frame_datastep",
+        "eval": "eval_loderunner_datastep",
+    },
+    "pli_2frame_lp": {
+        "train_ddp": "train_DDP_loderunner_2frame_lp_datastep",
+        "eval_ddp": "eval_DDP_loderunner_2frame_lp_datastep",
         "eval": "eval_loderunner_datastep",
     },
     "cylex": {
