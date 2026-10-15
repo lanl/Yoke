@@ -1,4 +1,12 @@
-"""Create diagnostic frames and an animation from a chained LodeRunner rollout."""
+"""Create diagnostic frames and an animation from a chained LodeRunner rollout.
+
+Supports both un-normalized checkpoints and checkpoints trained on the
+per-channel normalized LSC data (e.g. the ``ch_ldrViT`` ``*_lp_norm.py``
+harnesses). For the latter, pass the same ``--channel_norm_file`` used in
+training: seed frames are normalized before entering the model, the rollout
+history stays in normalized units, and every prediction is de-normalized to
+physical units for plotting.
+"""
 
 import argparse
 from pathlib import Path
@@ -14,6 +22,12 @@ import numpy as np
 import torch
 
 from yoke.datasets.lsc_dataset import LSCread_npz_NaN, volfrac_density
+from yoke.datasets.lsc_normalization import (
+    DEFAULT_MAX_LOG_MAGNITUDE,
+    denormalize_field,
+    load_channel_norm,
+    normalize_field,
+)
 from yoke.models.vit.swin.bomberman import LodeRunner, LodeRunnerViT
 from yoke.utils.checkpointing import load_model_and_optimizer
 
@@ -82,6 +96,17 @@ def build_parser() -> argparse.ArgumentParser:
         default=4.0,
         help="Animation frames per second (default: 4).",
     )
+    parser.add_argument(
+        "--channel_norm_file",
+        type=Path,
+        default=None,
+        help=(
+            "Per-channel normalization NPZ used to train the checkpoint (e.g. "
+            "applications/normalization/lsc240420_channel_norm.npz). When given, "
+            "model inputs are normalized and predictions are de-normalized to "
+            "physical units before plotting. Omit for un-normalized checkpoints."
+        ),
+    )
     return parser
 
 
@@ -97,6 +122,10 @@ def _validate_args(args: argparse.Namespace) -> None:
         raise FileNotFoundError(f"LSC NPZ directory not found: {args.LSC_NPZ_DIR}")
     if not args.checkpoint.is_file():
         raise FileNotFoundError(f"Checkpoint not found: {args.checkpoint}")
+    if args.channel_norm_file is not None and not args.channel_norm_file.is_file():
+        raise FileNotFoundError(
+            f"Channel normalization file not found: {args.channel_norm_file}"
+        )
 
 
 def _load_model(
@@ -155,6 +184,65 @@ def _load_frame(
 
     frame = torch.tensor(np.stack(field_images, axis=0), dtype=torch.float32)
     return frame, sim_time, r_coord, z_coord
+
+
+NormStats = dict[str, dict[str, float | str]]
+
+
+def _load_norm_stats(channel_norm_file: Path, fields: list[str]) -> NormStats:
+    """Load per-channel normalization records and check they cover the model.
+
+    Only presence by channel name is validated; the file is not recorded in the
+    checkpoint, so it is the caller's responsibility to pass the same file used
+    in training.
+    """
+    norm_stats = load_channel_norm(str(channel_norm_file))
+    missing = [field for field in fields if field not in norm_stats]
+    if missing:
+        raise ValueError(
+            f"channel_norm_file {str(channel_norm_file)!r} is missing "
+            f"normalization records for checkpoint channels: {missing}"
+        )
+    return norm_stats
+
+
+def _normalize_frame(
+    frame: torch.Tensor, fields: list[str], norm_stats: NormStats
+) -> torch.Tensor:
+    """Normalize a raw ``(C, H, W)`` frame exactly as the normalized datasets do."""
+    raw = frame.detach().cpu().numpy()
+    normed = [
+        normalize_field(raw[index], norm_stats[field])
+        for index, field in enumerate(fields)
+    ]
+    return torch.tensor(np.stack(normed, axis=0), dtype=torch.float32)
+
+
+def _denormalize_frame(
+    frame: torch.Tensor, fields: list[str], norm_stats: NormStats
+) -> tuple[torch.Tensor, int]:
+    """Map a normalized ``(C, H, W)`` frame back to physical units.
+
+    Log-range (energy/pressure) channels are inverted through a clipped
+    ``expm1`` so a drifting rollout saturates instead of overflowing.
+
+    Returns:
+        tuple: ``(physical_frame, n_saturated)`` where ``n_saturated`` counts
+        log-range voxels whose exponent hit the clip.
+    """
+    normed = frame.detach().cpu().numpy()
+    physical = []
+    n_saturated = 0
+    for index, field in enumerate(fields):
+        record = norm_stats[field]
+        if record["family"] == "log_range":
+            n_saturated += int(
+                np.count_nonzero(
+                    np.abs(normed[index] * record["scale"]) > DEFAULT_MAX_LOG_MAGNITUDE
+                )
+            )
+        physical.append(denormalize_field(normed[index], record))
+    return torch.tensor(np.stack(physical, axis=0), dtype=torch.float32), n_saturated
 
 
 def _field_indices(movie_field: str, fields: list[str]) -> tuple[list[int], str]:
@@ -347,18 +435,40 @@ def run(args: argparse.Namespace) -> None:
     )
     movie_indices, movie_label = _field_indices(args.movie_field, fields)
 
+    # With a normalization file, the model consumes and produces normalized
+    # tensors. The autoregressive `history` is kept in normalized units (the
+    # model's own output is fed straight back in, avoiding a lossy
+    # de-normalize/re-normalize round trip each step), while everything that is
+    # plotted -- truth, prediction, discrepancy, and aggregate `sum_*` movie
+    # fields -- is in physical units. Aggregates MUST be summed in physical
+    # units since per-channel scales differ by orders of magnitude.
+    #
+    # Possible future option: a `--plot_space {physical,normalized}` flag to
+    # render panels in the normalized units the model actually sees (normalize
+    # truth with `_normalize_frame`, skip `_denormalize_frame`).
+    norm_stats = None
+    if args.channel_norm_file is not None:
+        norm_stats = _load_norm_stats(args.channel_norm_file, fields)
+
     frames_root = args.output_filename.parent / f"{args.output_filename.stem}_frames"
     history = []
     for time_index in range(args.num_input_frames):
         seed, _, r_coord, z_coord = _load_frame(
             _npz_path(args.LSC_NPZ_DIR, args.simulation_prefix, time_index), fields
         )
+        if norm_stats is not None:
+            seed = _normalize_frame(seed, fields, norm_stats)
         history.append(seed.to(device))
 
     channel_indices = torch.arange(len(fields), dtype=torch.long, device=device)
     movie_paths = []
+    norm_msg = (
+        f"normalization from {args.channel_norm_file}"
+        if norm_stats is not None
+        else "no normalization"
+    )
     print(
-        f"Loaded checkpoint epoch {checkpoint_epoch} on {device}; "
+        f"Loaded checkpoint epoch {checkpoint_epoch} on {device} ({norm_msg}); "
         f"rolling out {args.prediction_length} frames."
     )
 
@@ -386,6 +496,15 @@ def run(args: argparse.Namespace) -> None:
                 )
 
             prediction_cpu = prediction.cpu()
+            if norm_stats is not None:
+                prediction_cpu, n_saturated = _denormalize_frame(
+                    prediction_cpu, fields, norm_stats
+                )
+                if n_saturated:
+                    print(
+                        f"Warning: {n_saturated} log-range voxels saturated the "
+                        f"de-normalization clip at time index {time_index:05d}."
+                    )
             for channel_index, channel_name in enumerate(fields):
                 output_path = (
                     frames_root

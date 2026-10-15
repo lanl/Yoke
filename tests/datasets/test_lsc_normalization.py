@@ -8,11 +8,14 @@ import pytest
 
 from yoke.datasets.lsc_normalization import (
     DEFAULT_CHANNEL_LIST,
+    DEFAULT_MAX_LOG_MAGNITUDE,
     classify_channel,
     compute_channel_stats,
+    denormalize_field,
     load_channel_norm,
     normalize_field,
     save_channel_norm,
+    signed_expm1,
     signed_log1p,
 )
 
@@ -188,3 +191,52 @@ def test_normalize_field_log_range_applies_signed_log1p_then_scale() -> None:
     raw = np.array([-10.0, 0.0, 10.0])
     expected = signed_log1p(raw) / 2.0
     assert np.allclose(normalize_field(raw, record), expected)
+
+
+def test_signed_expm1_inverts_signed_log1p() -> None:
+    """signed_expm1 is the inverse of signed_log1p, preserving zero and sign."""
+    x = np.array([-1.0e6, -3.5, 0.0, 2.0e-4, 7.0, 1.0e8])
+    y = signed_expm1(signed_log1p(x))
+    assert y[2] == 0.0
+    assert np.allclose(y, x, rtol=1e-10)
+
+
+def test_signed_expm1_clips_exponent_to_avoid_overflow() -> None:
+    """Large magnitudes saturate at the clip instead of overflowing to inf."""
+    y = np.array([-1.0e4, 1.0e4], dtype=np.float32)
+    with np.errstate(over="raise"):
+        out = signed_expm1(y)
+    assert np.all(np.isfinite(out))
+    limit = np.expm1(np.float32(DEFAULT_MAX_LOG_MAGNITUDE))
+    assert out[0] == -limit
+    assert out[1] == limit
+
+    clipped = signed_expm1(np.array([5.0]), max_log_magnitude=1.0)
+    assert clipped[0] == pytest.approx(np.expm1(1.0))
+
+
+@pytest.mark.parametrize(
+    "record,raw",
+    [
+        ({"family": "density", "scale": 2.5}, np.array([0.0, 0.1, 3.0, 12.0])),
+        ({"family": "velocity", "scale": 0.15}, np.array([-0.4, 0.0, 0.2])),
+        (
+            {"family": "log_range", "scale": 0.17},
+            np.array([-2.0e3, -0.01, 0.0, 1.0e-5, 0.3, 5.0e2]),
+        ),
+    ],
+)
+def test_denormalize_field_round_trips_normalize_field(
+    record: dict[str, float | str], raw: np.ndarray
+) -> None:
+    """denormalize_field(normalize_field(x)) recovers x for every family."""
+    recovered = denormalize_field(normalize_field(raw, record), record)
+    assert np.allclose(recovered, raw, rtol=1e-10, atol=0.0)
+    assert recovered[raw == 0.0].tolist() == [0.0] * int(np.sum(raw == 0.0))
+
+
+def test_denormalize_field_log_range_respects_clip() -> None:
+    """The log-range clip bounds |normed * scale| before exponentiation."""
+    record = {"family": "log_range", "scale": 0.5}
+    out = denormalize_field(np.array([-10.0, 10.0]), record, max_log_magnitude=2.0)
+    assert np.allclose(out, [-np.expm1(2.0), np.expm1(2.0)])

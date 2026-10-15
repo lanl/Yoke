@@ -51,6 +51,10 @@ DENSITY_PREFIX = "density_"
 LOG_RANGE_PREFIXES = ("pressure_", "energy_")
 #: Fields treated as signed, linear-range quantities (velocity).
 VELOCITY_FIELDS = ("Uvelocity", "Wvelocity")
+#: Default clip on the exponent magnitude when inverting the signed-log1p
+#: transform. ``expm1(80) ~ 5.5e34`` stays finite in ``float32`` (whose
+#: ``expm1`` overflows just above 88.7).
+DEFAULT_MAX_LOG_MAGNITUDE = 80.0
 
 #: Default 8-channel set: the 6 material densities + the two velocity
 #: components, matching
@@ -105,6 +109,27 @@ def signed_log1p(x: np.ndarray) -> np.ndarray:
         np.ndarray: Transformed array.
     """
     return np.sign(x) * np.log1p(np.abs(x))
+
+
+def signed_expm1(
+    y: np.ndarray, max_log_magnitude: float = DEFAULT_MAX_LOG_MAGNITUDE
+) -> np.ndarray:
+    """Invert :func:`signed_log1p`: ``sign(y) * expm1(|y|)``.
+
+    The exponent magnitude ``|y|`` is clipped to ``max_log_magnitude`` before
+    exponentiation so that out-of-distribution inputs (e.g. a drifting
+    autoregressive rollout) saturate at a large finite value instead of
+    overflowing to ``inf``.
+
+    Args:
+        y (np.ndarray): Signed-log1p-transformed array.
+        max_log_magnitude (float): Upper bound applied to ``|y|`` before
+            ``expm1``. The default is safe for ``float32``.
+
+    Returns:
+        np.ndarray: Array in the original (un-transformed) units.
+    """
+    return np.sign(y) * np.expm1(np.minimum(np.abs(y), max_log_magnitude))
 
 
 def compute_channel_stats(
@@ -236,3 +261,31 @@ def normalize_field(raw: np.ndarray, record: dict[str, float | str]) -> np.ndarr
     if record["family"] == "log_range":
         return signed_log1p(raw) / scale
     return raw / scale
+
+
+def denormalize_field(
+    normed: np.ndarray,
+    record: dict[str, float | str],
+    max_log_magnitude: float = DEFAULT_MAX_LOG_MAGNITUDE,
+) -> np.ndarray:
+    """Invert :func:`normalize_field`, mapping a normalized field to raw units.
+
+    Args:
+        normed (np.ndarray): Normalized field values (e.g. a model prediction).
+        record (dict[str, float | str]): Normalization record for this
+            channel, as returned by :func:`compute_channel_stats` /
+            :func:`load_channel_norm`.
+        max_log_magnitude (float): For log-range fields, the clip applied to
+            the signed-log1p magnitude ``|normed * scale|`` before
+            exponentiation (see :func:`signed_expm1`). Ignored for
+            density/velocity fields.
+
+    Returns:
+        np.ndarray: Field in raw (physical) units. Density/velocity fields are
+        multiplied by the scale; log-range fields are multiplied by the scale
+        and then passed through the clipped inverse signed-log1p transform.
+    """
+    scale = record["scale"]
+    if record["family"] == "log_range":
+        return signed_expm1(normed * scale, max_log_magnitude=max_log_magnitude)
+    return normed * scale

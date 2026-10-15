@@ -64,6 +64,24 @@ Arguments
 ``fps``
    Animation frames per second. The default is ``4``.
 
+``channel_norm_file``
+   Optional. Per-channel normalization NPZ used to train the checkpoint, for
+   models trained on normalized LSC data (e.g. the ``ch_ldrViT``
+   ``train_ldrViT_2frame_8ch_lp_norm.py`` and
+   ``train_ldrViT_2frame_20ch_lp_norm.py`` harnesses, which use
+   ``applications/normalization/lsc240420_channel_norm.npz`` and
+   ``applications/normalization/lsc240420_channel_norm_20channel.npz``
+   respectively). Seed frames are normalized before entering the model, the
+   rollout is carried in normalized units, and each prediction is
+   de-normalized so all panels and ``sum_*`` aggregates are in physical
+   units. The file must contain a record for every checkpoint channel. It is
+   not stored in the checkpoint, so pass the same file used for training.
+   Omit for un-normalized checkpoints.
+
+   For energy/pressure channels the inverse signed-log1p transform clips its
+   exponent to avoid overflow; a warning is printed when a predicted frame
+   saturates that clip, which usually indicates rollout divergence.
+
 .. caution::
 
    Autoregressive inference is sequential, and every output step renders one
