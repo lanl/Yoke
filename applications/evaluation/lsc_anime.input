@@ -1,5 +1,5 @@
 --checkpoint
-/usr/projects/artimis/mpmm/hickmank/github_yoke/applications/harnesses/ch_ldrViT/ldrViT_2frame_260903/study_001/study001_modelState_epoch0100_ema.pth
+/usr/projects/artimis/mpmm/hickmank/github_yoke/applications/harnesses/ch_ldrViT/ldrViT_2frame_260903/study_002/study002_modelState_epoch0080_ema.pth
 --LSC_NPZ_DIR
 /lustre/scratch5/exempt/artimis/data/lsc240420/
 --simulation_prefix
@@ -9,7 +9,7 @@ lsc240420_id03640
 --num_input_frames
 2
 --output_filename
-./lsc240420_id03640_2frame_chained.gif
+./lsc240420_id03640_2frame_chained_l2norm_loss.gif
 --movie_field
 sum_density
 --fps
