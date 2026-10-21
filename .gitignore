@@ -14,3 +14,6 @@ lightning_logs
 docs/source/modules.rst
 docs/source/yoke.rst
 docs/source/yoke.*.rst
+
+.venv/
+.venv-*/
