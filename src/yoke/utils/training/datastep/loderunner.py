@@ -434,6 +434,149 @@ def eval_DDP_loderunner_2frame_datastep(
     return end_img, pred_img, all_losses
 
 
+def train_DDP_loderunner_2frame_lp_datastep(
+    data: tuple,
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    loss_fn: torch.nn.Module,
+    device: torch.device,
+    rank: int,
+    world_size: int,
+    channel_map: list[int] = [0, 1, 2, 3, 4, 5, 6, 7],
+    grad_clip: float | None = None,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """A DDP training step for the 2-frame path using a per-channel ``LpLoss``.
+
+    Identical plumbing to :func:`train_DDP_loderunner_2frame_datastep` but tuned
+    to the UMich WAMRViT loss convention
+    (:class:`yoke.losses.lp_loss.LpLoss`). ``loss_fn`` is expected to return the
+    per-``(B, C)`` L2 norm (``reduction="none"``). The backward pass minimizes
+    the mean over batch *and* channel (matching the reference
+    ``reduce_dims=[0, 1], reductions="mean"`` and its effective learning-rate
+    scaling), while the per-sample value recorded/gathered is the mean over the
+    channel axis (``(B,)``), so the epoch CSV stays on the same scale as the
+    optimized objective.
+
+    Args:
+        data (tuple): ``(input_frames, target_frame, lead_times)`` where
+            ``input_frames`` is ``(B, 2, C, H, W)`` ordered ``[x_{t-1}, x_t]``,
+            ``target_frame`` is ``(B, C, H, W)``, and ``lead_times`` is
+            ``(B, 2) = (dt_in, dt_out)``.
+        model (torch.nn.Module): model to train (``num_input_frames == 2``).
+        optimizer (torch.optim.Optimizer): optimizer for training set.
+        loss_fn (torch.nn.Module): per-channel loss returning a ``(B, C)`` tensor
+            (e.g. ``LpLoss(reduction="none")``).
+        device (torch.device): device index to select.
+        rank (int): Rank of device.
+        world_size (int): Number of total DDP processes.
+        channel_map (list[int]): list of channel indices to use.
+        grad_clip (float | None): If not ``None``, clip the global gradient norm
+            to this value before the optimizer step.
+
+    Returns:
+        end_img (torch.Tensor): Ground truth target image.
+        pred_img (torch.Tensor): Predicted target image.
+        all_losses (torch.Tensor): Concatenated per-sample losses (mean over the
+            channel axis) from all ranks.
+    """
+    model.train()
+
+    input_frames, end_img, lead_times = data
+    input_frames = input_frames.to(device, non_blocking=True)
+    lead_times = lead_times.to(torch.float32).to(device, non_blocking=True)
+    end_img = end_img.to(device, non_blocking=True)
+
+    in_vars = torch.tensor(channel_map).to(device, non_blocking=True)
+    out_vars = torch.tensor(channel_map).to(device, non_blocking=True)
+
+    # Forward pass through the 2-in/1-out model.
+    pred_img = model(input_frames, in_vars, out_vars, lead_times)
+
+    # Per-(B, C) L2 norm from the LpLoss (reduction="none").
+    per_channel_loss = loss_fn(pred_img, end_img)  # (B, C)
+    # Per-sample loss for recording/gathering: mean over the channel axis.
+    per_sample_loss = per_channel_loss.mean(dim=1)  # (B,)
+
+    optimizer.zero_grad(set_to_none=True)
+    # Backprop on the mean over batch and channel (reference convention).
+    per_channel_loss.mean().backward()
+
+    if grad_clip is not None:
+        torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+
+    optimizer.step()
+
+    gathered_losses = [torch.zeros_like(per_sample_loss) for _ in range(world_size)]
+    dist.all_gather(gathered_losses, per_sample_loss)
+
+    if rank == 0:
+        all_losses = torch.cat(gathered_losses, dim=0)
+    else:
+        all_losses = None
+
+    return end_img, pred_img, all_losses
+
+
+def eval_DDP_loderunner_2frame_lp_datastep(
+    data: tuple,
+    model: torch.nn.Module,
+    loss_fn: torch.nn.Module,
+    device: torch.device,
+    rank: int,
+    world_size: int,
+    channel_map: list[int] = [0, 1, 2, 3, 4, 5, 6, 7],
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """A DDP evaluation step for the 2-frame path using a per-channel ``LpLoss``.
+
+    Evaluation counterpart to
+    :func:`train_DDP_loderunner_2frame_lp_datastep`. ``loss_fn`` returns the
+    per-``(B, C)`` norm (``reduction="none"``) and the recorded/gathered
+    per-sample value is the mean over the channel axis.
+
+    Args:
+        data (tuple): ``(input_frames, target_frame, lead_times)`` as produced
+            by :class:`LSC_rho2rho_temporal_2frame_DataSet`.
+        model (torch.nn.Module): model to evaluate (``num_input_frames == 2``).
+        loss_fn (torch.nn.Module): per-channel loss returning a ``(B, C)`` tensor
+            (e.g. ``LpLoss(reduction="none")``).
+        device (torch.device): device index to select.
+        rank (int): Rank of device.
+        world_size (int): Total number of DDP processes.
+        channel_map (list[int]): list of channel indices to use.
+
+    Returns:
+        end_img (torch.Tensor): Ground truth target image.
+        pred_img (torch.Tensor): Predicted target image.
+        all_losses (torch.Tensor): Concatenated per-sample losses (mean over the
+            channel axis) from all ranks.
+    """
+    model.eval()
+
+    input_frames, end_img, lead_times = data
+    input_frames = input_frames.to(device, non_blocking=True)
+    lead_times = lead_times.to(torch.float32).to(device, non_blocking=True)
+    end_img = end_img.to(device, non_blocking=True)
+
+    in_vars = torch.tensor(channel_map).to(device, non_blocking=True)
+    out_vars = torch.tensor(channel_map).to(device, non_blocking=True)
+
+    with torch.no_grad():
+        pred_img = model(input_frames, in_vars, out_vars, lead_times)
+
+    per_channel_loss = loss_fn(pred_img, end_img)  # (B, C)
+    per_sample_loss = per_channel_loss.mean(dim=1)  # (B,)
+
+    gathered_losses = [torch.zeros_like(per_sample_loss) for _ in range(world_size)]
+    dist.all_gather(gathered_losses, per_sample_loss)
+
+    if rank == 0:
+        all_losses = torch.cat(gathered_losses, dim=0)
+    else:
+        all_losses = None
+
+    return end_img, pred_img, all_losses
+
+
 ####################################
 # Evaluating on a Datastep
 ####################################

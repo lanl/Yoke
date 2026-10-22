@@ -21,7 +21,10 @@ from yoke.utils.training.datastep.loderunner import (
     eval_DDP_loderunner_datastep_cylex,
     train_DDP_loderunner_2frame_datastep,
     eval_DDP_loderunner_2frame_datastep,
+    train_DDP_loderunner_2frame_lp_datastep,
+    eval_DDP_loderunner_2frame_lp_datastep,
 )
+from yoke.losses.lp_loss import LpLoss
 
 
 class DummyModel(nn.Module):
@@ -281,6 +284,142 @@ def test_eval_DDP_loderunner_2frame_datastep(
     assert torch.equal(pred_img, target + 1.0)
     if rank == 0:
         assert all_losses.shape == (world_size * B,)
+    else:
+        assert all_losses is None
+
+
+@pytest.fixture
+def lp_loss_fn() -> nn.Module:
+    """Return a per-channel LpLoss (reduction='none') for 2-frame Lp tests."""
+    return LpLoss(d=2, p=2, method="abs", eps=1e-4, reduction="none")
+
+
+@pytest.mark.parametrize("rank", [0, 1])
+def test_train_DDP_loderunner_2frame_lp_datastep(
+    rank: int, device: torch.device, lp_loss_fn: nn.Module
+) -> None:
+    """Test the 2-frame Lp DDP training step shapes and rank-0 gathering."""
+    model = DummyTwoFrameModel()
+    optimizer = optim.SGD(model.parameters(), lr=0.1)
+    B, T, C, H, W = 2, 2, 3, 2, 2
+    input_frames = torch.randn((B, T, C, H, W))
+    target = torch.randn((B, C, H, W))
+    lead_times = torch.ones((B, 2))
+    world_size = 3
+
+    end_img, pred_img, all_losses = train_DDP_loderunner_2frame_lp_datastep(
+        (input_frames, target, lead_times),
+        model,
+        optimizer,
+        lp_loss_fn,
+        device,
+        rank,
+        world_size,
+        channel_map=[0, 1, 2],
+    )
+
+    assert torch.equal(end_img, target)
+    # Prediction is the frame-mean + 1.0 (DummyTwoFrameModel).
+    assert torch.allclose(pred_img, input_frames.mean(dim=1) + 1.0)
+    if rank == 0:
+        assert all_losses is not None
+        assert all_losses.shape == (world_size * B,)
+        # Recorded per-sample loss is the per-(B, C) norm averaged over C.
+        per_bc = lp_loss_fn(pred_img.detach(), target)
+        assert torch.allclose(all_losses[:B], per_bc.mean(dim=1))
+    else:
+        assert all_losses is None
+
+
+def test_train_DDP_loderunner_2frame_lp_datastep_grad_clip(
+    device: torch.device, lp_loss_fn: nn.Module, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test grad_clip invokes clip_grad_norm_ before the optimizer step."""
+    model = DummyTwoFrameModel()
+    optimizer = optim.SGD(model.parameters(), lr=0.1)
+    B, T, C, H, W = 2, 2, 1, 2, 2
+    input_frames = torch.ones((B, T, C, H, W))
+    target = torch.zeros((B, C, H, W))
+    lead_times = torch.ones((B, 2))
+
+    called = {"n": 0}
+    orig = torch.nn.utils.clip_grad_norm_
+
+    def spy(*args: object, **kwargs: object) -> torch.Tensor:
+        called["n"] += 1
+        return orig(*args, **kwargs)
+
+    monkeypatch.setattr(torch.nn.utils, "clip_grad_norm_", spy)
+
+    train_DDP_loderunner_2frame_lp_datastep(
+        (input_frames, target, lead_times),
+        model,
+        optimizer,
+        lp_loss_fn,
+        device,
+        rank=0,
+        world_size=1,
+        channel_map=[0],
+        grad_clip=1.0,
+    )
+
+    assert called["n"] == 1
+
+
+def test_train_DDP_loderunner_2frame_lp_datastep_updates_weights(
+    device: torch.device, lp_loss_fn: nn.Module
+) -> None:
+    """Test the Lp training step actually updates model parameters."""
+    model = DummyTwoFrameModel()
+    optimizer = optim.SGD(model.parameters(), lr=0.1)
+    B, T, C, H, W = 2, 2, 1, 2, 2
+    input_frames = torch.ones((B, T, C, H, W))
+    target = torch.zeros((B, C, H, W))
+    lead_times = torch.ones((B, 2))
+
+    before = model.param.detach().clone()
+    train_DDP_loderunner_2frame_lp_datastep(
+        (input_frames, target, lead_times),
+        model,
+        optimizer,
+        lp_loss_fn,
+        device,
+        rank=0,
+        world_size=1,
+        channel_map=[0],
+    )
+    assert not torch.allclose(before, model.param.detach())
+
+
+@pytest.mark.parametrize("rank", [0, 1])
+def test_eval_DDP_loderunner_2frame_lp_datastep(
+    rank: int, device: torch.device, lp_loss_fn: nn.Module
+) -> None:
+    """Test the 2-frame Lp DDP eval step shapes and rank-0 gathering."""
+    model = DummyTwoFrameModel()
+    B, T, C, H, W = 2, 2, 3, 2, 2
+    input_frames = torch.randn((B, T, C, H, W))
+    target = torch.randn((B, C, H, W))
+    lead_times = torch.ones((B, 2))
+    world_size = 4
+
+    end_img, pred_img, all_losses = eval_DDP_loderunner_2frame_lp_datastep(
+        (input_frames, target, lead_times),
+        model,
+        lp_loss_fn,
+        device,
+        rank,
+        world_size,
+        channel_map=[0, 1, 2],
+    )
+
+    assert torch.equal(end_img, target)
+    assert torch.allclose(pred_img, input_frames.mean(dim=1) + 1.0)
+    if rank == 0:
+        assert all_losses is not None
+        assert all_losses.shape == (world_size * B,)
+        per_bc = lp_loss_fn(pred_img.detach(), target)
+        assert torch.allclose(all_losses[:B], per_bc.mean(dim=1))
     else:
         assert all_losses is None
 

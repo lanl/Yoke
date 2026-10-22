@@ -24,6 +24,8 @@ import pandas as pd
 import torch
 from torch.utils.data import Dataset, DataLoader
 
+from yoke.datasets.lsc_normalization import load_channel_norm, normalize_field
+
 
 NoneStr = None | str
 
@@ -1036,6 +1038,104 @@ class LSC_rho2rho_temporal_2frame_DataSet(Dataset):
         lead_times = torch.tensor([0.25 * gap_in, 0.25 * gap_out], dtype=torch.float32)
 
         return input_frames, next_img, lead_times
+
+
+class LSC_rho2rho_temporal_2frame_normalized_DataSet(
+    LSC_rho2rho_temporal_2frame_DataSet
+):
+    """Channel-normalized sibling of :class:`LSC_rho2rho_temporal_2frame_DataSet`.
+
+    Identical sampling behavior (two input frames ``[x_{t-1}, x_t]``, target
+    frame ``x_{t+1}``, lead-times ``(dt_in, dt_out)``) to the base class, but
+    each loaded field is additionally normalized per-channel using a fixed
+    (precomputed, global) scale-only transform loaded from a
+    ``channel_norm_file`` written by
+    ``applications/normalization/generate_lsc_channel_normalization.py``. See
+    :mod:`yoke.datasets.lsc_normalization` for the exact scheme: density
+    fields are divided by a one-sided percentile-based scale (zero stays
+    zero), velocity fields are divided by a symmetric percentile-based scale,
+    and pressure/energy fields are signed-log1p transformed before the
+    symmetric scale is applied.
+
+    This mirrors the existing split between
+    :class:`LSC_cntr2rho_DataSet` and :class:`LSCnorm_cntr2rho_DataSet`: the
+    normalized behavior is a separate class rather than an optional flag, so
+    the un-normalized class's behavior/signature never changes.
+
+    Args:
+        LSC_NPZ_DIR (str): Location of LSC NPZ files.
+        file_prefix_list (str): Text file listing unique simulation prefixes.
+        max_timeIDX_offset (int): Maximum per-gap file-index offset.
+        max_file_checks (int): Maximum number of index-sampling attempts before
+            reporting a missing-file error.
+        channel_norm_file (str): Path to the NPZ written by
+            :func:`yoke.datasets.lsc_normalization.save_channel_norm`
+            (typically via the ``generate_lsc_channel_normalization.py``
+            script). Must contain a normalization record for every entry in
+            ``hydro_fields``.
+        half_image (bool): If True, return half-images (no reflection).
+        hydro_fields (np.array): Array of hydro field names to include. Every
+            entry must have a matching record in ``channel_norm_file``.
+
+    """
+
+    def __init__(
+        self,
+        LSC_NPZ_DIR: str,
+        file_prefix_list: str,
+        max_timeIDX_offset: int,
+        max_file_checks: int,
+        channel_norm_file: str,
+        half_image: bool = True,
+        hydro_fields: np.array = np.array(
+            [
+                "density_case",
+                "density_cushion",
+                "density_maincharge",
+                "density_outside_air",
+                "density_striker",
+                "density_throw",
+                "Uvelocity",
+                "Wvelocity",
+            ]
+        ),
+    ) -> None:
+        """Initialization of the normalized 2-frame temporal dataset."""
+        super().__init__(
+            LSC_NPZ_DIR,
+            file_prefix_list,
+            max_timeIDX_offset,
+            max_file_checks,
+            half_image=half_image,
+            hydro_fields=hydro_fields,
+        )
+
+        self.channel_norm_file = channel_norm_file
+        self.norm_stats = load_channel_norm(channel_norm_file)
+
+        missing = [h for h in self.hydro_fields if h not in self.norm_stats]
+        if missing:
+            raise ValueError(
+                f"channel_norm_file {channel_norm_file!r} is missing "
+                f"normalization records for hydro_fields: {missing}"
+            )
+
+    def _load_frame(self, file_name: str) -> torch.Tensor:
+        """Load, normalize, and assemble a single multi-channel frame tensor."""
+        npz = np.load(self.LSC_NPZ_DIR + file_name)
+        img_list = []
+        try:
+            for hfield in self.hydro_fields:
+                tmp_img = LSCread_npz_NaN(npz, hfield)
+                tmp_img = volfrac_density(tmp_img, npz, hfield)
+                tmp_img = normalize_field(tmp_img, self.norm_stats[hfield])
+                if not self.half_image:
+                    tmp_img = np.concatenate((np.fliplr(tmp_img), tmp_img), axis=1)
+                img_list.append(tmp_img)
+        finally:
+            npz.close()
+
+        return torch.tensor(np.stack(img_list, axis=0)).to(torch.float32)
 
 
 class LSC_rho2rho_sequential_DataSet(Dataset):
