@@ -63,8 +63,7 @@ def csv2scalar(csv_file: str, key: str, scalar: str) -> float:
     design_df = pd.read_csv(csv_file, sep=",", header=0, index_col=0, engine="python")
 
     # removed spaces from headers
-    for col in design_df.columns:
-        design_df.rename(columns={col: col.strip()}, inplace=True)
+    design_df.columns = design_df.columns.str.strip()
 
     assert scalar in design_df.columns, (
         "csv2scalar: selected scalar is not in the design file"
