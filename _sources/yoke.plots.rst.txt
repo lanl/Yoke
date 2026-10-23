@@ -1,0 +1,21 @@
+yoke.plots package
+==================
+
+Submodules
+----------
+
+yoke.plots.loss\_curves module
+------------------------------
+
+.. automodule:: yoke.plots.loss_curves
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+Module contents
+---------------
+
+.. automodule:: yoke.plots
+   :members:
+   :show-inheritance:
+   :undoc-members:
