@@ -380,8 +380,7 @@ class LabeledData:
             index_col=0,
             engine="python",
         )
-        for col in design_df.columns:
-            design_df.rename(columns={col: col.strip()}, inplace=True)
+        design_df.columns = design_df.columns.str.strip()
 
         non_he_mats_arr = design_df.loc[self.key, "wallMat":"backMat"].values
         non_he_mats = [str(m).strip() for m in non_he_mats_arr]

@@ -72,8 +72,7 @@ def LSCcsv2bspline_pts(design_file: str, key: str) -> np.ndarray:
     design_df = pd.read_csv(design_file, sep=",", header=0, index_col=0, engine="python")
 
     # removed spaces from headers
-    for col in design_df.columns:
-        design_df.rename(columns={col: col.strip()}, inplace=True)
+    design_df.columns = design_df.columns.str.strip()
 
     bspline_pts = design_df.loc[key, "sa1":"ct7"].values
 
