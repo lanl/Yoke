@@ -1,0 +1,6 @@
+studyIDX,KNODES,NGPUS,VIT_EMBED_DIM,VIT_NUM_LAYERS,VIT_NUM_HEADS,MAX_TIME_OFFSET,NUM_WORKERS,NTRN_BATCH,NVAL_BATCH,ANCHOR_LR,NUM_CYCLES,MIN_FRACTION,TERMINAL_STEPS,WARMUP_STEPS,LSC_WEIGHT,CYL_WEIGHT,train_script,allocation
+# Smoke tests: joint, LSC-only, and CYL-only mixing. Batch size is fixed to 1
+# in training_input.tmpl because channel sets vary between simulations.
+1,1,4,2304,6,12,1,2,200,100,1.0e-4,0.5,0.5,1000,100,1.0,1.0,train_ldrViT_2frame_lsc_cyl.py,y26_artimis-test_g
+2,1,4,2304,6,12,1,2,200,100,1.0e-4,0.5,0.5,1000,100,1.0,0.0,train_ldrViT_2frame_lsc_cyl.py,y26_artimis-test_g
+3,1,4,2304,6,12,1,2,200,100,1.0e-4,0.5,0.5,1000,100,0.0,1.0,train_ldrViT_2frame_lsc_cyl.py,y26_artimis-test_g

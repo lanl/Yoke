@@ -505,3 +505,37 @@ def test_loderunner_vit_single_frame_regression(
     # Deterministic with noise off.
     assert torch.allclose(out1, out2)
     assert out1.shape == (2, 3, 1120, 800)
+
+
+def test_loderunner_vit_2frame_variable_channels_all_params_get_grads() -> None:
+    """Different channel subsets train one model; every parameter gets a grad.
+
+    Joint LSC/CYL training feeds the 2-frame model a different ``in_vars`` set
+    per batch. DDP requires every parameter to receive a gradient each step,
+    which holds because the per-variable weights are indexed (giving dense,
+    partly zero gradients) rather than skipped.
+    """
+    from yoke.datasets.pagosa_fields import CANONICAL_FIELDS
+
+    torch.manual_seed(0)
+    model = LodeRunnerViT(
+        default_vars=list(CANONICAL_FIELDS),
+        image_size=(20, 10),
+        patch_size=(10, 5),
+        embed_dim=16,
+        num_heads=2,
+        num_attention_heads=2,
+        attention_head_dim=8,
+        num_layers=1,
+        num_input_frames=2,
+    )
+    for channels in ([0, 1, 2, 17], [0, 1, 5, 8, 11, 32]):
+        model.zero_grad(set_to_none=True)
+        variables = torch.tensor(channels)
+        x = torch.randn(1, 2, len(channels), 20, 10)
+        out = model(x, variables, variables, torch.rand(1, 2))
+
+        assert out.shape == (1, len(channels), 20, 10)
+        out.square().mean().backward()
+        missing = [n for n, p in model.named_parameters() if p.grad is None]
+        assert missing == []

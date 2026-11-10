@@ -19,7 +19,10 @@ from yoke.utils.training.datastep.loderunner import (
     eval_DDP_loderunner_2frame_datastep,
     train_DDP_loderunner_2frame_lp_datastep,
     eval_DDP_loderunner_2frame_lp_datastep,
+    train_DDP_loderunner_2frame_varchan_datastep,
+    eval_DDP_loderunner_2frame_varchan_datastep,
 )
+from yoke.datasets.pagosa_fields import DATASET_NAMES
 
 # These datastep functions are resolved dynamically at runtime via
 # ``globals()[...]`` using the ``DATASTEP_FN`` dispatch table below, so they must
@@ -39,10 +42,13 @@ __all__ = [
     "eval_DDP_loderunner_2frame_datastep",
     "train_DDP_loderunner_2frame_lp_datastep",
     "eval_DDP_loderunner_2frame_lp_datastep",
+    "train_DDP_loderunner_2frame_varchan_datastep",
+    "eval_DDP_loderunner_2frame_varchan_datastep",
     "train_simple_loderunner_epoch",
     "train_scheduled_loderunner_epoch",
     "train_LRsched_loderunner_epoch",
     "train_DDP_loderunner_epoch",
+    "train_DDP_loderunner_multidataset_epoch",
     "eval_loderunner_epoch",
 ]
 
@@ -615,3 +621,141 @@ def eval_loderunner_epoch(
                 ]
             )
             np.savetxt(test_rcrd_file, batch_records, fmt="%d, %d, %.8f")
+
+
+def _write_tagged_records(
+    rcrd_file: object,
+    epochIDX: int,
+    batchID: int,
+    losses: torch.Tensor,
+    dataset_ids: torch.Tensor,
+) -> None:
+    """Append ``epoch, batch, loss, dataset`` rows to an open record file.
+
+    Args:
+        rcrd_file (object): Open text file to append to.
+        epochIDX (int): Current epoch.
+        batchID (int): Current batch index.
+        losses (torch.Tensor): Per-sample losses gathered over ranks.
+        dataset_ids (torch.Tensor): Matching per-sample dataset IDs.
+    """
+    losses = losses.cpu().numpy().flatten()
+    names = [DATASET_NAMES.get(int(i), str(int(i))) for i in dataset_ids.cpu()]
+    for loss, name in zip(losses, names):
+        rcrd_file.write(f"{epochIDX:d}, {batchID:d}, {loss:.8f}, {name}\n")
+
+
+def train_DDP_loderunner_multidataset_epoch(
+    training_data: torch.utils.data.DataLoader,
+    validation_data: torch.utils.data.DataLoader,
+    num_train_batches: int,
+    num_val_batches: int,
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    loss_fn: torch.nn.Module,
+    LRsched: torch.optim.lr_scheduler._LRScheduler,
+    epochIDX: int,
+    train_per_val: int,
+    train_rcrd_filename: str,
+    val_rcrd_filename: str,
+    device: torch.device,
+    rank: int,
+    world_size: int,
+    ema_model: torch.nn.Module = None,
+    global_step: int = 0,
+    ema_update_after_step: int = 1000,
+    grad_clip: float = None,
+) -> int:
+    """DDP 2-frame LodeRunner epoch over mixed, variable-channel datasets.
+
+    Same loop as :func:`train_DDP_loderunner_epoch` (LR step every batch,
+    warmup-EMA update, validation every ``train_per_val`` epochs), but for
+    batches from :mod:`yoke.datasets.pagosa_2frame`: each batch carries its
+    own channel map and dataset tag. Record CSV rows gain a fourth column
+    naming the source dataset, e.g. ``12, 340, 0.00123400, cyl``.
+
+    Args:
+        training_data (torch.utils.data.DataLoader): Training dataloader.
+        validation_data (torch.utils.data.DataLoader): Validation dataloader.
+        num_train_batches (int): Number of batches in the training epoch.
+        num_val_batches (int): Number of batches in the validation epoch.
+        model (torch.nn.Module): Model to train.
+        optimizer (torch.optim.Optimizer): Optimizer.
+        loss_fn (torch.nn.Module): Elementwise loss function.
+        LRsched (torch.optim.lr_scheduler._LRScheduler): Scheduler stepped every
+            training batch.
+        epochIDX (int): Index of the current epoch.
+        train_per_val (int): Training epochs between validations.
+        train_rcrd_filename (str): Training record CSV name (``<epochIDX>`` is
+            substituted).
+        val_rcrd_filename (str): Validation record CSV name.
+        device (torch.device): Device to run on.
+        rank (int): Rank of this process.
+        world_size (int): Number of DDP processes.
+        ema_model (torch.nn.Module): Optional EMA shadow, updated after each step
+            once ``global_step`` exceeds ``ema_update_after_step``.
+        global_step (int): Optimizer-step counter at the start of the epoch.
+        ema_update_after_step (int): Global step after which EMA updates begin.
+        grad_clip (float | None): Optional global gradient-norm clip value.
+
+    Returns:
+        int: The updated global optimizer-step counter.
+    """
+    model.train()
+    train_rcrd_filename = train_rcrd_filename.replace("<epochIDX>", f"{epochIDX:04d}")
+    with (
+        open(train_rcrd_filename, "a") if rank == 0 else nullcontext()
+    ) as train_rcrd_file:
+        for trainbatch_ID, traindata in enumerate(training_data):
+            if trainbatch_ID >= num_train_batches:
+                break
+
+            step_out = train_DDP_loderunner_2frame_varchan_datastep(
+                traindata,
+                model,
+                optimizer,
+                loss_fn,
+                device,
+                rank,
+                world_size,
+                grad_clip=grad_clip,
+            )
+            _, _, train_losses, train_ids = step_out
+
+            LRsched.step()
+
+            # Same ordering as train_DDP_loderunner_epoch:
+            #   backward -> clip -> optimizer.step -> LRsched.step -> ema.update
+            global_step += 1
+            if ema_model is not None and global_step > ema_update_after_step:
+                source = model.module if hasattr(model, "module") else model
+                ema_model.update_parameters(source)
+
+            if rank == 0:
+                _write_tagged_records(
+                    train_rcrd_file, epochIDX, trainbatch_ID, train_losses, train_ids
+                )
+
+    if epochIDX % train_per_val == 0:
+        print("Validating...", epochIDX)
+        val_rcrd_filename = val_rcrd_filename.replace("<epochIDX>", f"{epochIDX:04d}")
+        model.eval()
+        with (
+            open(val_rcrd_filename, "a") if rank == 0 else nullcontext()
+        ) as val_rcrd_file:
+            with torch.no_grad():
+                for valbatch_ID, valdata in enumerate(validation_data):
+                    if valbatch_ID >= num_val_batches:
+                        break
+
+                    step_out = eval_DDP_loderunner_2frame_varchan_datastep(
+                        valdata, model, loss_fn, device, rank, world_size
+                    )
+                    _, _, val_losses, val_ids = step_out
+
+                    if rank == 0:
+                        _write_tagged_records(
+                            val_rcrd_file, epochIDX, valbatch_ID, val_losses, val_ids
+                        )
+
+    return global_step
