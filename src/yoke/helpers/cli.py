@@ -652,6 +652,14 @@ def add_plot_loss_args(parser: argparse.ArgumentParser) -> argparse.ArgumentPars
         help="If run is still training throw out last training CSV.",
     )
     parser.add_argument(
+        "--dataset",
+        action="store",
+        type=str,
+        default=None,
+        help="Plot only records tagged with this dataset (e.g. lsc, cyl). "
+        "Requires 4-column records from a multi-dataset epoch function.",
+    )
+    parser.add_argument(
         "--savedir",
         action="store",
         type=str,

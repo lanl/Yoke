@@ -37,6 +37,7 @@ def main() -> None:
         scatter=args.scatter,
         ylim=args.ylim,
         inprogress=args.inprogress,
+        dataset=args.dataset,
     )
     save_or_show_figure(fig, args.IDX, args.savefig, args.savedir)
 

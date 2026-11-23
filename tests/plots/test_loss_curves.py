@@ -174,3 +174,57 @@ def test_save_or_show_figure_saves(tmp_path: Path) -> None:
     expected = savedir / "study007_TandV_curve.png"
     assert result == str(expected)
     assert expected.exists()
+
+
+def _write_tagged_study(base: Path, studyIDX: int) -> None:
+    """Create a study whose records carry an lsc/cyl dataset column.
+
+    Args:
+        base (Path): Base directory to create the study under.
+        studyIDX (int): Study index.
+    """
+    study_dir = base / f"study_{studyIDX:03d}"
+    study_dir.mkdir(parents=True)
+    for kind, n in (("training", 40), ("validation", 20)):
+        rows = [
+            f"10, {b}, {0.5 if b % 2 else 0.1}, {'cyl' if b % 2 else 'lsc'}"
+            for b in range(n)
+        ]
+        path = study_dir / f"{kind}_study{studyIDX:03d}_epoch0010.csv"
+        path.write_text("\n".join(rows) + "\n")
+
+
+def test_load_record_csv_tagged(tmp_path: Path) -> None:
+    """Four-column records gain a Dataset column."""
+    csv_path = tmp_path / "rec.csv"
+    csv_path.write_text("1, 0, 0.5, lsc\n1, 0, 0.25, cyl\n")
+
+    df = loss_curves.load_record_csv(str(csv_path))
+
+    assert list(df.columns) == ["Epoch", "Batch", "Loss", "Dataset"]
+    assert list(df["Dataset"]) == ["lsc", "cyl"]
+
+
+def test_load_record_csv_bad_columns(tmp_path: Path) -> None:
+    """Files with neither 3 nor 4 columns raise."""
+    csv_path = tmp_path / "rec.csv"
+    csv_path.write_text("1, 0\n")
+    with pytest.raises(ValueError, match="expected 3 or 4 columns"):
+        loss_curves.load_record_csv(str(csv_path))
+
+
+def test_plot_loss_curves_dataset_filter(tmp_path: Path) -> None:
+    """dataset= keeps only matching records; untagged files then raise."""
+    _write_tagged_study(tmp_path, 2)
+
+    fig = loss_curves.plot_loss_curves(
+        str(tmp_path), 2, nsamps_per_trn_pt=10, nsamps_per_val_pt=5, dataset="cyl"
+    )
+    medians = fig.gca().lines[1].get_ydata()
+    assert np.allclose(medians, 0.5)
+
+    _make_study(tmp_path, 3, n_trn=40, n_val=20)
+    with pytest.raises(ValueError, match="no Dataset column"):
+        loss_curves.plot_loss_curves(
+            str(tmp_path), 3, nsamps_per_trn_pt=10, nsamps_per_val_pt=5, dataset="lsc"
+        )

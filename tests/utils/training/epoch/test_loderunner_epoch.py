@@ -519,3 +519,128 @@ def test_train_DDP_loderunner_epoch_ema_update_gating(
 
     assert new_step == 6
     assert ema.updates == 1
+
+
+class DummyVarchanStep:
+    """Fake varchan datastep returning fixed losses and dataset ids."""
+
+    def __init__(self, ids: list[int]) -> None:
+        """Store the per-sample ids to return and a call counter."""
+        self.ids = torch.tensor(ids)
+        self.calls = 0
+
+    def __call__(
+        self, *args: object, **kwargs: object
+    ) -> tuple[None, None, torch.Tensor, torch.Tensor]:
+        """Return ``(truth, pred, losses, ids)`` like the real step on rank 0."""
+        self.calls += 1
+        losses = torch.full((len(self.ids),), 0.25)
+        return None, None, losses, self.ids
+
+
+def _run_multidataset_epoch(
+    tmp_path: Path,
+    loaders: tuple[DataLoader, DataLoader],
+    model_opt: tuple[nn.Module, torch.optim.Optimizer],
+    epochIDX: int,
+    rank: int = 0,
+    **kwargs: object,
+) -> int:
+    """Run train_DDP_loderunner_multidataset_epoch with 2 train/val batches."""
+    model, optimizer = model_opt
+    return epoch_mod.train_DDP_loderunner_multidataset_epoch(
+        training_data=loaders[0],
+        validation_data=loaders[1],
+        num_train_batches=2,
+        num_val_batches=1,
+        model=model,
+        optimizer=optimizer,
+        loss_fn=None,
+        LRsched=optim.lr_scheduler.StepLR(optimizer, step_size=1),
+        epochIDX=epochIDX,
+        train_per_val=2,
+        train_rcrd_filename=str(tmp_path / "train_<epochIDX>.csv"),
+        val_rcrd_filename=str(tmp_path / "val_<epochIDX>.csv"),
+        device=torch.device("cpu"),
+        rank=rank,
+        world_size=2,
+        **kwargs,
+    )
+
+
+def test_multidataset_epoch_writes_tagged_records(
+    tmp_path: Path,
+    simple_loaders: tuple[DataLoader, DataLoader],
+    dummy_model_optimizer: tuple[nn.Module, torch.optim.Optimizer],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Records gain a dataset column; validation follows train_per_val."""
+    train_step = DummyVarchanStep([0, 1])
+    eval_step = DummyVarchanStep([1, 7])
+    monkeypatch.setattr(
+        epoch_mod, "train_DDP_loderunner_2frame_varchan_datastep", train_step
+    )
+    monkeypatch.setattr(
+        epoch_mod, "eval_DDP_loderunner_2frame_varchan_datastep", eval_step
+    )
+
+    step = _run_multidataset_epoch(
+        tmp_path, simple_loaders, dummy_model_optimizer, epochIDX=4, global_step=10
+    )
+
+    assert step == 12
+    assert train_step.calls == 2 and eval_step.calls == 1
+    train_rows = (tmp_path / "train_0004.csv").read_text().splitlines()
+    assert train_rows == [
+        "4, 0, 0.25000000, lsc",
+        "4, 0, 0.25000000, cyl",
+        "4, 1, 0.25000000, lsc",
+        "4, 1, 0.25000000, cyl",
+    ]
+    # Unknown ids fall back to the integer.
+    val_rows = (tmp_path / "val_0004.csv").read_text().splitlines()
+    assert val_rows == ["4, 0, 0.25000000, cyl", "4, 0, 0.25000000, 7"]
+
+    # Odd epoch: no validation; non-zero rank: no files.
+    _run_multidataset_epoch(
+        tmp_path, simple_loaders, dummy_model_optimizer, epochIDX=5, rank=1
+    )
+    assert not (tmp_path / "train_0005.csv").exists()
+    assert eval_step.calls == 1
+
+
+def test_multidataset_epoch_ema_gating(
+    tmp_path: Path,
+    simple_loaders: tuple[DataLoader, DataLoader],
+    dummy_model_optimizer: tuple[nn.Module, torch.optim.Optimizer],
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """EMA updates only after ema_update_after_step global steps."""
+    monkeypatch.setattr(
+        epoch_mod,
+        "train_DDP_loderunner_2frame_varchan_datastep",
+        DummyVarchanStep([0]),
+    )
+
+    class CountingEMA:
+        """Counts update_parameters calls."""
+
+        def __init__(self) -> None:
+            """Initialize the counter."""
+            self.updates = 0
+
+        def update_parameters(self, model: nn.Module) -> None:
+            """Count an update."""
+            self.updates += 1
+
+    ema = CountingEMA()
+    _run_multidataset_epoch(
+        tmp_path,
+        simple_loaders,
+        dummy_model_optimizer,
+        epochIDX=1,
+        ema_model=ema,
+        global_step=0,
+        ema_update_after_step=1,
+    )
+    assert ema.updates == 1

@@ -22,8 +22,10 @@ import matplotlib
 import matplotlib.pyplot as plt
 
 
-# Column names used in Yoke record CSV files.
+# Column names used in Yoke record CSV files. Multi-dataset epoch functions
+# append a fourth column naming the dataset each sample came from.
 _RECORD_COLUMNS = ["Epoch", "Batch", "Loss"]
+_TAGGED_RECORD_COLUMNS = [*_RECORD_COLUMNS, "Dataset"]
 
 # Default quantiles for the plotted loss bands (lower, median, upper).
 _DEFAULT_QUANTILES = (0.025, 0.5, 0.975)
@@ -87,18 +89,45 @@ def load_record_csv(path: str) -> pd.DataFrame:
     """Read a single Yoke record CSV into a DataFrame.
 
     Args:
-        path (str): Path to a record CSV with ``Epoch, Batch, Loss`` columns.
+        path (str): Path to a record CSV with ``Epoch, Batch, Loss`` columns,
+            optionally followed by a ``Dataset`` tag column.
 
     Returns:
-        pandas.DataFrame: DataFrame with columns ``Epoch``, ``Batch``, ``Loss``.
+        pandas.DataFrame: DataFrame with columns ``Epoch``, ``Batch``, ``Loss``
+        and, for tagged records, ``Dataset``.
+
+    Raises:
+        ValueError: If the file has neither 3 nor 4 columns.
     """
-    return pd.read_csv(
-        path,
-        sep=", ",
-        header=None,
-        names=_RECORD_COLUMNS,
-        engine="python",
-    )
+    df = pd.read_csv(path, sep=", ", header=None, engine="python")
+    if df.shape[1] == len(_RECORD_COLUMNS):
+        df.columns = _RECORD_COLUMNS
+    elif df.shape[1] == len(_TAGGED_RECORD_COLUMNS):
+        df.columns = _TAGGED_RECORD_COLUMNS
+    else:
+        raise ValueError(f"{path}: expected 3 or 4 columns, found {df.shape[1]}.")
+    return df
+
+
+def _select_dataset(df: pd.DataFrame, dataset: str | None, path: str) -> pd.DataFrame:
+    """Keep only the records of one dataset tag, or all when ``dataset`` is None.
+
+    Args:
+        df (pandas.DataFrame): Records from :func:`load_record_csv`.
+        dataset (str | None): Dataset tag to keep.
+        path (str): Source file, for error messages.
+
+    Returns:
+        pandas.DataFrame: The selected records.
+
+    Raises:
+        ValueError: If a dataset is requested but the file has no tags.
+    """
+    if dataset is None:
+        return df
+    if "Dataset" not in df.columns:
+        raise ValueError(f"{path} has no Dataset column; cannot select {dataset!r}.")
+    return df[df["Dataset"] == dataset]
 
 
 def compute_quantile_bands(
@@ -149,6 +178,7 @@ def plot_loss_curves(
     scatter: bool = False,
     ylim: float = 1.0,
     inprogress: bool = False,
+    dataset: str | None = None,
 ) -> "matplotlib.figure.Figure":
     """Build a training/validation loss-curve figure for one study.
 
@@ -165,6 +195,8 @@ def plot_loss_curves(
         ylim (float): Upper y-axis limit for the plot.
         inprogress (bool): If True, drop the most recent (incomplete) training
             record CSV.
+        dataset (str | None): If given, plot only records tagged with this
+            dataset (e.g. ``"lsc"``); requires tagged 4-column records.
 
     Returns:
         matplotlib.figure.Figure: The figure containing the loss curves. The
@@ -183,7 +215,7 @@ def plot_loss_curves(
     vIDX = 0
     startIDX = 0
     for tIDX, trn_csv in enumerate(trn_csv_list):
-        trn_DF = load_record_csv(trn_csv)
+        trn_DF = _select_dataset(load_record_csv(trn_csv), dataset, trn_csv)
         all_losses = trn_DF.loc[:, "Loss"].values
         all_idxs = trn_DF.loc[:, "Batch"].values
         scaled_trn_idxs = np.array(all_idxs) / nsamps_per_trn_pt
@@ -206,7 +238,9 @@ def plot_loss_curves(
         if vIDX < len(val_file_epochs) and (
             trn_file_epochs[tIDX] == val_file_epochs[vIDX]
         ):
-            val_DF = load_record_csv(val_csv_list[vIDX])
+            val_DF = _select_dataset(
+                load_record_csv(val_csv_list[vIDX]), dataset, val_csv_list[vIDX]
+            )
             all_val_losses = val_DF.loc[:, "Loss"].values
             all_val_idxs = np.array(val_DF.loc[:, "Batch"].values)
             scaled_val_idxs = all_val_idxs / nsamps_per_val_pt + np.array(
