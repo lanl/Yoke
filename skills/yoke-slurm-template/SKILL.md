@@ -35,6 +35,12 @@ Load when saving a profile:
 - Run `command -v sinfo scontrol sacctmgr`.
 - **SLURM available**: get `ClusterName` (`scontrol show config | grep -i
   ClusterName`) and go to step 2.
+- **GPU or CPU-only?** Once the partitions are known, check their GRES
+  (`sinfo -o "%P %G"`). If the partition the user will train on has no GPUs
+  (GRES `(null)`), write the **CPU-only template** from
+  `slurm_template_skeleton.md`. It is for harnesses with
+  `HarnessTrainer(..., device_type="cpu")`; confirm the harness uses that
+  mode.
 - **SLURM not available** (for example a laptop): say so and offer:
   1. if the user names the target machine and
      `skills/yoke-slurm-template/machines/<cluster>.md` exists, build the
@@ -74,12 +80,14 @@ ask, in one or two rounds:
 - QOS, if needed.
 - Wall time per job. One job runs `--cycle_epochs` epochs, then resubmits
   itself. Check it against the partition `MaxTime` and QOS `maxwall`.
-- GPUs per node (default: all on the node; this becomes the CSV `NGPUS`), and
-  typical node counts (CSV `KNODES`).
+- GPU template only: GPUs per node (default: all on the node; this becomes
+  the CSV `NGPUS`), typical node counts (CSV `KNODES`), memory per GPU,
+  binding flags, and `NCCL_SOCKET_IFNAME` (from the profile, or ask; see
+  section 6 of the queries file).
 - `--cpus-per-task` and `OMP_NUM_THREADS` (defaults from the node hardware or
-  profile), memory per GPU, and binding flags.
-- `NCCL_SOCKET_IFNAME` (from the profile, or ask; see section 6 of the
-  queries file).
+  profile). For a CPU-only template: one task on one node, so these set the
+  training threads. Small models are often fastest with only a few threads,
+  even on a large node; say so, and suggest timing the smoke run.
 - Environment activation lines (modules, venv or conda).
 - Include a commented-out debug block? (Existing templates do.)
 - Evaluation template too? (Only if the harness opts into post-training
@@ -101,7 +109,9 @@ design notes (`dev_plans/<harness>_slurm.md`, or the harness's notes file).
   - no `@@...@@` fill-in markers remain;
   - the required tokens `<studyIDX>`, `<epochIDX>`, `<KNODES>`, `<NGPUS>`,
     `<train_script>`, `<INPUTFILE>` are present (and `<allocation>` if
-    chosen); the evaluation template has no `<epochIDX>`;
+    chosen); a CPU-only template needs no `<KNODES>`/`<NGPUS>` and must not
+    contain `--gpus-per-node` or a multi-task `srun`; the evaluation template
+    has no `<epochIDX>`;
   - bash syntax on a token-substituted copy:
     `sed -E 's/<[A-Za-z_]+>/X/g' training_slurm.tmpl > /tmp/x.sh && bash -n /tmp/x.sh`.
 - The full render check is `yoke-start-study --dryrun`, done by
@@ -113,7 +123,7 @@ Following `machine_profile_template.md`, write or update
 `skills/yoke-slurm-template/machines/<cluster>.md` with:
 
 - machine facts (partitions, node hardware, recommended settings, NCCL
-  interface, debug pattern, quirks);
+  interface or "CPU-only: no GPUs", debug pattern, quirks);
 - environment hints, with personal paths replaced by placeholders;
 - a dated row under "Allocations seen", keeping the re-query warning;
 - `last verified:` today's date and the SLURM version.
@@ -123,9 +133,11 @@ writing**. Never write credentials or personal paths.
 
 ### 8. Hand off
 
-Write the **Slurm card** (`skills/shared/cards.md`): machine, template paths,
+Write the **Slurm card** (`skills/shared/cards.md`): machine, device mode
+(`cuda` or `cpu`), template paths,
 partition/QOS, wall time, the CSV keys the template needs (`KNODES`, `NGPUS`,
 `train_script`, and `allocation` if used), env lines, and what is **not
-verified**. A real job is the only full test of the NCCL interface,
+verified**. A real job is the only full test of the NCCL interface (GPU
+mode), thread performance (CPU mode),
 binding flags, and environment, and this skill does not submit one. Return
 to `yoke-new-harness` if it called you.

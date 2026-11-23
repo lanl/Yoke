@@ -21,7 +21,8 @@ Read with
 - Empty cells become NaN and render as `nan`. Fill every cell.
 - An all-integer column renders as integers. A float column renders with
   Python's `str` (for example `0.0001`, `1e-05`).
-- Conventional columns: `KNODES`, `NGPUS` (used by the SLURM template),
+- Conventional columns: `KNODES`, `NGPUS` (used by GPU SLURM templates; a
+  CPU-mode template runs one task on one node and needs neither),
   `train_script` (the script filename, also listed in `cp_files.txt`), and
   `allocation` (the SLURM account, if the template uses `<allocation>`).
 - Keep a small **smoke-test CSV** (2–3 rows, few batches) next to the
@@ -85,7 +86,9 @@ value on the next; a list flag is followed by one value per line).
 `training_slurm.tmpl` (made by `yoke-slurm-template`) or `training_shell.tmpl`.
 Plain `<KEY>` substitution, no optional blocks. Required tokens:
 `<studyIDX>`, `<epochIDX>`, `<train_script>`, `<INPUTFILE>`, plus `<KNODES>`
-and `<NGPUS>` for SLURM.
+and `<NGPUS>` for a GPU SLURM template. A CPU-mode SLURM template
+(`device_type="cpu"`) needs only the first four (and `<allocation>`, if
+used).
 
 For `shell` submission, the script is run with `source`. Its job is to run
 `python <train_script> @<INPUTFILE>` (see

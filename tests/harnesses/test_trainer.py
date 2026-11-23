@@ -667,3 +667,52 @@ def test_no_ema_means_no_ema_kwargs(patched_ddp: dict) -> None:
 
     assert "ema_model" not in calls[0]
     assert "global_step" not in calls[0]
+
+
+# ---------------------------------------------------------------------------
+# device_type (CPU single-process mode)
+# ---------------------------------------------------------------------------
+def test_invalid_device_type_rejected() -> None:
+    """An unknown device_type raises ValueError at construction."""
+    with pytest.raises(ValueError, match="device_type"):
+        HarnessTrainer(
+            _make_args(),
+            model_builder=_fresh_model_builder,
+            dataset_builder=_dataset_builder,
+            epoch_fn=lambda **k: None,
+            device_type="tpu",
+        )
+
+
+def test_default_device_type_uses_setup_distributed(patched_ddp: dict) -> None:
+    """The default is cuda mode, which calls setup_distributed."""
+    trainer = HarnessTrainer(
+        _make_args(),
+        model_builder=_fresh_model_builder,
+        dataset_builder=_dataset_builder,
+        epoch_fn=lambda **k: None,
+    )
+    assert trainer.device_type == "cuda"
+    trainer.setup_distributed()  # patched: returns the CPU device
+    assert trainer.world_size == 1
+
+
+def test_cpu_mode_rejects_multiple_slurm_tasks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CPU mode refuses to start when SLURM launched several tasks."""
+    monkeypatch.setenv("SLURM_NTASKS", "4")
+    called = []
+    monkeypatch.setattr(
+        trainer_mod, "setup_single_process_cpu", lambda: called.append(1)
+    )
+    trainer = HarnessTrainer(
+        _make_args(),
+        model_builder=_fresh_model_builder,
+        dataset_builder=_dataset_builder,
+        epoch_fn=lambda **k: None,
+        device_type="cpu",
+    )
+    with pytest.raises(RuntimeError, match="--ntasks=1"):
+        trainer.setup_distributed()
+    assert not called

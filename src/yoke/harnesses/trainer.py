@@ -30,7 +30,12 @@ is expressed through a small :class:`TrainerHooks` object of optional,
 composable callables.
 
 Because HDF5 checkpointing and vanilla ``DataParallel`` are deprecated, the
-trainer is **always** DDP and **always** writes ``.pth`` checkpoints.
+trainer always writes ``.pth`` checkpoints and always trains through
+:class:`~torch.nn.parallel.DistributedDataParallel`. With the default
+``device_type="cuda"`` that is multi-GPU DDP (one SLURM task per GPU, ``nccl``).
+With ``device_type="cpu"`` it is a single process on a CPU node, in a
+one-rank ``gloo`` group, for CPU-only clusters and small models; the DDP
+wrapper and collectives are then pass-throughs.
 """
 
 import argparse
@@ -178,10 +183,18 @@ class HarnessTrainer:
              (``..._ema.pth``) written by :func:`yoke.utils.ema.make_ema_hooks`.
              ``"ema"`` is only valid for EMA-enabled harnesses; if the companion
              is missing at finalize time a ``FileNotFoundError`` is raised.
+         device_type (str): ``"cuda"`` (default) for multi-GPU DDP via
+             :func:`yoke.utils.parallel.setup_distributed`, or ``"cpu"`` to run
+             one process on the CPU via
+             :func:`yoke.utils.parallel.setup_single_process_cpu`. CPU mode
+             must be launched as a single task; it raises ``RuntimeError`` if
+             ``SLURM_NTASKS`` is greater than 1.
     """
 
     #: Accepted values for ``evaluate_checkpoint``.
     _EVAL_CHECKPOINT_CHOICES = ("main", "ema")
+    #: Accepted values for ``device_type``.
+    _DEVICE_TYPE_CHOICES = ("cuda", "cpu")
 
     def __init__(
         self,
@@ -200,6 +213,7 @@ class HarnessTrainer:
         time_epochs: bool = True,
         evaluate_after_training: bool = False,
         evaluate_checkpoint: str = "main",
+        device_type: str = "cuda",
     ) -> None:
         """Initialize the trainer with parsed args and injected components."""
         self.args = args
@@ -224,6 +238,12 @@ class HarnessTrainer:
                 f"Supported values are: {valid}."
             )
         self.evaluate_checkpoint = evaluate_checkpoint
+        if device_type not in self._DEVICE_TYPE_CHOICES:
+            valid = ", ".join(self._DEVICE_TYPE_CHOICES)
+            raise ValueError(
+                f"Unknown device_type {device_type!r}. Supported values are: {valid}."
+            )
+        self.device_type = device_type
 
         # Distributed context, populated by :meth:`setup_distributed`.
         self.rank: int = 0
@@ -258,7 +278,33 @@ class HarnessTrainer:
     # Setup
     # ------------------------------------------------------------------
     def setup_distributed(self) -> None:
-        """Initialize the DDP process group and record the rank/device."""
+        """Initialize the process group and record the rank/device.
+
+        ``device_type="cuda"`` sets up multi-GPU DDP from the SLURM
+        environment. ``device_type="cpu"`` sets up a one-process ``gloo`` group
+        on the CPU.
+
+        Raises:
+            RuntimeError: In CPU mode, if SLURM launched more than one task.
+                Every task would otherwise train its own copy and write the
+                same records, checkpoints, and resubmissions.
+        """
+        if self.device_type == "cpu":
+            ntasks = int(os.environ.get("SLURM_NTASKS", "1"))
+            if ntasks > 1:
+                raise RuntimeError(
+                    f"device_type='cpu' runs a single process, but SLURM_NTASKS="
+                    f"{ntasks}. Launch with --ntasks=1 (e.g. 'python -u <script>', "
+                    "not a multi-task srun)."
+                )
+            (
+                self.rank,
+                self.world_size,
+                self.local_rank,
+                self.device,
+            ) = setup_single_process_cpu()
+            return
+
         (
             self.rank,
             self.world_size,
@@ -400,9 +446,13 @@ class HarnessTrainer:
             if self.hooks.on_epoch_start is not None:
                 self.hooks.on_epoch_start(self, epochIDX)
 
+            # Wait for queued GPU work so the timing is real; CPU work is
+            # synchronous, and torch.cuda calls would fail without a GPU.
+            sync_cuda = self.device.type == "cuda"
             if self.time_epochs:
                 dist.barrier()
-                torch.cuda.synchronize(self.device)
+                if sync_cuda:
+                    torch.cuda.synchronize(self.device)
                 start_time = time.time()
 
             result = self.epoch_fn(**self._epoch_call_kwargs(epochIDX))
@@ -411,7 +461,8 @@ class HarnessTrainer:
                 self.global_step = result
 
             if self.time_epochs:
-                torch.cuda.synchronize(self.device)
+                if sync_cuda:
+                    torch.cuda.synchronize(self.device)
                 dist.barrier()
                 end_time = time.time()
                 epoch_time = (end_time - start_time) / 60

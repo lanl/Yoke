@@ -42,8 +42,11 @@ Ask:
   image to numbers (inverse), numbers to image (forward), or a mix.
 - Data scale: number of samples or simulations, image size, number of
   channels.
-- Compute: GPU type and memory per GPU, number of GPUs, time budget (from
-  the machine profile, if there is one).
+- Compute: GPU type and memory per GPU and number of GPUs, or, on a
+  CPU-only machine, cores and memory per node; and the time budget (from the
+  machine profile, if there is one). CPU mode (`device_type="cpu"`, one
+  process per job) suits small models; check that the size fits a CPU's
+  speed before recommending it.
 - Any architecture the user prefers or must reproduce, or one that worked
   before.
 

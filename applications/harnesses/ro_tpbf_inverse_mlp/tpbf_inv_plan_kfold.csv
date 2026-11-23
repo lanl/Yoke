@@ -1,0 +1,15 @@
+studyIDX,FOLD,SPLIT_SEED,INPUT_COLS,TARGET_COLS,LOG_COLS,TOTAL_EPOCHS,CYCLE_EPOCHS,TERMINAL_STEPS,TRAIN_PER_VAL,PARTITION,QOS,WALLTIME,RESERVATION_OPT,HIDDEN_DIMS,WEIGHT_DECAY,train_script,allocation
+# Weld PLANNING inverse: desired depth + known beam sigma + measured S wt% ->
+# laser power and scan speed. No melt-pool observations (length/width) are used,
+# as before a weld. Twin without S: tpbf_inv_plan_noS_kfold.csv (71-80).
+# Same splits/settings as all other studies: MLP v3 [32, 32], wd 0.1, 150 epochs.
+61,0,0,depth_um:sigma_m:S_wpct,power_W:scan_speed_mps,S_wpct,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd
+62,1,0,depth_um:sigma_m:S_wpct,power_W:scan_speed_mps,S_wpct,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd
+63,2,0,depth_um:sigma_m:S_wpct,power_W:scan_speed_mps,S_wpct,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd
+64,3,0,depth_um:sigma_m:S_wpct,power_W:scan_speed_mps,S_wpct,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd
+65,4,0,depth_um:sigma_m:S_wpct,power_W:scan_speed_mps,S_wpct,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd
+66,0,1,depth_um:sigma_m:S_wpct,power_W:scan_speed_mps,S_wpct,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd
+67,1,1,depth_um:sigma_m:S_wpct,power_W:scan_speed_mps,S_wpct,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd
+68,2,1,depth_um:sigma_m:S_wpct,power_W:scan_speed_mps,S_wpct,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd
+69,3,1,depth_um:sigma_m:S_wpct,power_W:scan_speed_mps,S_wpct,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd
+70,4,1,depth_um:sigma_m:S_wpct,power_W:scan_speed_mps,S_wpct,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd

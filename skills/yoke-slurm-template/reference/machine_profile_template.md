@@ -38,9 +38,13 @@ aliases: <other names users call it, login hostnames pattern>
 | gpu | production | 4x <type> | 16:00:00 | 04:00:00 | |
 | gpu_debug | debug | 4x <type> | 02:00:00 | | needs --qos=debug, reservation gpu_debug |
 
+(For a CPU-only machine, write `none` under GPUs/node, and add the quirk line
+"CPU-only: harnesses use HarnessTrainer device_type="cpu" and the CPU-only
+template".)
+
 ### Node hardware (partition: <name>)
 
-- GPUs: <count> x <model>, <memory> GB each
+- GPUs: <count> x <model>, <memory> GB each, or "none (CPU-only)"
 - CPUs: <CPUTot> (<Sockets> sockets x <CoresPerSocket> cores x
   <ThreadsPerCore> threads)
 - Memory: <RealMemory> MB
@@ -51,7 +55,8 @@ aliases: <other names users call it, login hostnames pattern>
 - `OMP_NUM_THREADS`: <n>
 - `--mem-per-gpu`: <value or "not needed">
 - binding flags: <e.g. --gpu-bind=closest, or "none">
-- `NCCL_SOCKET_IFNAME`: <e.g. hsn0> (checked on a compute node: yes/no)
+- `NCCL_SOCKET_IFNAME`: <e.g. hsn0> (checked on a compute node: yes/no), or
+  "not needed (CPU-only)"
 - QOS needed for production: <name or "none">
 
 ### Debug pattern

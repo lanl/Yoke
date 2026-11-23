@@ -51,7 +51,7 @@ Model card
 - input/output:  shapes with B, matching the Dataset card
 - constraints:   e.g. image size divisible by patch_size, num_input_frames=2
 - parameters:    count for the chosen configuration
-- memory note:   rough per-GPU estimate, or "not estimated"
+- memory note:   rough per-GPU (or per-CPU-node) estimate, or "not estimated"
 ```
 
 ## Loss card (from `yoke-new-loss`)
@@ -92,12 +92,15 @@ Step card
 ```
 Slurm card
 - machine:       <ClusterName>
+- device:        cuda (multi-GPU DDP) | cpu (HarnessTrainer device_type="cpu",
+                 one task per job)
 - profile:       skills/yoke-slurm-template/machines/<cluster>.md
 - template:      path to training_slurm.tmpl (+ evaluation_slurm.tmpl if any)
 - partition/qos: chosen values (and debug variant, if included)
 - wall time:     per cycle
 - CSV keys:      <KEY>s the template needs from the study CSV,
                  e.g. KNODES, NGPUS, allocation, train_script
+                 (CPU mode: no KNODES/NGPUS)
 - env:           environment activation line(s) used
 - not verified:  anything that can only be checked by a real job
 ```
@@ -119,7 +122,7 @@ Run card
 - job prefix:    the #SBATCH --job-name prefix, for finding jobs in sacct
 - expected:      record CSVs, .out/.err per cycle, checkpoints
                  studyNNN_modelState_epochEEEE.pth, restart files
-- budget:        GPU hours estimate
+- budget:        GPU hours estimate (GPU mode) or node hours (CPU mode)
 - submitted:     "by agent at user's request" or "by user"; date; job IDs
                  (filled in later by the user or yoke-run-doctor if unknown)
 - doctor log:    dated findings from yoke-run-doctor sessions

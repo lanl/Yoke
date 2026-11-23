@@ -17,6 +17,8 @@ from torch.utils.data import Dataset
 import yoke.harnesses.trainer as trainer_mod
 from yoke.harnesses.trainer import HarnessTrainer
 from yoke.helpers import cli
+from yoke.utils.builders import build_from_checkpoint
+from yoke.utils.checkpointing import load_model_and_optimizer
 from yoke.utils.parallel import setup_single_process_cpu
 from yoke.utils.training.epoch.array_output import train_DDP_array_epoch
 from yoke.utils.training.epoch.loderunner import train_DDP_loderunner_epoch
@@ -293,3 +295,104 @@ def test_plain_callable_loss_is_left_alone() -> None:
     )
     trainer.preflight()
     assert trainer.loss_fn is squared
+
+
+# ---------------------------------------------------------------------------
+# CPU single-process mode: a real run() with no CUDA calls
+# ---------------------------------------------------------------------------
+def _no_cuda(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make any CUDA call in the trainer module fail the test."""
+
+    def _fail(*args: object, **kwargs: object) -> None:
+        raise AssertionError("CUDA was called in CPU mode")
+
+    monkeypatch.setattr(trainer_mod.torch.cuda, "synchronize", _fail)
+    monkeypatch.setattr(trainer_mod.torch.cuda, "set_device", _fail)
+    monkeypatch.delenv("SLURM_NTASKS", raising=False)
+
+
+def _cpu_args(tmp_path: Path, extra: list[str] | None = None) -> argparse.Namespace:
+    """Parse real training args for a short 2-epoch CPU run in tmp_path."""
+    parser = argparse.ArgumentParser()
+    parser = cli.add_default_args(parser=parser)
+    parser = cli.add_training_args(parser=parser)
+    return parser.parse_args(
+        [
+            "--studyIDX", "7",
+            "--batch_size", "4",
+            "--total_epochs", "2",
+            "--cycle_epochs", "2",
+            "--train_batches", "2",
+            "--val_batches", "1",
+            "--TRAIN_PER_VAL", "1",
+            "--num_workers", "0",
+            "--trn_rcrd_filename", str(tmp_path / "trn_<epochIDX>.csv"),
+            "--val_rcrd_filename", str(tmp_path / "val_<epochIDX>.csv"),
+            *(extra or []),
+        ]
+    )  # fmt: skip
+
+
+def _constant_lr(
+    optimizer: torch.optim.Optimizer, args: argparse.Namespace, last_epoch: int
+) -> torch.optim.lr_scheduler.LambdaLR:
+    """Constant LR; train_DDP_array_epoch steps a scheduler every batch."""
+    return torch.optim.lr_scheduler.LambdaLR(optimizer, lambda step: 1.0)
+
+
+def test_cpu_mode_full_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """device_type='cpu' trains, records, checkpoints, and tears down."""
+    _no_cuda(monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    trainer = HarnessTrainer(
+        _cpu_args(tmp_path),
+        model_builder=build_from_checkpoint(_TinyLinear, lambda a: {}),
+        dataset_builder=lambda a: (_ArrayData(), _ArrayData()),
+        epoch_fn=train_DDP_array_epoch,
+        scheduler_builder=_constant_lr,
+        resubmit=False,
+        device_type="cpu",
+    )
+    trainer.run()
+
+    assert trainer.device.type == "cpu"
+    assert not dist.is_initialized()
+    assert (tmp_path / "trn_0001.csv").exists()
+    assert (tmp_path / "val_0002.csv").exists()
+    ckpt = tmp_path / "study007_modelState_epoch0002.pth"
+    assert ckpt.exists()
+
+    model, _, epoch = load_model_and_optimizer(
+        str(ckpt),
+        torch.optim.AdamW,
+        {"lr": 1e-4},
+        {"_TinyLinear": _TinyLinear},
+        device="cpu",
+    )
+    assert epoch == 2
+    assert isinstance(model, _TinyLinear)
+
+
+def test_cpu_mode_continuation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A CPU-mode continuation resumes from the checkpoint's epoch."""
+    _no_cuda(monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    common = {
+        "model_builder": build_from_checkpoint(_TinyLinear, lambda a: {}),
+        "dataset_builder": lambda a: (_ArrayData(), _ArrayData()),
+        "epoch_fn": train_DDP_array_epoch,
+        "scheduler_builder": _constant_lr,
+        "resubmit": False,
+        "device_type": "cpu",
+    }
+    HarnessTrainer(_cpu_args(tmp_path), **common).run()
+
+    ckpt = str(tmp_path / "study007_modelState_epoch0002.pth")
+    args = _cpu_args(
+        tmp_path,
+        ["--total_epochs", "3", "--continuation", "--checkpoint", ckpt],
+    )
+    trainer = HarnessTrainer(args, **common)
+    trainer.run()
+    assert trainer.epochIDX == 3
+    assert (tmp_path / "study007_modelState_epoch0003.pth").exists()

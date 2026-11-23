@@ -29,8 +29,9 @@ Notes:
   input already has `<epochIDX>` replaced). Later cycles write one file per
   epoch.
 - Rows have no header, except the training records of `train_DDP_array_epoch`
-  and `train_lsc_policy_epoch` (`epoch,batch,loss`).
-  `yoke.plots.loss_curves.load_record_csv` reads them with `sep=", "`.
+  and `train_lsc_policy_epoch` (`epoch,batch,loss`, repeated once per epoch,
+  so a first-cycle file has several). `yoke.plots.loss_curves.load_record_csv`
+  skips those header lines and reads the rest with `sep=", "`.
 
 ## The healthy chain
 

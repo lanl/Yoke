@@ -77,8 +77,13 @@ Structure (see `train_ldrViT_2frame_lsc_cyl.py`):
        epoch_kwargs={...},      # channel_map, dataset tag, grad_clip, ...
        hooks=hooks,             # e.g. EMA via yoke.utils.ema.make_ema_hooks
        evaluate_after_training=False,
+       device_type="cuda",      # "cpu" on a CPU-only machine (one process)
    ).run()
    ```
+
+   `device_type="cpu"` runs one process on the CPU with no GPU or NCCL
+   setup (see `docs/source/harness_trainer.rst`, "CPU-only machines"). Its
+   SLURM template must launch a single task.
 
    All work happens under the `__main__` guard, so importing the module only
    builds `parser`. The verification step relies on this.

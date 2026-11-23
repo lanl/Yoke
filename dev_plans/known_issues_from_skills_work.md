@@ -102,6 +102,37 @@ docs warn agents about issues 1–4, so update those notes when an issue is fixe
   adding preflight, which uses no workers. A test was added in
   `tests/test_training_utils.py`.
 
+## 9. `yoke-plot-loss` failed on array-epoch records — FIXED 2026-11-13
+
+- **Where:** `yoke.plots.loss_curves.load_record_csv`
+  (`src/yoke/plots/loss_curves.py`).
+- **What:** `train_DDP_array_epoch` (and `train_lsc_policy_epoch`) write an
+  `epoch,batch,loss` header at the start of every epoch. All first-cycle
+  epochs append to one file, and the reader (`sep=", "`, no header handling)
+  raised `ParserError: Expected 1 fields in line 2, saw 3`.
+- **Fix:** skip lines starting with `epoch` before parsing. Test in
+  `tests/plots/test_loss_curves.py`. Found during the TPBF harness work.
+
+## 10. `train_DDP_array_epoch` needs a scheduler
+
+- **Where:** `src/yoke/utils/training/epoch/array_output.py:165`.
+- **What:** it calls `LRsched.step()` every batch, but `HarnessTrainer`'s
+  `scheduler_builder` defaults to `None`, so a harness that omits it crashes
+  with `AttributeError` on the first batch.
+- **Fix idea:** skip the step when `LRsched is None` (as other epoch
+  functions may need too). Until then, array harnesses must pass a
+  `scheduler_builder`. Open.
+
+## 11. LR schedulers restart their warmup on continuation
+
+- **Where:** `src/yoke/lr_schedulers.py` (all three schedulers use
+  `self._step_count`) and `yoke.utils.builders.compute_last_epoch`
+  (one epoch short).
+- **What:** PyTorch resets `_step_count` to 1 whenever a scheduler is built,
+  so every continuation job restarts the LR schedule. Found 2026-11-13.
+- **Details, reproduction, and fix plan:**
+  `dev_plans/lr_scheduler_continuation_bug.md`. Open.
+
 ## Decision recorded: optional reader dependencies
 
 `tifffile`, `imageio`, and `PIL` are importable in Yoke environments only

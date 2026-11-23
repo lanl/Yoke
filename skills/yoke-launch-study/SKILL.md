@@ -58,7 +58,8 @@ in the failure table. Do not patch around it here.
 Show:
 
 - checks passed, with the preflight report (batch shapes, parameters, loss);
-- the GPU-hour estimate (check 5) for the smoke CSV and the production CSV;
+- the GPU-hour (or, in CPU mode, node-hour) estimate (check 5) for the smoke
+  CSV and the production CSV;
 - what the run will produce, and where (`runs/study_NNN/`: `.out`/`.err` per
   cycle, record CSVs, `studyNNN_modelState_epochEEEE.pth` checkpoints,
   restart files);
@@ -92,7 +93,7 @@ in the question:
 
 - the exact command, and the directory it runs in;
 - the CSV and its study IDs (one job per row);
-- the GPU-hour estimate, and the account (`allocation` column) to be
+- the GPU-hour or node-hour estimate, and the account (`allocation` column) to be
   charged;
 - that you will run only this command, and won't cancel or change jobs
   afterwards.
@@ -132,5 +133,6 @@ study 1 of `<harness>`" to start `yoke-run-doctor`, which reads this card.
 ### 8. Summarize
 
 Checks run and their results, what was **not** checked (GPU and NCCL
-behaviour, multi-node runs, and convergence: only a real job shows these),
+behaviour and multi-node runs in GPU mode, thread performance in CPU mode,
+and convergence: only a real job shows these),
 the command, and whether it was submitted (by whom, and the job IDs).

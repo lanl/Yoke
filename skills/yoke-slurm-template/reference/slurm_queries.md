@@ -59,7 +59,10 @@ Read: `CPUTot`, `Sockets`, `CoresPerSocket`, `ThreadsPerCore`, `RealMemory`
 
 Derived defaults for the interview:
 
-- GPUs per node = the count in `Gres`.
+- GPUs per node = the count in `Gres`. A `Gres` of `(null)` (and `%G` of
+  `(null)` in `sinfo`) means a **CPU-only** partition: use the CPU-only
+  template, skip the GPU, memory-per-GPU and NCCL items below, and base the
+  thread defaults on cores per node.
 - `--cpus-per-task` = `CPUTot / GPUs per node`, rounded down to an even
   number when `ThreadsPerCore == 2` (existing templates note that odd values
   are rounded up by SLURM).
@@ -94,9 +97,17 @@ scontrol show reservation
 ```
 
 Note GPU debug reservations (for example `gpu_debug`) for the commented-out
-debug block.
+debug block. Check the debug QOS's flags too
+(`sacctmgr -nP show qos <name> format=name,flags`). With `RequiresReservation`,
+debug jobs must pass `--reservation=<name>`, or sbatch fails with
+`Invalid qos specification`. A reservation's `Accounts=` list also admits
+child accounts, so validate with `sbatch --test-only <script>` (read-only:
+it schedules nothing).
 
 ## 6. Network interface for NCCL
+
+(GPU templates only. CPU mode uses `gloo` on the loopback interface and needs
+no NCCL setting.)
 
 `NCCL_SOCKET_IFNAME` must name a compute-node interface (for example `hsn0`
 on HPE Slingshot, `ib0` on InfiniBand). The login node may differ, so:

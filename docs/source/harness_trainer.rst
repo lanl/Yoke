@@ -9,10 +9,12 @@ scheduler/dataloader construction, a timed epoch loop, ``.pth`` checkpointing,
 and job resubmission) while a thin harness script injects only the parts that
 genuinely vary.
 
-The trainer is **always DDP** and **always writes** ``.pth`` checkpoints via
-:func:`yoke.utils.checkpointing.save_model_and_optimizer`. Vanilla
-``DataParallel`` and HDF5 checkpoint *writing* are deprecated (targeted for
-removal in December 2026).
+The trainer **always writes** ``.pth`` checkpoints via
+:func:`yoke.utils.checkpointing.save_model_and_optimizer` and always trains
+through ``DistributedDataParallel``, either as multi-GPU DDP (the default) or as
+a single CPU process (see `CPU-only machines`_). Vanilla ``DataParallel`` and
+HDF5 checkpoint *writing* are deprecated (targeted for removal in December
+2026).
 
 What you inject
 ---------------
@@ -178,6 +180,36 @@ This catches most dataset, model, loss, and datastep mismatches before a job
 waits in the queue. A large model can be slow or memory-hungry on a CPU, so
 check its size first.
 
+CPU-only machines
+-----------------
+
+On a cluster without GPUs, or for a model small enough that GPUs don't help,
+pass ``device_type="cpu"``:
+
+.. code-block:: python
+
+    HarnessTrainer(
+        args,
+        model_builder=...,
+        dataset_builder=...,
+        epoch_fn=train_DDP_array_epoch,
+        device_type="cpu",
+    ).run()
+
+The trainer then sets up a one-process ``gloo`` group on the CPU
+(:func:`yoke.utils.parallel.setup_single_process_cpu`, the same path as
+preflight) instead of the SLURM/``nccl`` GPU setup, and skips the CUDA
+synchronization in epoch timing. The DDP wrapper and the datasteps'
+collectives become pass-throughs, so the existing DDP epoch functions,
+checkpointing, and continuation work unchanged.
+
+Run exactly one task per job: ``#SBATCH --nodes=1``, ``--ntasks=1``, a
+``--cpus-per-task`` for the threads, ``OMP_NUM_THREADS`` set to match, and
+``python -u <train_script> @<INPUTFILE>`` rather than a multi-task ``srun``.
+The trainer raises ``RuntimeError`` if ``SLURM_NTASKS`` is greater than 1,
+because every task would otherwise train its own copy and write the same
+files. Small models are often fastest with only a few threads.
+
 Bespoke model builders: freezing and fine-tuning
 ------------------------------------------------
 
@@ -208,5 +240,5 @@ Demo harnesses
 
 ``moving_mnist`` and ``mnist_surrogate`` are intentionally kept as small,
 single-process, bespoke reference scripts and do **not** use ``HarnessTrainer``.
-They are minimal onboarding examples; migrating them would reintroduce a
-single-process path that the "always DDP" design deliberately removes.
+They are minimal onboarding examples. For a single-process run on a CPU node,
+use ``HarnessTrainer`` with ``device_type="cpu"`` rather than copying them.

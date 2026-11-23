@@ -19,6 +19,9 @@ and the reference ``wamrvit/loss.py``). It differs from a plain
    physical scale, which is why the reference trains on raw (un-normalized)
    channels successfully.
 
+:class:`VectorLpLoss` applies the same norm to ``(B, N)`` vector outputs (one
+norm per sample), for tabular regression with the ``array`` datasteps.
+
 The ``method="abs"`` form used by the finest PLI run is the absolute L2 norm.
 The ``method="rel"`` form additionally divides by ``||y||`` per channel (a
 relative error). The finest run uses ``abs``.
@@ -161,4 +164,85 @@ class LpLoss(nn.Module):
         if self.reduction == "sum":
             return norm.sum()
         # "mean": mean over batch and channel (reference convention).
+        return norm.mean()
+
+
+class VectorLpLoss(nn.Module):
+    r"""Per-sample Lp norm of the error between two batches of vectors.
+
+    For prediction and target vectors of shape ``(B, N)`` (for example the
+    z-scored outputs of a tabular regression), the per-sample loss is the Lp
+    norm of the error vector, computed by :class:`LpLoss` with ``d=1`` on a
+    ``(B, 1, N)`` view:
+
+    .. math::
+
+        \ell_b = \left( \sum_{i=1}^{N} |\hat{y}_{b,i} - y_{b,i}|^{p} \right)^{1/p}
+
+    For ``p == 2`` this is ``sqrt(sum(e**2) + eps)``. Its gradient
+    ``e / ||e||`` has unit size for every sample, so, unlike MSE, samples with
+    large errors do not dominate the update.
+
+    The default ``reduction="none"`` returns shape ``(B, 1)``, which is what the
+    ``array`` datasteps in :mod:`yoke.utils.training.datastep.array_output`
+    need. They record the mean over the non-batch dims (here, the norm itself)
+    and backpropagate the batch mean. A ``(B,)`` loss would not work there: its
+    non-batch reduction is over no dims, which collapses it to a scalar.
+
+    Args:
+        p (int): Order of the norm. Default ``2``.
+        method (str): ``"abs"`` for the absolute norm, ``"rel"`` to divide by
+            the target's norm ``||y_b||`` (clamped to ``eps``). Default
+            ``"abs"``.
+        eps (float): Stability constant, as in :class:`LpLoss`. Default
+            ``1e-4``.
+        reduction (str): ``"none"`` gives ``(B, 1)``; ``"mean"`` or ``"sum"``
+            over the batch gives a scalar.
+
+    Raises:
+        ValueError: On an unknown ``reduction`` or ``method``, or, in
+            ``forward``, if the inputs are not 2-D tensors of equal shape.
+    """
+
+    _VALID_REDUCTIONS = ("none", "mean", "sum")
+
+    def __init__(
+        self,
+        p: int = 2,
+        method: str = "abs",
+        eps: float = 1e-4,
+        reduction: str = "none",
+    ) -> None:
+        """Initialize the VectorLpLoss."""
+        super().__init__()
+        if reduction not in self._VALID_REDUCTIONS:
+            raise ValueError(
+                f"reduction must be one of {self._VALID_REDUCTIONS}; got {reduction!r}."
+            )
+        self.reduction = reduction
+        # The wrapped loss stays unreduced; the reduction is applied here so that
+        # "none" keeps the (B, 1) shape (LpLoss has no such option).
+        self.lp = LpLoss(d=1, p=p, method=method, eps=eps, reduction="none")
+
+    def forward(self, y_pred: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+        """Compute the per-sample vector Lp-norm loss.
+
+        Args:
+            y_pred (torch.Tensor): Predictions, ``(B, N)``.
+            y (torch.Tensor): Targets, ``(B, N)``.
+
+        Returns:
+            torch.Tensor: ``(B, 1)`` for ``"none"``, otherwise a scalar.
+        """
+        if y_pred.ndim != 2 or y_pred.shape != y.shape:
+            raise ValueError(
+                "VectorLpLoss expects 2-D (B, N) inputs of equal shape; got "
+                f"{tuple(y_pred.shape)} and {tuple(y.shape)}."
+            )
+        # Insert a singleton channel axis: (B, N) -> (B, 1, N) -> norm (B, 1).
+        norm = self.lp(y_pred.unsqueeze(1), y.unsqueeze(1))
+        if self.reduction == "none":
+            return norm
+        if self.reduction == "sum":
+            return norm.sum()
         return norm.mean()

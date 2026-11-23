@@ -38,7 +38,8 @@ Ask, without Yoke terms:
 - How will you judge success: a number, a visual check, use in a later
   workflow?
 - How much data is there (number of simulations or samples, size on disk)?
-- Where will you train (which cluster), how much GPU time do you have, and
+- Where will you train (which cluster)? Does it have GPUs, or is it
+  CPU-only? How much compute time do you have (GPU hours or node hours), and
   is there a deadline?
 - Have you, or a colleague, trained something like this before?
 
@@ -56,6 +57,11 @@ Explain, briefly and in plain words, and confirm with the user:
   (input, target, ...)".
 - **What already exists** in Yoke for each piece, and what will need to be
   built.
+- **Device mode**: GPU clusters use multi-GPU DDP (the default). A CPU-only
+  cluster, or a model small enough that GPUs don't help, uses
+  `HarnessTrainer(..., device_type="cpu")`: one process per job on one CPU
+  node. Record the choice in the progress file; the harness and SLURM
+  stages need it.
 
 Introduce each Yoke concept in one or two sentences the first time it comes
 up (dataset class, harness, study CSV, continuation, preflight).

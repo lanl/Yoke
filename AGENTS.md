@@ -208,9 +208,17 @@ Non-Lightning DDP training harnesses should be thin wrappers around
 `train_*.py`. The trainer owns the fixed orchestration (DDP setup via
 `yoke.utils.parallel.setup_distributed`/`cleanup_distributed`, model/optimizer/
 scheduler/dataloader construction, the timed epoch loop, `.pth` checkpointing
-via `save_model_and_optimizer`, and continuation resubmission). It is **always
-DDP** and **always writes `.pth`** (HDF5 checkpoint writing and vanilla
-`DataParallel`/`--multigpu` are deprecated for **Dec-2026** removal).
+via `save_model_and_optimizer`, and continuation resubmission). It **always
+writes `.pth`** (HDF5 checkpoint writing and vanilla `DataParallel`/`--multigpu`
+are deprecated for **Dec-2026** removal) and trains through DDP in one of two
+modes, chosen by `HarnessTrainer(..., device_type=...)`:
+
+- `"cuda"` (default): multi-GPU DDP, one SLURM task per GPU, `nccl`.
+- `"cpu"`: one process on one CPU node, in a one-rank `gloo` group
+  (`yoke.utils.parallel.setup_single_process_cpu`), for CPU-only clusters
+  (e.g. rocinante) and small models. Launch it as a single task
+  (`--ntasks=1`, plain `python -u`); the trainer raises if `SLURM_NTASKS > 1`.
+  Set threads with `OMP_NUM_THREADS` in the SLURM template.
 
 A harness injects only what varies:
 

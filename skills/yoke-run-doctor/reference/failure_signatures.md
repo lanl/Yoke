@@ -44,6 +44,18 @@ any resubmission is run by the user.
 - **Propose:** lower `NUM_WORKERS`, raise `--mem-per-gpu`, and check
   `MaxRSS` in `sacct`.
 
+### sbatch rejects the QOS
+
+- **Shows:** `yoke-start-study` output (no job ID):
+  `sbatch: error: Batch job submission failed: Invalid qos specification`.
+- **Cause:** the account lacks that QOS on that partition, or the QOS has the
+  `RequiresReservation` flag (`sacctmgr -nP show qos <name> format=name,flags`)
+  and the job gave no `--reservation`. Seen on rocinante's `debug` QOS,
+  2026-11-13.
+- **Propose:** add `#SBATCH --reservation=<name>` (see the machine profile),
+  check it with `sbatch --test-only <script>`, then relaunch. The study dirs
+  were already rendered, so relaunching the same CSV rewrites them.
+
 ### Job never started or was cancelled
 
 - **Shows:** `squeue` shows `PD` with reason `(AssocGrpGRESMinutes)`,
@@ -56,6 +68,27 @@ any resubmission is run by the user.
   with the site if the account is out of hours.
 
 ## Distributed (DDP / NCCL)
+
+### GPU-mode harness on a CPU-only node
+
+- **Shows:** `.err` at start-up: `Torch not compiled with CUDA enabled`,
+  `RuntimeError: No CUDA GPUs are available`, `invalid device ordinal`, or an
+  NCCL init error, from `yoke.utils.parallel.setup_distributed`.
+- **Cause:** the harness constructs `HarnessTrainer` with the default
+  `device_type="cuda"`, but the job ran on a node without GPUs (a CPU-only
+  cluster or partition).
+- **Propose:** pass `device_type="cpu"` in the train script, and switch to
+  the CPU-only SLURM template (one node, one task; see
+  `skills/yoke-slurm-template/reference/slurm_template_skeleton.md`).
+
+### CPU mode launched with several tasks
+
+- **Shows:** `.err`: `RuntimeError: device_type='cpu' runs a single process,
+  but SLURM_NTASKS=N`.
+- **Cause:** the SLURM template asks for more than one task (`--ntasks`,
+  `--ntasks-per-node`), or runs the script under a multi-task `srun`.
+- **Propose:** `#SBATCH --nodes=1`, `#SBATCH --ntasks=1`, and launch with
+  `python -u <train_script> @<INPUTFILE>`.
 
 ### NCCL cannot connect or times out
 

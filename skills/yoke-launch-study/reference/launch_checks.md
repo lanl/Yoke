@@ -94,6 +94,10 @@ scan whole directories on shared file systems.
 
 GPU hours ≈ Σ over CSV rows of
 `KNODES × NGPUS × wall time per cycle × ceil(total_epochs / cycle_epochs)`.
+
+CPU mode (`device_type="cpu"`, one node per job): node hours ≈ Σ over CSV rows
+of `wall time per cycle × ceil(total_epochs / cycle_epochs)`. On partitions that
+allocate whole nodes, the whole node is charged even if few threads are used.
 This is an upper bound: a cycle that finishes early uses less. Give the smoke
 CSV and the production CSV separately.
 

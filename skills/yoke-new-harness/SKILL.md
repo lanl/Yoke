@@ -91,6 +91,12 @@ use `model_catalog.md`:
 
 ### 5. Submission (round 4)
 
+- Device mode: does the machine have GPUs? GPU machines use the default
+  multi-GPU DDP. A CPU-only machine (or a model too small to need GPUs) uses
+  `HarnessTrainer(..., device_type="cpu")`: one process on one node, launched
+  as a single task. Its SLURM template has no GPU lines, and the CSV needs no
+  `NGPUS`/`KNODES` columns. Take this from the progress file if
+  `yoke-train-my-data` recorded it.
 - `slurm` or `shell`.
 - SLURM: reuse the template of an existing harness on the same machine, if
   the user confirms it is current, or run `yoke-slurm-template` (on the
@@ -108,7 +114,8 @@ Read `study_csv_and_templates.md`, then ask:
 - The rows: start with a small **smoke-test CSV** (2–3 rows, few batches),
   then the production CSV.
 - Required columns: `studyIDX`, `train_script`, and whatever the submission
-  template needs (`KNODES`, `NGPUS`, `allocation`).
+  template needs (`KNODES`, `NGPUS`, `allocation` for GPU templates; usually
+  only `allocation` for CPU-mode templates).
 
 ### 7. Design and approval
 
@@ -186,7 +193,8 @@ touched:
    files).
 
 Report the actual results. Say what was **not** verified: data paths on the
-cluster, the SLURM environment, multi-GPU behaviour, and convergence.
+cluster, the SLURM environment, multi-GPU behaviour (GPU mode) or thread
+performance (CPU mode), and convergence.
 
 ### 10. Summarize
 
