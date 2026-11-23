@@ -1,0 +1,37 @@
+yoke.losses package
+===================
+
+Submodules
+----------
+
+yoke.losses.NormMSE module
+--------------------------
+
+.. automodule:: yoke.losses.NormMSE
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+yoke.losses.lp\_loss module
+---------------------------
+
+.. automodule:: yoke.losses.lp_loss
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+yoke.losses.masked\_loss module
+-------------------------------
+
+.. automodule:: yoke.losses.masked_loss
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+Module contents
+---------------
+
+.. automodule:: yoke.losses
+   :members:
+   :show-inheritance:
+   :undoc-members:
