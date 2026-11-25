@@ -1,0 +1,14 @@
+studyIDX,FOLD,SPLIT_SEED,INPUT_COLS,LOG_COLS,TOTAL_EPOCHS,CYCLE_EPOCHS,TERMINAL_STEPS,TRAIN_PER_VAL,PARTITION,QOS,WALLTIME,RESERVATION_OPT,HIDDEN_DIMS,WEIGHT_DECAY,train_script,allocation
+# Forward WITHOUT S wt%: power, speed, beam sigma only. Twin of tpbf_kfold_fix.csv (31-40).
+# Same splits and settings as the twin (S wt% is only absent from the inputs;
+# folds are still stratified by the S-based stratum, so the holdout sets match).
+41,0,0,power_W:scan_speed_mps:sigma_m,none,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_mlp.py,xd
+42,1,0,power_W:scan_speed_mps:sigma_m,none,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_mlp.py,xd
+43,2,0,power_W:scan_speed_mps:sigma_m,none,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_mlp.py,xd
+44,3,0,power_W:scan_speed_mps:sigma_m,none,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_mlp.py,xd
+45,4,0,power_W:scan_speed_mps:sigma_m,none,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_mlp.py,xd
+46,0,1,power_W:scan_speed_mps:sigma_m,none,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_mlp.py,xd
+47,1,1,power_W:scan_speed_mps:sigma_m,none,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_mlp.py,xd
+48,2,1,power_W:scan_speed_mps:sigma_m,none,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_mlp.py,xd
+49,3,1,power_W:scan_speed_mps:sigma_m,none,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_mlp.py,xd
+50,4,1,power_W:scan_speed_mps:sigma_m,none,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_mlp.py,xd

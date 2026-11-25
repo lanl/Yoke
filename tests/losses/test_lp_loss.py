@@ -3,7 +3,8 @@
 import pytest
 import torch
 
-from yoke.losses.lp_loss import LpLoss
+from yoke.losses.lp_loss import LpLoss, VectorLpLoss
+from yoke.utils.training.datastep.array_output import train_array_datastep
 
 
 @pytest.fixture
@@ -154,3 +155,66 @@ def test_invalid_d_raises() -> None:
     """A non-positive ``d`` raises ``ValueError``."""
     with pytest.raises(ValueError, match="d must be a positive integer"):
         LpLoss(d=0)
+
+
+# --- VectorLpLoss -----------------------------------------------------------
+
+
+def test_vector_lp_hand_value() -> None:
+    """[[3, 4]] against zeros gives sqrt(25 + eps), shape (1, 1)."""
+    eps = 1e-4
+    out = VectorLpLoss(eps=eps)(torch.tensor([[3.0, 4.0]]), torch.zeros(1, 2))
+    assert out.shape == (1, 1)
+    assert out.item() == pytest.approx((25.0 + eps) ** 0.5)
+
+
+@pytest.mark.parametrize("method", ["abs", "rel"])
+def test_vector_lp_matches_lploss(method: str) -> None:
+    """Equals LpLoss(d=1) on the (B, 1, N) view, and reductions agree."""
+    torch.manual_seed(1)
+    y_pred, y = torch.randn(6, 4), torch.randn(6, 4)
+    ref = LpLoss(d=1, method=method)(y_pred[:, None], y[:, None])
+    out = VectorLpLoss(method=method)(y_pred, y)
+    assert torch.allclose(out, ref)
+    mean = VectorLpLoss(method=method, reduction="mean")(y_pred, y)
+    total = VectorLpLoss(method=method, reduction="sum")(y_pred, y)
+    assert mean.ndim == 0 and torch.allclose(mean, ref.mean())
+    assert total.ndim == 0 and torch.allclose(total, ref.sum())
+
+
+def test_vector_lp_finite_grad_at_zero_error() -> None:
+    """The eps term keeps the gradient finite at zero error."""
+    y = torch.randn(3, 4)
+    y_pred = y.clone().requires_grad_(True)
+    VectorLpLoss()(y_pred, y).sum().backward()
+    assert torch.isfinite(y_pred.grad).all()
+
+
+@pytest.mark.parametrize(
+    ("a", "b"),
+    [((4,), (4,)), ((2, 1, 4), (2, 1, 4)), ((2, 4), (2, 3))],
+)
+def test_vector_lp_bad_shapes(a: tuple[int, ...], b: tuple[int, ...]) -> None:
+    """Non-2-D or mismatched inputs raise ValueError."""
+    with pytest.raises(ValueError, match="2-D"):
+        VectorLpLoss()(torch.zeros(a), torch.zeros(b))
+
+
+def test_vector_lp_bad_reduction() -> None:
+    """An unsupported reduction raises ValueError."""
+    with pytest.raises(ValueError, match="reduction"):
+        VectorLpLoss(reduction="channel_mean")
+
+
+def test_vector_lp_through_array_datastep() -> None:
+    """The array datastep records one norm per sample, shape (B,)."""
+    torch.manual_seed(2)
+    model = torch.nn.Linear(3, 4)
+    opt = torch.optim.SGD(model.parameters(), lr=0.0)  # lr=0: weights fixed
+    inpt, truth = torch.randn(5, 3), torch.randn(5, 4)
+    loss_fn = VectorLpLoss()
+    _, pred, per_sample = train_array_datastep(
+        (inpt, truth), model, opt, loss_fn, torch.device("cpu")
+    )
+    assert per_sample.shape == (5,)
+    assert torch.allclose(per_sample, loss_fn(pred, truth)[:, 0])

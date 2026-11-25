@@ -1,0 +1,14 @@
+studyIDX,FOLD,SPLIT_SEED,INPUT_COLS,TARGET_COLS,LOG_COLS,TOTAL_EPOCHS,CYCLE_EPOCHS,TERMINAL_STEPS,TRAIN_PER_VAL,PARTITION,QOS,WALLTIME,RESERVATION_OPT,HIDDEN_DIMS,WEIGHT_DECAY,train_script,allocation
+# Weld PLANNING inverse WITHOUT S wt%: desired depth + known beam sigma ->
+# laser power and scan speed. Twin of tpbf_inv_plan_kfold.csv (61-70).
+# Same splits/settings as all other studies: MLP v3 [32, 32], wd 0.1, 150 epochs.
+71,0,0,depth_um:sigma_m,power_W:scan_speed_mps,none,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd
+72,1,0,depth_um:sigma_m,power_W:scan_speed_mps,none,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd
+73,2,0,depth_um:sigma_m,power_W:scan_speed_mps,none,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd
+74,3,0,depth_um:sigma_m,power_W:scan_speed_mps,none,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd
+75,4,0,depth_um:sigma_m,power_W:scan_speed_mps,none,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd
+76,0,1,depth_um:sigma_m,power_W:scan_speed_mps,none,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd
+77,1,1,depth_um:sigma_m,power_W:scan_speed_mps,none,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd
+78,2,1,depth_um:sigma_m,power_W:scan_speed_mps,none,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd
+79,3,1,depth_um:sigma_m,power_W:scan_speed_mps,none,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd
+80,4,1,depth_um:sigma_m,power_W:scan_speed_mps,none,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd

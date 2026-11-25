@@ -36,6 +36,7 @@ navigable and follows consistent design principles.
    :maxdepth: 2
    :caption: Concepts
 
+   agent_skills
    harnesses
    start_study
    evaluate_study

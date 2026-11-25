@@ -1,0 +1,15 @@
+studyIDX,FOLD,SPLIT_SEED,INPUT_COLS,LOG_COLS,TOTAL_EPOCHS,CYCLE_EPOCHS,TERMINAL_STEPS,TRAIN_PER_VAL,PARTITION,QOS,WALLTIME,RESERVATION_OPT,HIDDEN_DIMS,WEIGHT_DECAY,train_script,allocation
+# 5-fold CV x 2 shuffles: folds 0-4 with split seed 0 (rows 1-5) and seed 1
+# (rows 6-10). Inputs: power, speed, beam sigma, log10(S wt%); O_wpct dropped
+# (all zero). 1000 epochs in ONE cycle (no continuation: see
+# dev_plans/lr_scheduler_continuation_bug.md); 19 steps/epoch -> 19000 steps.
+1,0,0,power_W:scan_speed_mps:sigma_m:S_wpct,S_wpct,1000,1000,19000,10,standard,standard,00:30:00,--reservation=,64:64:64,0.01,train_tpbf_mlp.py,xd
+2,1,0,power_W:scan_speed_mps:sigma_m:S_wpct,S_wpct,1000,1000,19000,10,standard,standard,00:30:00,--reservation=,64:64:64,0.01,train_tpbf_mlp.py,xd
+3,2,0,power_W:scan_speed_mps:sigma_m:S_wpct,S_wpct,1000,1000,19000,10,standard,standard,00:30:00,--reservation=,64:64:64,0.01,train_tpbf_mlp.py,xd
+4,3,0,power_W:scan_speed_mps:sigma_m:S_wpct,S_wpct,1000,1000,19000,10,standard,standard,00:30:00,--reservation=,64:64:64,0.01,train_tpbf_mlp.py,xd
+5,4,0,power_W:scan_speed_mps:sigma_m:S_wpct,S_wpct,1000,1000,19000,10,standard,standard,00:30:00,--reservation=,64:64:64,0.01,train_tpbf_mlp.py,xd
+6,0,1,power_W:scan_speed_mps:sigma_m:S_wpct,S_wpct,1000,1000,19000,10,standard,standard,00:30:00,--reservation=,64:64:64,0.01,train_tpbf_mlp.py,xd
+7,1,1,power_W:scan_speed_mps:sigma_m:S_wpct,S_wpct,1000,1000,19000,10,standard,standard,00:30:00,--reservation=,64:64:64,0.01,train_tpbf_mlp.py,xd
+8,2,1,power_W:scan_speed_mps:sigma_m:S_wpct,S_wpct,1000,1000,19000,10,standard,standard,00:30:00,--reservation=,64:64:64,0.01,train_tpbf_mlp.py,xd
+9,3,1,power_W:scan_speed_mps:sigma_m:S_wpct,S_wpct,1000,1000,19000,10,standard,standard,00:30:00,--reservation=,64:64:64,0.01,train_tpbf_mlp.py,xd
+10,4,1,power_W:scan_speed_mps:sigma_m:S_wpct,S_wpct,1000,1000,19000,10,standard,standard,00:30:00,--reservation=,64:64:64,0.01,train_tpbf_mlp.py,xd

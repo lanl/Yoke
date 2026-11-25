@@ -438,6 +438,16 @@ def add_training_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParse
         default=(1120, 400),
         help="Rescaled image will be padded or cropped to this size.",
     )
+    parser.add_argument(
+        "--preflight",
+        action="store_true",
+        help=(
+            "Check the harness wiring on the CPU and exit: build the dataset, "
+            "model, and loss, push one batch through one evaluation datastep, "
+            "and print a report. No training, checkpoints, or resubmission. "
+            "Run as: python <train_script> @<input file> --preflight"
+        ),
+    )
     return parser
 
 

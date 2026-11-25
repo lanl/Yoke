@@ -202,3 +202,123 @@ def build_from_checkpoint(
         return model, model_args, model_class, 0, None
 
     return _model_builder
+
+
+def _normalize_model_arg(value: object) -> object:
+    """Return ``value`` with tuples turned into lists, recursively.
+
+    ``model_args`` written by a harness and read back from a checkpoint can hold
+    the same values as lists in one and tuples in the other (for example
+    ``image_size``). Comparing normalized copies avoids reporting those as
+    architecture differences.
+
+    Args:
+        value (object): A ``model_args`` value.
+
+    Returns:
+        object: The value with every tuple replaced by a list.
+    """
+    if isinstance(value, (list, tuple)):
+        return [_normalize_model_arg(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _normalize_model_arg(item) for key, item in value.items()}
+    return value
+
+
+def build_from_pretrained(
+    model_class: type,
+    model_args_fn: Callable[[argparse.Namespace], dict],
+    *,
+    optimizer_class: type = torch.optim.AdamW,
+    optimizer_kwargs: dict | None = None,
+) -> Callable[[argparse.Namespace, torch.device], ModelBuilderReturn]:
+    """Build a ``HarnessTrainer`` ``model_builder`` with an optional pretrained start.
+
+    This is :func:`build_from_checkpoint` plus a fine-tuning start. When
+    ``args.pretrained_model`` names a ``.pth`` checkpoint written by
+    :func:`yoke.utils.checkpointing.save_model_and_optimizer` (including an EMA
+    ``_ema.pth`` companion), a fresh run loads only that checkpoint's model
+    weights. Its optimizer state and epoch are ignored, and the builder returns
+    starting epoch ``0`` and no optimizer, so the trainer builds a fresh
+    optimizer and learning-rate schedule.
+
+    The three cases are:
+
+    - ``args.continuation`` set: identical to :func:`build_from_checkpoint`
+      (reload model, optimizer, and epoch from ``args.checkpoint``). A
+      fine-tuning study therefore continues like any other study.
+    - fresh, with ``args.pretrained_model``: the fine-tuning start above.
+    - fresh, without it: build the model from ``model_args_fn(args)``.
+
+    The model is rebuilt from the checkpoint's own ``model_args`` so the weights
+    fit. Those must agree with ``model_args_fn(args)``, which is what later
+    continuation checkpoints record; any key that differs raises.
+
+    Args:
+        model_class (type): The model class to instantiate/save. The checkpoint's
+            ``model_class`` name must match its ``__name__``.
+        model_args_fn (Callable[[argparse.Namespace], dict]): Callable mapping
+            parsed args to the ``model_args`` dict passed to ``model_class``.
+        optimizer_class (type): Optimizer class used when reloading on
+            continuation. Defaults to :class:`torch.optim.AdamW`.
+        optimizer_kwargs (dict | None): Keyword arguments for the reload-time
+            optimizer, as in :func:`build_from_checkpoint`.
+
+    Returns:
+        Callable: A ``model_builder`` suitable for :class:`HarnessTrainer`.
+    """
+    # Continuation and plain fresh runs behave exactly like build_from_checkpoint.
+    checkpoint_builder = build_from_checkpoint(
+        model_class,
+        model_args_fn,
+        optimizer_class=optimizer_class,
+        optimizer_kwargs=optimizer_kwargs,
+    )
+
+    def _model_builder(
+        args: argparse.Namespace, device: torch.device
+    ) -> tuple[nn.Module, dict, type, int, torch.optim.Optimizer | None]:
+        """Construct the model, starting from pretrained weights when requested."""
+        pretrained = getattr(args, "pretrained_model", None)
+        if getattr(args, "continuation", False) or not pretrained:
+            return checkpoint_builder(args, device)
+
+        # mmap avoids reading the whole file (most of it optimizer state, which
+        # a fine-tune discards) into memory; only the weights are touched.
+        checkpoint = torch.load(
+            pretrained, map_location="cpu", mmap=True, weights_only=False
+        )
+        if checkpoint["model_class"] != model_class.__name__:
+            raise ValueError(
+                f"Pretrained checkpoint {pretrained!r} holds a "
+                f"{checkpoint['model_class']}, not a {model_class.__name__}."
+            )
+
+        model_args = checkpoint["model_args"]
+        expected = model_args_fn(args)
+        differing = sorted(
+            key
+            for key in set(model_args) | set(expected)
+            if _normalize_model_arg(model_args.get(key))
+            != _normalize_model_arg(expected.get(key))
+        )
+        if differing:
+            raise ValueError(
+                f"Pretrained checkpoint {pretrained!r} was built with different "
+                f"model_args than this harness for: {', '.join(differing)}. "
+                "Set the harness's architecture arguments to match the checkpoint."
+            )
+
+        # Checkpoints saved by save_model_and_optimizer hold unwrapped weights,
+        # but strip a DDP ``module.`` prefix in case one was saved wrapped.
+        state_dict = {
+            key.removeprefix("module."): value
+            for key, value in checkpoint["model_state_dict"].items()
+        }
+        model = model_class(**model_args)
+        model.load_state_dict(state_dict)
+        model.to(device)
+        print(f"Model weights loaded from pretrained checkpoint {pretrained}.")
+        return model, model_args, model_class, 0, None
+
+    return _model_builder

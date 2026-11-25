@@ -2,12 +2,16 @@
 
 import argparse
 
+from pathlib import Path
+
+import pytest
 import torch
 import torch.nn as nn
 
 from yoke.utils.builders import (
     build_adamw,
     build_from_checkpoint,
+    build_from_pretrained,
     checkpoint_name,
     compute_last_epoch,
     default_mse_loss,
@@ -165,3 +169,153 @@ def test_build_from_checkpoint_continuation(
     assert captured["filepath"] == "ck.pth"
     assert captured["available_models"] == {"_TinyNet": _TinyNet}
     assert captured["optimizer_kwargs"]["lr"] == 2e-4
+
+
+class _SizedNet(nn.Module):
+    """Minimal model with an architecture argument, for pretrained starts."""
+
+    def __init__(self, width: int, shape: tuple[int, int] = (1, 2)) -> None:
+        """Initialize one linear layer of the given width."""
+        super().__init__()
+        self.shape = shape
+        self.linear = nn.Linear(width, 2)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward map."""
+        return self.linear(x)
+
+
+def _save_pretrained(
+    path: Path,
+    model_args: dict,
+    *,
+    epoch: int = 6,
+    prefix: str = "",
+    model_class: str = "_SizedNet",
+) -> nn.Module:
+    """Write a checkpoint in ``save_model_and_optimizer``'s layout.
+
+    Args:
+        path (Path): Where to write the ``.pth`` file.
+        model_args (dict): ``model_args`` to record and build the model from.
+        epoch (int): Epoch to record.
+        prefix (str): Prefix added to every weight name (``"module."`` mimics a
+            DDP-wrapped save).
+        model_class (str): Model class name to record.
+
+    Returns:
+        nn.Module: The saved model, for comparing weights.
+    """
+    model = _SizedNet(**model_args)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+    # One optimizer step so the saved optimizer state is non-empty, like a real
+    # training checkpoint.
+    model(torch.ones(1, model_args["width"])).sum().backward()
+    optimizer.step()
+    torch.save(
+        {
+            "epoch": epoch,
+            "model_class": model_class,
+            "model_args": model_args,
+            "model_state_dict": {
+                prefix + key: value for key, value in model.state_dict().items()
+            },
+            "optimizer_state_dict": optimizer.state_dict(),
+        },
+        path,
+    )
+    return model
+
+
+def _fresh_args(**kwargs: object) -> argparse.Namespace:
+    """Return args for a fresh (non-continuation) run."""
+    return argparse.Namespace(continuation=False, checkpoint=None, **kwargs)
+
+
+def test_build_from_pretrained_loads_weights_only(tmp_path: Path) -> None:
+    """A pretrained start restores weights, epoch 0, and no optimizer."""
+    path = tmp_path / "pretrained_ema.pth"
+    saved = _save_pretrained(path, {"width": 3, "shape": (4, 5)})
+    builder = build_from_pretrained(_SizedNet, lambda a: {"width": 3, "shape": [4, 5]})
+
+    model, model_args, model_class, starting_epoch, optimizer = builder(
+        _fresh_args(pretrained_model=str(path)), torch.device("cpu")
+    )
+
+    assert isinstance(model, _SizedNet)
+    assert model_class is _SizedNet
+    # The checkpoint's own model_args are used, and a list/tuple difference is
+    # not an architecture difference.
+    assert model_args == {"width": 3, "shape": (4, 5)}
+    assert starting_epoch == 0
+    assert optimizer is None
+    for key, value in saved.state_dict().items():
+        assert torch.equal(model.state_dict()[key], value)
+
+
+def test_build_from_pretrained_strips_ddp_prefix(tmp_path: Path) -> None:
+    """Weights saved from a DDP-wrapped model still load."""
+    path = tmp_path / "wrapped.pth"
+    saved = _save_pretrained(path, {"width": 3}, prefix="module.")
+    builder = build_from_pretrained(_SizedNet, lambda a: {"width": 3})
+
+    model, *_ = builder(_fresh_args(pretrained_model=str(path)), torch.device("cpu"))
+
+    assert torch.equal(model.linear.weight, saved.linear.weight)
+
+
+def test_build_from_pretrained_rejects_other_model_class(tmp_path: Path) -> None:
+    """A checkpoint of another model class raises."""
+    path = tmp_path / "other.pth"
+    _save_pretrained(path, {"width": 3}, model_class="LodeRunnerViT")
+    builder = build_from_pretrained(_SizedNet, lambda a: {"width": 3})
+
+    with pytest.raises(ValueError, match="holds a LodeRunnerViT"):
+        builder(_fresh_args(pretrained_model=str(path)), torch.device("cpu"))
+
+
+def test_build_from_pretrained_rejects_model_args_mismatch(tmp_path: Path) -> None:
+    """Differing architecture arguments raise and name the keys."""
+    path = tmp_path / "pretrained.pth"
+    _save_pretrained(path, {"width": 3})
+    builder = build_from_pretrained(_SizedNet, lambda a: {"width": 4})
+
+    with pytest.raises(ValueError, match="for: width"):
+        builder(_fresh_args(pretrained_model=str(path)), torch.device("cpu"))
+
+
+def test_build_from_pretrained_without_checkpoint_builds_fresh() -> None:
+    """Without a pretrained checkpoint the model is built from model_args_fn."""
+    builder = build_from_pretrained(_SizedNet, lambda a: {"width": 5})
+
+    model, model_args, _, starting_epoch, optimizer = builder(
+        _fresh_args(pretrained_model=None), torch.device("cpu")
+    )
+
+    assert model.linear.in_features == 5
+    assert model_args == {"width": 5}
+    assert starting_epoch == 0
+    assert optimizer is None
+
+
+def test_build_from_pretrained_continuation_reloads_checkpoint(
+    tmp_path: Path,
+) -> None:
+    """On continuation, args.checkpoint wins and the optimizer and epoch return."""
+    pretrained = tmp_path / "pretrained.pth"
+    _save_pretrained(pretrained, {"width": 3}, epoch=6)
+    restart = tmp_path / "study001_modelState_epoch0002.pth"
+    _save_pretrained(restart, {"width": 3}, epoch=2)
+    builder = build_from_pretrained(_SizedNet, lambda a: {"width": 3})
+    args = argparse.Namespace(
+        continuation=True,
+        checkpoint=str(restart),
+        pretrained_model=str(pretrained),
+        init_learnrate=2e-4,
+    )
+
+    model, _, _, starting_epoch, optimizer = builder(args, torch.device("cpu"))
+
+    assert starting_epoch == 2
+    assert isinstance(optimizer, torch.optim.AdamW)
+    assert optimizer.state  # restored, not freshly built

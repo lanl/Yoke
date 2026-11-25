@@ -43,7 +43,8 @@ def make_distributed_dataloader(
         drop_last=True,  # Ensures uniform batch size
         num_workers=num_workers,
         pin_memory=pin_memory,
-        prefetch_factor=2,
+        # DataLoader rejects prefetch_factor without worker processes.
+        prefetch_factor=2 if num_workers > 0 else None,
     )
 
 

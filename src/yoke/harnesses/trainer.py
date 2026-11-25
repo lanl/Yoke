@@ -30,11 +30,17 @@ is expressed through a small :class:`TrainerHooks` object of optional,
 composable callables.
 
 Because HDF5 checkpointing and vanilla ``DataParallel`` are deprecated, the
-trainer is **always** DDP and **always** writes ``.pth`` checkpoints.
+trainer always writes ``.pth`` checkpoints and always trains through
+:class:`~torch.nn.parallel.DistributedDataParallel`. With the default
+``device_type="cuda"`` that is multi-GPU DDP (one SLURM task per GPU, ``nccl``).
+With ``device_type="cpu"`` it is a single process on a CPU node, in a
+one-rank ``gloo`` group, for CPU-only clusters and small models; the DDP
+wrapper and collectives are then pass-throughs.
 """
 
 import argparse
 import os
+import tempfile
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -56,7 +62,11 @@ from yoke.utils.builders import (
 )
 from yoke.utils.checkpointing import save_model_and_optimizer
 from yoke.utils.dataload import make_distributed_dataloader
-from yoke.utils.parallel import cleanup_distributed, setup_distributed
+from yoke.utils.parallel import (
+    cleanup_distributed,
+    setup_distributed,
+    setup_single_process_cpu,
+)
 
 # Type aliases for the injected builder callables.
 #
@@ -173,10 +183,18 @@ class HarnessTrainer:
              (``..._ema.pth``) written by :func:`yoke.utils.ema.make_ema_hooks`.
              ``"ema"`` is only valid for EMA-enabled harnesses; if the companion
              is missing at finalize time a ``FileNotFoundError`` is raised.
+         device_type (str): ``"cuda"`` (default) for multi-GPU DDP via
+             :func:`yoke.utils.parallel.setup_distributed`, or ``"cpu"`` to run
+             one process on the CPU via
+             :func:`yoke.utils.parallel.setup_single_process_cpu`. CPU mode
+             must be launched as a single task; it raises ``RuntimeError`` if
+             ``SLURM_NTASKS`` is greater than 1.
     """
 
     #: Accepted values for ``evaluate_checkpoint``.
     _EVAL_CHECKPOINT_CHOICES = ("main", "ema")
+    #: Accepted values for ``device_type``.
+    _DEVICE_TYPE_CHOICES = ("cuda", "cpu")
 
     def __init__(
         self,
@@ -195,6 +213,7 @@ class HarnessTrainer:
         time_epochs: bool = True,
         evaluate_after_training: bool = False,
         evaluate_checkpoint: str = "main",
+        device_type: str = "cuda",
     ) -> None:
         """Initialize the trainer with parsed args and injected components."""
         self.args = args
@@ -219,6 +238,12 @@ class HarnessTrainer:
                 f"Supported values are: {valid}."
             )
         self.evaluate_checkpoint = evaluate_checkpoint
+        if device_type not in self._DEVICE_TYPE_CHOICES:
+            valid = ", ".join(self._DEVICE_TYPE_CHOICES)
+            raise ValueError(
+                f"Unknown device_type {device_type!r}. Supported values are: {valid}."
+            )
+        self.device_type = device_type
 
         # Distributed context, populated by :meth:`setup_distributed`.
         self.rank: int = 0
@@ -253,7 +278,33 @@ class HarnessTrainer:
     # Setup
     # ------------------------------------------------------------------
     def setup_distributed(self) -> None:
-        """Initialize the DDP process group and record the rank/device."""
+        """Initialize the process group and record the rank/device.
+
+        ``device_type="cuda"`` sets up multi-GPU DDP from the SLURM
+        environment. ``device_type="cpu"`` sets up a one-process ``gloo`` group
+        on the CPU.
+
+        Raises:
+            RuntimeError: In CPU mode, if SLURM launched more than one task.
+                Every task would otherwise train its own copy and write the
+                same records, checkpoints, and resubmissions.
+        """
+        if self.device_type == "cpu":
+            ntasks = int(os.environ.get("SLURM_NTASKS", "1"))
+            if ntasks > 1:
+                raise RuntimeError(
+                    f"device_type='cpu' runs a single process, but SLURM_NTASKS="
+                    f"{ntasks}. Launch with --ntasks=1 (e.g. 'python -u <script>', "
+                    "not a multi-task srun)."
+                )
+            (
+                self.rank,
+                self.world_size,
+                self.local_rank,
+                self.device,
+            ) = setup_single_process_cpu()
+            return
+
         (
             self.rank,
             self.world_size,
@@ -291,12 +342,20 @@ class HarnessTrainer:
             self.optimizer = optimizer
 
         # --- Loss ---
+        # Move loss modules to the training device so registered buffers (e.g.
+        # a mask) live with the predictions. Plain-callable losses are left as is.
         self.loss_fn = self.loss_builder()
+        if isinstance(self.loss_fn, nn.Module):
+            self.loss_fn = self.loss_fn.to(self.device)
 
         # --- DDP wrap ---
-        self.model = DDP(
-            model, device_ids=[self.local_rank], output_device=self.local_rank
-        )
+        # ``device_ids`` must be omitted for CPU modules (used by preflight).
+        if self.device.type == "cuda":
+            self.model = DDP(
+                model, device_ids=[self.local_rank], output_device=self.local_rank
+            )
+        else:
+            self.model = DDP(model)
         if self.hooks.on_after_ddp_wrap is not None:
             self.hooks.on_after_ddp_wrap(self)
 
@@ -387,9 +446,13 @@ class HarnessTrainer:
             if self.hooks.on_epoch_start is not None:
                 self.hooks.on_epoch_start(self, epochIDX)
 
+            # Wait for queued GPU work so the timing is real; CPU work is
+            # synchronous, and torch.cuda calls would fail without a GPU.
+            sync_cuda = self.device.type == "cuda"
             if self.time_epochs:
                 dist.barrier()
-                torch.cuda.synchronize(self.device)
+                if sync_cuda:
+                    torch.cuda.synchronize(self.device)
                 start_time = time.time()
 
             result = self.epoch_fn(**self._epoch_call_kwargs(epochIDX))
@@ -398,7 +461,8 @@ class HarnessTrainer:
                 self.global_step = result
 
             if self.time_epochs:
-                torch.cuda.synchronize(self.device)
+                if sync_cuda:
+                    torch.cuda.synchronize(self.device)
                 dist.barrier()
                 end_time = time.time()
                 epoch_time = (end_time - start_time) / 60
@@ -506,13 +570,105 @@ class HarnessTrainer:
         """Tear down the DDP process group."""
         cleanup_distributed()
 
+    # ------------------------------------------------------------------
+    # Preflight
+    # ------------------------------------------------------------------
+    #: Largest per-process batch used by :meth:`preflight`.
+    _PREFLIGHT_MAX_BATCH = 2
+
+    def preflight(self) -> dict:
+        """Check the harness wiring with one CPU forward pass, then stop.
+
+        Builds the real dataset, model, loss, and epoch function exactly as
+        :meth:`run` would, but in a one-process ``gloo`` group on the CPU, and
+        calls ``epoch_fn`` once with no training batches and a single
+        validation batch. That drives one evaluation datastep (a forward pass
+        and a loss evaluation) through the harness's own ``epoch_kwargs``.
+        Nothing is trained, checkpointed, or resubmitted, and the record files
+        go to a temporary directory.
+
+        The batch size is capped at ``_PREFLIGHT_MAX_BATCH`` and the dataloaders
+        use no worker processes, so the check is quick. ``self.args`` is
+        replaced by a copy holding those overrides.
+
+        Returns:
+            dict: The report that was printed: model class, parameter count,
+            batch layout, recorded losses, and elapsed seconds.
+
+        Raises:
+            RuntimeError: If no validation loss was recorded, or a recorded
+                loss is not finite. Errors from the builders, datasets, or
+                datasteps propagate unchanged.
+        """
+        start = time.time()
+        args = argparse.Namespace(**vars(self.args))
+        args.batch_size = min(args.batch_size, self._PREFLIGHT_MAX_BATCH)
+        args.num_workers = 0
+        self.args = args
+
+        (
+            self.rank,
+            self.world_size,
+            self.local_rank,
+            self.device,
+        ) = setup_single_process_cpu()
+        try:
+            self.setup()
+            batch = next(iter(self.val_dataloader))
+
+            with tempfile.TemporaryDirectory() as tmpdir:
+                val_record = os.path.join(tmpdir, "preflight_val_<epochIDX>.csv")
+                kwargs = self._epoch_call_kwargs(0)
+                # epochIDX 0 with train_per_val 1 always runs validation; zero
+                # training batches means no backward pass or optimizer step.
+                kwargs.update(
+                    num_train_batches=0,
+                    num_val_batches=1,
+                    train_per_val=1,
+                    train_rcrd_filename=os.path.join(tmpdir, "preflight_train.csv"),
+                    val_rcrd_filename=val_record,
+                )
+                self.epoch_fn(**kwargs)
+                losses = _read_record_losses(val_record.replace("<epochIDX>", "0000"))
+        finally:
+            self.teardown()
+
+        module = self.model.module if hasattr(self.model, "module") else self.model
+        report = {
+            "model_class": self.model_class.__name__,
+            "parameters": sum(p.numel() for p in module.parameters()),
+            "batch": _describe_batch(batch),
+            "losses": losses,
+            "seconds": round(time.time() - start, 1),
+        }
+        print("========== Yoke preflight ==========", flush=True)
+        for key, value in report.items():
+            print(f"{key}: {value}", flush=True)
+
+        if not losses:
+            raise RuntimeError(
+                "Preflight recorded no validation loss. The epoch function did not "
+                "write a validation record for epochIDX=0 with train_per_val=1."
+            )
+        if not all(torch.isfinite(torch.tensor(losses))):
+            raise RuntimeError(f"Preflight loss is not finite: {losses}")
+        print("Preflight passed.", flush=True)
+        return report
+
     def run(self) -> None:
         """Execute the full lifecycle: distributed setup, train, finalize.
 
         This is the single entry point a thin harness script calls. It sets up
         the process group, builds everything, runs the epoch loop, checkpoints
         (and possibly resubmits), and always tears down the process group.
+
+        If ``args.preflight`` is set, :meth:`preflight` runs instead and
+        nothing is trained.
         """
+        if getattr(self.args, "preflight", False):
+            self.preflight()
+            return
+
         self.setup_distributed()
         try:
             self.setup()
@@ -520,3 +676,51 @@ class HarnessTrainer:
             self.finalize()
         finally:
             self.teardown()
+
+
+def _describe_batch(batch: object) -> object:
+    """Summarize a collated batch as shapes and dtypes, keeping its nesting.
+
+    Args:
+        batch (object): A batch from a dataloader: a tensor, or a tuple, list,
+            or dict of them.
+
+    Returns:
+        object: The same structure with each tensor replaced by a
+        ``"shape dtype"`` string and other values by their type name.
+    """
+    if isinstance(batch, torch.Tensor):
+        return f"{tuple(batch.shape)} {batch.dtype}"
+    if isinstance(batch, (tuple, list)):
+        return [_describe_batch(item) for item in batch]
+    if isinstance(batch, dict):
+        return {key: _describe_batch(value) for key, value in batch.items()}
+    return type(batch).__name__
+
+
+def _read_record_losses(path: str) -> list[float]:
+    """Read the loss column from an epoch record file.
+
+    Record rows are ``epoch, batch, loss[, extra ...]``. Some epoch functions
+    write an ``epoch,batch,loss`` header, which is skipped like any other row
+    whose third field is not a number.
+
+    Args:
+        path (str): Record file path. A missing file gives an empty list.
+
+    Returns:
+        list[float]: The recorded losses, in file order.
+    """
+    if not os.path.isfile(path):
+        return []
+    losses = []
+    with open(path) as f:
+        for line in f:
+            fields = [field.strip() for field in line.split(",")]
+            if len(fields) < 3:
+                continue
+            try:
+                losses.append(float(fields[2]))
+            except ValueError:
+                continue
+    return losses

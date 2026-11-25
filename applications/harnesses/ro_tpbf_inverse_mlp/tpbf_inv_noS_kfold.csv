@@ -1,0 +1,14 @@
+studyIDX,FOLD,SPLIT_SEED,INPUT_COLS,TARGET_COLS,LOG_COLS,TOTAL_EPOCHS,CYCLE_EPOCHS,TERMINAL_STEPS,TRAIN_PER_VAL,PARTITION,QOS,WALLTIME,RESERVATION_OPT,HIDDEN_DIMS,WEIGHT_DECAY,train_script,allocation
+# Inverse WITHOUT S wt%: depth, length, width -> power, speed, sigma. Twin of 1-10.
+# Same splits and settings as the twin (S wt% is only absent from the inputs;
+# folds are still stratified by the S-based stratum, so the holdout sets match).
+31,0,0,depth_um:length_um:width_um,power_W:scan_speed_mps:sigma_m,none,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd
+32,1,0,depth_um:length_um:width_um,power_W:scan_speed_mps:sigma_m,none,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd
+33,2,0,depth_um:length_um:width_um,power_W:scan_speed_mps:sigma_m,none,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd
+34,3,0,depth_um:length_um:width_um,power_W:scan_speed_mps:sigma_m,none,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd
+35,4,0,depth_um:length_um:width_um,power_W:scan_speed_mps:sigma_m,none,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd
+36,0,1,depth_um:length_um:width_um,power_W:scan_speed_mps:sigma_m,none,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd
+37,1,1,depth_um:length_um:width_um,power_W:scan_speed_mps:sigma_m,none,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd
+38,2,1,depth_um:length_um:width_um,power_W:scan_speed_mps:sigma_m,none,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd
+39,3,1,depth_um:length_um:width_um,power_W:scan_speed_mps:sigma_m,none,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd
+40,4,1,depth_um:length_um:width_um,power_W:scan_speed_mps:sigma_m,none,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd

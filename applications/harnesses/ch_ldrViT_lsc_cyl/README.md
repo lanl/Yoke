@@ -63,6 +63,23 @@ yoke-plot-loss --basedir ./runs --IDX 1 --dataset cyl --ylim 50
 The recorded values are L2 norms (no averaging over pixels), so they are much
 larger than MSE values; raise `--ylim` (default `1.0`) to fit them.
 
+Fine-tuning
+-----------
+
+`--pretrained_model <path>` starts a **fresh** study from another
+study's weights, for example the LSC-only study 2 checkpoint
+(`study002_modelState_epoch<E>_ema.pth`) fine-tuned on CYL with
+`--lsc_weight 0 --cyl_weight 1`. Only the weights are loaded
+(`yoke.utils.builders.build_from_pretrained`); the optimizer, LR schedule,
+EMA warmup and epoch count start fresh, so a lower `ANCHOR_LR` than the
+original run is usual. The ViT arguments (`--vit_embed_dim`,
+`--vit_num_layers`, `--vit_num_heads`) must match the checkpoint, or the run
+stops with the differing `model_args` named. Continuation of a fine-tuning
+study works as for any study (`--continuation --checkpoint`).
+
+`--device_type cpu` runs one process on a CPU node instead of multi-GPU DDP,
+for small tests. The default is `cuda`.
+
 Launch
 ------
 

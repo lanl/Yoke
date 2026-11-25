@@ -69,6 +69,17 @@ conventions, reserved substitution keys, and the epoch-continuation lifecycle â€
 see the "Authoring a Yoke Harness" and "The `yoke-start-study` CLI" pages in the
 `docs/` (`docs/source/harnesses.rst` and `docs/source/start_study.rst`).
 
+Using Yoke with an AI agent
+---------------------------
+
+New to Yoke? You can open an AI coding agent (such as Claude Code) in this
+repository and ask it to help you train a model on your own data. The agent
+skills in `skills/` guide it, and you, through the dataset, model, loss,
+harness, and SLURM setup. It gives you the exact launch command, and
+submits the study for you only if you ask. In a later session it can
+diagnose the run. In Claude Code, start with `/yoke-train-my-data`. See
+`docs/source/agent_skills.rst` ("Using Yoke with an AI agent") for details.
+
 Installation
 ------------
 

@@ -13,6 +13,7 @@ tested with a non-interactive backend.
 
 import os
 import glob
+import io
 import warnings
 
 import numpy as np
@@ -88,6 +89,12 @@ def find_record_csvs(
 def load_record_csv(path: str) -> pd.DataFrame:
     """Read a single Yoke record CSV into a DataFrame.
 
+    Header lines starting with ``epoch`` are skipped wherever they occur.
+    Some epoch functions (e.g.
+    :func:`yoke.utils.training.epoch.array_output.train_DDP_array_epoch`)
+    write an ``epoch,batch,loss`` header every epoch, and in the first cycle
+    several epochs append to one file.
+
     Args:
         path (str): Path to a record CSV with ``Epoch, Batch, Loss`` columns,
             optionally followed by a ``Dataset`` tag column.
@@ -99,7 +106,9 @@ def load_record_csv(path: str) -> pd.DataFrame:
     Raises:
         ValueError: If the file has neither 3 nor 4 columns.
     """
-    df = pd.read_csv(path, sep=", ", header=None, engine="python")
+    with open(path) as f:
+        lines = [line for line in f if not line.lstrip().lower().startswith("epoch")]
+    df = pd.read_csv(io.StringIO("".join(lines)), sep=", ", header=None, engine="python")
     if df.shape[1] == len(_RECORD_COLUMNS):
         df.columns = _RECORD_COLUMNS
     elif df.shape[1] == len(_TAGGED_RECORD_COLUMNS):

@@ -1,0 +1,15 @@
+studyIDX,FOLD,SPLIT_SEED,INPUT_COLS,TARGET_COLS,LOG_COLS,TOTAL_EPOCHS,CYCLE_EPOCHS,TERMINAL_STEPS,TRAIN_PER_VAL,PARTITION,QOS,WALLTIME,RESERVATION_OPT,HIDDEN_DIMS,WEIGHT_DECAY,train_script,allocation
+# Inverse: desired depth + observed S wt%, melt-pool length and width ->
+# laser power, scan speed, beam sigma.
+# Same 10 splits (folds 0-4 x seeds 0, 1) and settings as ro_tpbf_mlp studies
+# 31-40: fixed SwiGLU_mlp [32, 32], weight decay 0.1, 150 epochs in one job.
+1,0,0,depth_um:S_wpct:length_um:width_um,power_W:scan_speed_mps:sigma_m,S_wpct,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd
+2,1,0,depth_um:S_wpct:length_um:width_um,power_W:scan_speed_mps:sigma_m,S_wpct,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd
+3,2,0,depth_um:S_wpct:length_um:width_um,power_W:scan_speed_mps:sigma_m,S_wpct,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd
+4,3,0,depth_um:S_wpct:length_um:width_um,power_W:scan_speed_mps:sigma_m,S_wpct,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd
+5,4,0,depth_um:S_wpct:length_um:width_um,power_W:scan_speed_mps:sigma_m,S_wpct,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd
+6,0,1,depth_um:S_wpct:length_um:width_um,power_W:scan_speed_mps:sigma_m,S_wpct,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd
+7,1,1,depth_um:S_wpct:length_um:width_um,power_W:scan_speed_mps:sigma_m,S_wpct,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd
+8,2,1,depth_um:S_wpct:length_um:width_um,power_W:scan_speed_mps:sigma_m,S_wpct,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd
+9,3,1,depth_um:S_wpct:length_um:width_um,power_W:scan_speed_mps:sigma_m,S_wpct,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd
+10,4,1,depth_um:S_wpct:length_um:width_um,power_W:scan_speed_mps:sigma_m,S_wpct,150,150,2850,10,standard,standard,00:30:00,--reservation=,32:32,0.1,train_tpbf_inverse_mlp.py,xd

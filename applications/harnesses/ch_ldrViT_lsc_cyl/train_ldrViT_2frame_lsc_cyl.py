@@ -21,6 +21,12 @@ map, so batches must use ``--batch_size 1``.
 naming each sample's dataset (plot one with ``yoke-plot-loss --dataset lsc``).
 Recorded losses are per-channel L2 norms averaged over channels, as in
 ``train_ldrViT_2frame_8ch_lp.py``.
+
+Fine-tuning: ``--pretrained_model`` starts a fresh study from another
+study's checkpoint (for example the ``_ema.pth`` of an LSC-only run), loading
+only its weights; the optimizer, LR schedule, and epoch count start fresh
+(:func:`~yoke.utils.builders.build_from_pretrained`). ``--device_type cpu``
+runs one process on a CPU node instead of multi-GPU DDP.
 """
 
 import argparse
@@ -36,7 +42,7 @@ from yoke.helpers import cli
 from yoke.losses.lp_loss import LpLoss
 from yoke.lr_schedulers import CosineWithWarmupScheduler
 from yoke.models.vit.swin.bomberman import LodeRunnerViT
-from yoke.utils.builders import build_adamw, build_from_checkpoint
+from yoke.utils.builders import build_adamw, build_from_pretrained
 from yoke.utils.ema import make_ema_hooks
 from yoke.utils.training.epoch.loderunner import (
     train_DDP_loderunner_multidataset_epoch,
@@ -113,6 +119,15 @@ parser.add_argument(
     choices=THERMO_KINDS,
     default=list(THERMO_KINDS),
     help="Per-material thermodynamic fields to train on.",
+)
+
+# Device selection. Fine-tuning uses --pretrained_model from add_training_args.
+parser.add_argument(
+    "--device_type",
+    type=str,
+    choices=("cuda", "cpu"),
+    default="cuda",
+    help="'cuda' for multi-GPU DDP (default); 'cpu' for one process on a CPU node.",
 )
 
 # ViT backbone parameters
@@ -349,7 +364,8 @@ if __name__ == "__main__":
 
     HarnessTrainer(
         args,
-        model_builder=build_from_checkpoint(
+        # Same as build_from_checkpoint unless --pretrained_model is set.
+        model_builder=build_from_pretrained(
             LodeRunnerViT,
             make_model_args,
             optimizer_kwargs={
@@ -366,4 +382,5 @@ if __name__ == "__main__":
         loss_builder=build_lp_loss,
         epoch_kwargs=epoch_kwargs,
         hooks=hooks,
+        device_type=args.device_type,
     ).run()

@@ -1,0 +1,5 @@
+studyIDX,FOLD,SPLIT_SEED,INPUT_COLS,LOG_COLS,TOTAL_EPOCHS,CYCLE_EPOCHS,TERMINAL_STEPS,TRAIN_PER_VAL,PARTITION,QOS,WALLTIME,RESERVATION_OPT,HIDDEN_DIMS,WEIGHT_DECAY,train_script,allocation
+# Smoke tests on the debug partition (1 running job per user, so these run in
+# turn). 4 epochs in 2 cycles: each row exercises one continuation resubmit.
+901,0,0,power_W:scan_speed_mps:sigma_m:S_wpct,S_wpct,4,2,76,1,debug,debug,00:30:00,--reservation=debug,64:64:64,0.01,train_tpbf_mlp.py,xd
+902,1,1,power_W:scan_speed_mps:sigma_m:S_wpct,S_wpct,4,2,76,1,debug,debug,00:30:00,--reservation=debug,64:64:64,0.01,train_tpbf_mlp.py,xd

@@ -228,3 +228,17 @@ def test_plot_loss_curves_dataset_filter(tmp_path: Path) -> None:
         loss_curves.plot_loss_curves(
             str(tmp_path), 3, nsamps_per_trn_pt=10, nsamps_per_val_pt=5, dataset="lsc"
         )
+
+
+def test_load_record_csv_skips_repeated_headers(tmp_path: Path) -> None:
+    """Per-epoch 'epoch,batch,loss' header lines are skipped."""
+    csv_path = tmp_path / "rec.csv"
+    csv_path.write_text(
+        "epoch,batch,loss\n1, 0, 0.5\n1, 1, 0.4\nepoch,batch,loss\n2, 0, 0.3\n"
+    )
+
+    df = loss_curves.load_record_csv(str(csv_path))
+
+    assert list(df.columns) == ["Epoch", "Batch", "Loss"]
+    assert list(df["Epoch"]) == [1, 1, 2]
+    assert list(df["Loss"]) == [0.5, 0.4, 0.3]

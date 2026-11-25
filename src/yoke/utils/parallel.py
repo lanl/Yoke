@@ -6,6 +6,7 @@ training utilities.
 """
 
 import os
+import socket
 import warnings
 
 import torch
@@ -62,6 +63,34 @@ def setup_distributed() -> tuple[int, int, int, torch.device]:
     )
 
     return rank, world_size, local_rank, device
+
+
+def setup_single_process_cpu() -> tuple[int, int, int, torch.device]:
+    """Set up a one-process ``gloo`` process group on the CPU.
+
+    Used by the trainer's preflight check to run harness code that expects a
+    process group (DDP wrapping, ``dist.all_gather`` in datasteps) outside a
+    SLURM GPU job. Unlike :func:`setup_distributed`, no SLURM environment
+    variables are read: the group always has ``world_size == 1`` and listens
+    on a free port on the loopback interface.
+
+    Returns:
+        tuple: ``(rank, world_size, local_rank, device)``, always
+        ``(0, 1, 0, torch.device("cpu"))``.
+    """
+    # Ask the OS for a free port, then release it for the process group. The
+    # tiny race window is acceptable for a single local process.
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+
+    dist.init_process_group(
+        backend="gloo",
+        init_method=f"tcp://127.0.0.1:{port}",
+        world_size=1,
+        rank=0,
+    )
+    return 0, 1, 0, torch.device("cpu")
 
 
 def cleanup_distributed() -> None:

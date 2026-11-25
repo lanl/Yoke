@@ -783,3 +783,19 @@ def test_make_distributed_dataloader(dummy_dataset: DummyDataset) -> None:
     assert loader.batch_size == 4
     # drop_last is enabled for uniform batch sizes.
     assert loader.drop_last is True
+
+
+def test_make_distributed_dataloader_without_workers(
+    dummy_dataset: DummyDataset,
+) -> None:
+    """With num_workers=0 the loader builds and iterates (no prefetch_factor)."""
+    loader = make_distributed_dataloader(
+        dataset=dummy_dataset,
+        batch_size=2,
+        shuffle=False,
+        num_workers=0,
+        rank=0,
+        world_size=1,
+    )
+    assert loader.prefetch_factor is None
+    next(iter(loader))

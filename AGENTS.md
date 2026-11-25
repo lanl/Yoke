@@ -57,6 +57,7 @@ tests/                         # pytest; mirrors src layout (datasets/, models/,
 docs/                          # sphinx (source/, Makefile)
 docker/                        # Dockerfile for containerized builds
 dev_plans/                     # design/planning docs (markdown)
+skills/                        # agent skills (Section 6a); .claude/skills/ links here
 ```
 
 ---
@@ -207,9 +208,17 @@ Non-Lightning DDP training harnesses should be thin wrappers around
 `train_*.py`. The trainer owns the fixed orchestration (DDP setup via
 `yoke.utils.parallel.setup_distributed`/`cleanup_distributed`, model/optimizer/
 scheduler/dataloader construction, the timed epoch loop, `.pth` checkpointing
-via `save_model_and_optimizer`, and continuation resubmission). It is **always
-DDP** and **always writes `.pth`** (HDF5 checkpoint writing and vanilla
-`DataParallel`/`--multigpu` are deprecated for **Dec-2026** removal).
+via `save_model_and_optimizer`, and continuation resubmission). It **always
+writes `.pth`** (HDF5 checkpoint writing and vanilla `DataParallel`/`--multigpu`
+are deprecated for **Dec-2026** removal) and trains through DDP in one of two
+modes, chosen by `HarnessTrainer(..., device_type=...)`:
+
+- `"cuda"` (default): multi-GPU DDP, one SLURM task per GPU, `nccl`.
+- `"cpu"`: one process on one CPU node, in a one-rank `gloo` group
+  (`yoke.utils.parallel.setup_single_process_cpu`), for CPU-only clusters
+  (e.g. rocinante) and small models. Launch it as a single task
+  (`--ntasks=1`, plain `python -u`); the trainer raises if `SLURM_NTASKS > 1`.
+  Set threads with `OMP_NUM_THREADS` in the SLURM template.
 
 A harness injects only what varies:
 
@@ -245,6 +254,13 @@ checkpoints). The per-step EMA update and gradient clipping live in
 trainer threads it and the live `global_step` into each epoch call. See
 `applications/harnesses/ch_ldrViT/train_ldrViT_ddp.py` (and `train_ldrViT_2frame.py`).
 
+**Preflight.** Every `HarnessTrainer` script accepts `--preflight`
+(`python train_<name>.py @<input> --preflight`). It builds everything in a
+one-process CPU `gloo` group, runs one evaluation datastep through the real
+`epoch_fn` and `epoch_kwargs`, prints a report, and exits. There is no training,
+checkpointing, or resubmission (`HarnessTrainer.preflight`). The trainer also moves
+`nn.Module` losses to the training device.
+
 Shared builder helpers live in `yoke.utils.builders` (`build_adamw`,
 `move_optimizer_state_to_device`, `compute_last_epoch`, `default_mse_loss`,
 `checkpoint_name`, `build_from_checkpoint`).
@@ -265,6 +281,40 @@ Shared builder helpers live in `yoke.utils.builders` (`build_adamw`,
 - **Git:** only commit/push when explicitly asked. `main` is the stable comparison point.
 - **Data & external paths** are passed as CLI args (see `helpers/cli.py` `add_filepath_args`
   et al.); never hardcode dataset locations into the package.
+
+---
+
+## 6a. Agent skills
+
+`skills/` holds guided, interview-style procedures for adding training
+capability to Yoke. Each is a `SKILL.md` plus reference notes. Claude Code finds
+them through `.claude/skills/` symlinks. Any other agent can follow them by
+reading the `SKILL.md` directly. Start with `skills/README.md`.
+
+| Skill | Use it to |
+| --- | --- |
+| `skills/yoke-train-my-data/` | **start here**: frame the problem and run the others in order |
+| `skills/yoke-new-dataset/` | write a `Dataset` class (any file format) + tests |
+| `skills/yoke-model/` | choose and size a model, or compose one from Yoke blocks |
+| `skills/yoke-new-loss/` | choose or write a loss with the right output shape |
+| `skills/yoke-new-training-step/` | add a datastep/epoch pair for a new batch contract |
+| `skills/yoke-new-harness/` | build an `applications/harnesses/` directory |
+| `skills/yoke-slurm-template/` | write a SLURM template from read-only cluster queries |
+| `skills/yoke-launch-study/` | run readiness checks and preflight; give the launch command |
+| `skills/yoke-run-doctor/` | diagnose a study the user already submitted |
+| `skills/yoke-finetune-mcp/` | fine-tune a model a Nomad MCP server offers, through its tools only |
+
+Agents never cancel or modify jobs. `yoke-launch-study` prints the launch command
+and, only if the user explicitly asks, runs it for a SLURM study. The jobs then
+live in the SLURM queue, not the agent's shell. Shell-type studies are never
+agent-submitted. `yoke-run-doctor` picks the run up later from the files on disk,
+and only proposes restart commands. `yoke-finetune-mcp` is the remote case: an
+agent with no Yoke checkout fills in a fine-tune spec for a Nomad server, which
+runs the training itself after the user's explicit yes.
+
+`skills/shared/batch_contracts.md` maps dataset return tuples to datasteps and
+epoch functions. `tests/skills/test_skill_files.py` keeps the skills in sync with
+the code, so update the skills when you rename or change code they mention.
 
 ---
 
