@@ -33,6 +33,8 @@ EXPECTED_SKILLS = {
     "yoke-new-loss",
     "yoke-launch-study",
     "yoke-run-doctor",
+    # Remote use through a Nomad MCP server.
+    "yoke-finetune-mcp",
 }
 
 # Inline code spans (`...`) are where skills name paths and Python objects.

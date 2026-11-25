@@ -70,8 +70,11 @@ use `model_catalog.md`:
   `default_vars`.
 - Which architecture arguments are fixed in `make_model_args`, exposed as
   flags, or swept in the CSV.
-- Fresh training, or starting from a pretrained checkpoint (needs a
-  bespoke `model_builder`)?
+- Fresh training, or starting from a pretrained checkpoint? A start from a
+  checkpoint of the same architecture uses
+  `yoke.utils.builders.build_from_pretrained` and `--pretrained_model`
+  (weights only; fresh optimizer, schedule, and epoch count). Architecture
+  surgery still needs a bespoke `model_builder`.
 
 ### 4. Training recipe (round 3)
 

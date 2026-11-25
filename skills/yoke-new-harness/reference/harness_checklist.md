@@ -91,8 +91,10 @@ Structure (see `train_ldrViT_2frame_lsc_cyl.py`):
 Key helpers:
 
 - `yoke.utils.builders.build_from_checkpoint(model_class, make_model_args,
-  optimizer_kwargs=...)` covers fresh starts and continuation. Write a
-  bespoke `model_builder` only for pretrained or backbone surgery (see
+  optimizer_kwargs=...)` covers fresh starts and continuation.
+  `yoke.utils.builders.build_from_pretrained` (same arguments) adds a start
+  from another checkpoint's weights via `--pretrained_model`. Write a
+  bespoke `model_builder` only for backbone surgery (see
   `applications/harnesses/se_DDP_loderunner_finetune_cylex/`).
 - EMA: `on_after_ddp_wrap, on_before_save = make_ema_hooks(ModelClass,
   max_decay=..., inv_gamma=..., power=...)`, wrapped in

@@ -231,6 +231,8 @@ It is a demo only and not used with `HarnessTrainer`.
    constraints?
 3. Which architecture arguments are fixed in `make_model_args`, exposed as CLI
    flags, or swept in the study CSV (`<KEY>` columns)?
-4. Fresh training only, or also starting from a pretrained checkpoint? The
-   latter needs a bespoke `model_builder` (see
+4. Fresh training only, or also starting from a pretrained checkpoint? For
+   the same architecture, use `yoke.utils.builders.build_from_pretrained`
+   (as in `applications/harnesses/ch_ldrViT_lsc_cyl/`). Changing the
+   architecture needs a bespoke `model_builder` (see
    `applications/harnesses/se_DDP_loderunner_finetune_cylex/`).

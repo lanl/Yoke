@@ -27,6 +27,10 @@ done, the cards, the next stage. Ask whether to continue from the first
 unfinished stage. If a run was already launched (there is a Run card) and the
 user is asking about it, switch to `yoke-run-doctor`.
 
+If you have no Yoke repo but are connected to a Nomad server with
+`yoke_finetune_*` tools, and the user wants to adapt one of its models to
+their data, use `yoke-finetune-mcp` instead.
+
 ### 1. Frame the problem (plain language, round 1)
 
 Ask, without Yoke terms:

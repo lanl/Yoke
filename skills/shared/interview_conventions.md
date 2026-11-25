@@ -7,6 +7,22 @@ Most users of these skills do **not** know Yoke's internals. When a Yoke
 concept first comes up (batch contract, harness, study CSV, continuation,
 preflight), explain it in one or two plain sentences before asking about it.
 
+## Remote (MCP) mode
+
+Some skills (`yoke-finetune-mcp`) are used by an agent that reaches Yoke only
+through a Nomad MCP server's tools, with no Yoke repo, files, or Python of its
+own. In that mode:
+
+- Skip the repo steps below (reading `AGENTS.md`, asking for a Python
+  environment, design notes and progress files). The server keeps each run's
+  state and **run card**; a later session resumes from the run's id.
+- You never write code. Work is sent as declarative input the server checks
+  (a fine-tune spec), after the user approves it.
+- Training starts only through the server's start tool, after the user's
+  explicit yes to that run, as for SLURM submission below.
+- Everything else here still applies: rounds of questions, plain-language
+  explanations, recommended defaults, and the finishing summary.
+
 ## Before starting
 
 1. Read `AGENTS.md` at the repo root, and any `CLAUDE.md` / `CONTRIBUTING.md`
@@ -71,10 +87,12 @@ stage's design notes file, and all the cards (`skills/shared/cards.md`).
   `yoke-launch-study` may run its `yoke-start-study` command for a **SLURM**
   study, once, when the user explicitly asks at launch time. That is safe
   because the jobs then live in the SLURM queue, independent of the agent's
-  shell. No other skill submits; `yoke-run-doctor` only proposes restart
-  commands. The one exception to "no compute" is the CPU **preflight**
-  (`--preflight`), a single forward pass that the user has approved for
-  that run.
+  shell. The same holds for `yoke-finetune-mcp`, which may start a
+  fine-tune on a Nomad server through its start tool after an explicit yes:
+  the server owns the process. No other skill submits; `yoke-run-doctor`
+  only proposes restart commands. The one exception to "no compute" is the
+  CPU **preflight** (`--preflight`), a single forward pass that the user has
+  approved for that run.
 - Never write credentials, tokens, or secrets into any file.
 - Never run `git commit` or `git push`. Leave changes in the working tree.
 

@@ -302,12 +302,15 @@ reading the `SKILL.md` directly. Start with `skills/README.md`.
 | `skills/yoke-slurm-template/` | write a SLURM template from read-only cluster queries |
 | `skills/yoke-launch-study/` | run readiness checks and preflight; give the launch command |
 | `skills/yoke-run-doctor/` | diagnose a study the user already submitted |
+| `skills/yoke-finetune-mcp/` | fine-tune a model a Nomad MCP server offers, through its tools only |
 
 Agents never cancel or modify jobs. `yoke-launch-study` prints the launch command
 and, only if the user explicitly asks, runs it for a SLURM study. The jobs then
 live in the SLURM queue, not the agent's shell. Shell-type studies are never
 agent-submitted. `yoke-run-doctor` picks the run up later from the files on disk,
-and only proposes restart commands.
+and only proposes restart commands. `yoke-finetune-mcp` is the remote case: an
+agent with no Yoke checkout fills in a fine-tune spec for a Nomad server, which
+runs the training itself after the user's explicit yes.
 
 `skills/shared/batch_contracts.md` maps dataset return tuples to datasteps and
 epoch functions. `tests/skills/test_skill_files.py` keeps the skills in sync with

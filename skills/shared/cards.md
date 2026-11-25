@@ -12,6 +12,8 @@ Which skill reads which card:
 - `yoke-new-loss` reads the Dataset, Model, and Step cards.
 - `yoke-launch-study` reads all of them and writes the Run card.
 - `yoke-run-doctor` reads the Run card.
+- `yoke-finetune-mcp` writes the Fine-tune card (remote mode: in chat; the
+  Nomad server keeps the matching run card).
 
 When a progress file exists (`dev_plans/<project>_training.md`, see
 `skills/shared/interview_conventions.md`), cards are also copied there.
@@ -126,4 +128,24 @@ Run card
 - submitted:     "by agent at user's request" or "by user"; date; job IDs
                  (filled in later by the user or yoke-run-doctor if unknown)
 - doctor log:    dated findings from yoke-run-doctor sessions
+```
+
+## Fine-tune card (from `yoke-finetune-mcp`)
+
+Shown in chat. The server keeps its own run card for the same run, which
+`yoke_finetune_status` returns, so a later session needs only the run id.
+
+```
+Fine-tune card
+- run id:        <run_id> from yoke_finetune_prepare
+- server:        the Nomad server's URL or name
+- base model:    name from yoke_finetune_list_models
+- data:          kind; npz dir and design CSV on the server; train and
+                 validation series
+- spec:          the training overrides as sent (YAML)
+- preflight:     passed YYYY-MM-DD (report summary), or failed (cause)
+- training:      started YYYY-MM-DD by the agent after the user's explicit
+                 yes, or "not started"; final status and exit code
+- results:       record rows (last losses), checkpoints written
+- not checked:   e.g. whether the fine-tuned model is better
 ```
